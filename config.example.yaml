@@ -1,0 +1,9 @@
+imap:
+  host: mail.example.jp
+  port: 993
+  username: user@example.jp
+  password: secret
+  mailbox: INBOX
+
+database:
+  path: data/workinbox.db
