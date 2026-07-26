@@ -122,8 +122,62 @@ database:
 ```
 
 ---
+## 7. 実装環境
 
-## 7. メール取得仕様
+### 実装言語
+
+Python 3.14
+
+### 動作環境
+
+- macOS
+- Python 3.14
+
+### 利用ライブラリ
+
+標準ライブラリ
+
+- sqlite3
+- imaplib
+- email
+- logging
+
+外部ライブラリ
+
+- PyYAML
+
+--
+## 8. ディレクトリ構成
+
+```text
+WorkInBox/
+
+├── config.yaml
+
+├── data/
+│   └── workinbox.db
+
+├── src/
+│   └── workinbox/
+│       ├── __init__.py
+│       ├── main.py
+│       ├── config.py
+│       ├── database.py
+│       ├── imap_client.py
+│       └── models.py
+
+├── logs/
+
+└── docs/
+    └── design_v0_1.md
+```
+
+## 9. 動作環境
+
+- macOS
+- Python 3.14
+
+## 10. メール取得仕様
 
 ### 接続方式
 
@@ -165,7 +219,7 @@ text/plain が存在する場合は text/plain を採用する。
 
 ---
 
-## 8. 同期仕様
+## 11. 同期仕様
 
 ### 概要
 
@@ -231,7 +285,7 @@ IMAP 上で FLAGGED ではない
 
 ---
 
-## 9. データモデル
+## 12. データモデル
 
 ```mermaid
 erDiagram
@@ -258,7 +312,7 @@ erDiagram
 
 ---
 
-## 10. データベース
+## 13. データベース
 
 SQLite を利用する。
 
@@ -292,7 +346,7 @@ CREATE TABLE emails (
 
 ---
 
-## 11. ディレクトリ構成
+## 14. ディレクトリ構成
 
 ```text
 WorkInBox/
@@ -316,7 +370,7 @@ WorkInBox/
 
 ---
 
-## 12. 処理フロー
+## 15. 処理フロー
 
 ```mermaid
 flowchart TD
@@ -342,7 +396,7 @@ flowchart TD
 
 ---
 
-## 13. ログ出力
+## 16. ログ出力
 
 標準出力へ出力する。
 
@@ -362,7 +416,7 @@ INFO Synchronization completed
 
 ---
 
-## 14. エラー処理
+## 17. エラー処理
 
 ### IMAP接続失敗
 
@@ -382,7 +436,7 @@ ERROR Database error
 
 ---
 
-## 15. 完了条件
+## 18. 完了条件
 
 以下をすべて満たした場合、
 Version 0.1 は完成とする。
