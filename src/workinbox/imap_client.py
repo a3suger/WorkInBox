@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import imaplib
 from email import message_from_bytes, policy
-from email.header import decode_header, make_header
+from email.header import decode_header
 from email.message import Message
 from email.utils import getaddresses
 
@@ -13,7 +13,20 @@ from .models import EmailMessage
 def _decode_header(value: str | None) -> str | None:
     if value is None:
         return None
-    return str(make_header(decode_header(value)))
+
+    decoded_parts: list[str] = []
+    for part, charset in decode_header(str(value)):
+        if isinstance(part, str):
+            decoded_parts.append(part)
+            continue
+
+        encoding = charset or "utf-8"
+        try:
+            decoded_parts.append(part.decode(encoding, errors="replace"))
+        except LookupError:
+            decoded_parts.append(part.decode("utf-8", errors="replace"))
+
+    return "".join(decoded_parts)
 
 
 def _addresses(message: Message, header: str) -> str | None:
