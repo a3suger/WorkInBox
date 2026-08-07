@@ -1,0 +1,8 @@
+config.yaml
+data/
+logs/
+.venv/
+__pycache__/
+*.pyc
+.idea/
+*.egg-info/
