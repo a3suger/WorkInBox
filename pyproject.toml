@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workinbox"
+version = "0.1.0"
+description = "Synchronize Thunderbird-starred IMAP messages into SQLite"
+requires-python = ">=3.14"
+dependencies = ["PyYAML>=6.0"]
+
+[project.scripts]
+workinbox = "workinbox.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
