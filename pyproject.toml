@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 workinbox = "workinbox.main:cli"
 workinbox-web = "workinbox.web:cli"
+workinbox-imap-flags = "workinbox.imap_debug:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
