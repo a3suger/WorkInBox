@@ -14,6 +14,7 @@ class ImapConfig:
     username: str
     password: str
     mailbox: str = "INBOX"
+    new_mail_lookback_days: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,12 +36,16 @@ def load_config(path: str | Path) -> AppConfig:
     try:
         imap_raw = raw["imap"]
         database_raw = raw["database"]
+        new_mail_lookback_days = int(imap_raw["new_mail_lookback_days"])
+        if new_mail_lookback_days < 1:
+            raise ValueError("new_mail_lookback_days must be at least 1")
         imap = ImapConfig(
             host=str(imap_raw["host"]),
             port=int(imap_raw.get("port", 993)),
             username=str(imap_raw["username"]),
             password=str(imap_raw["password"]),
             mailbox=str(imap_raw.get("mailbox", "INBOX")),
+            new_mail_lookback_days=new_mail_lookback_days,
         )
         database_path = Path(str(database_raw["path"]))
     except (KeyError, TypeError, ValueError) as exc:
