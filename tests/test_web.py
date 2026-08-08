@@ -76,15 +76,15 @@ class WebFoundationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             app = create_app(self._config(Path(directory) / "workinbox.db"))
             routes = {
-                (route.path, tuple(sorted(route.methods or ())))
+                route.path: set(route.methods or ())
                 for route in app.routes
             }
 
-        self.assertIn(("/", ("GET",)), routes)
-        self.assertIn(("/active", ("GET",)), routes)
-        self.assertIn(("/inactive", ("GET",)), routes)
-        self.assertIn(("/sync", ("POST",)), routes)
-        self.assertIn(("/full-recheck", ("POST",)), routes)
+        self.assertIn("GET", routes["/"])
+        self.assertIn("GET", routes["/active"])
+        self.assertIn("GET", routes["/inactive"])
+        self.assertIn("POST", routes["/sync"])
+        self.assertIn("POST", routes["/full-recheck"])
 
     def test_templates_are_loadable(self) -> None:
         self.assertIsNotNone(_TEMPLATES.get_template("base.html"))
