@@ -77,7 +77,7 @@ python -m pip install -e .
 これにより `src/workinbox` を編集した内容が、そのまま現在の仮想環境から利用できます。
 FastAPI / Jinja2 / Uvicorn などの必要な依存パッケージも同時にインストールされます。
 
-既に venv を作成済みの場合も、`pyproject.toml` の依存関係が更新された後は同じコマンドを再実行してください。
+既に venv を作成済みの場合も、`pyproject.toml` の依存関係やコマンドが更新された後は同じコマンドを再実行してください。
 
 ## 設定ファイル
 
@@ -186,6 +186,40 @@ http://127.0.0.1:8000/
 workinbox-web --config config.yaml --host 127.0.0.1 --port 8080
 ```
 
+## Thunderbird タグの IMAP FLAGS を確認する
+
+ステップ6の作業タグ読み書きを実装する前に、Thunderbird の表示タグと IMAP keyword の対応を実測するための読み取り専用診断コマンドがあります。
+
+SQLite の `emails.uid` で対象メールの UID を確認した後、次を実行します。
+
+```bash
+workinbox-imap-flags --config config.yaml --uid 12345
+```
+
+または:
+
+```bash
+python -m workinbox.imap_debug --config config.yaml --uid 12345
+```
+
+出力例:
+
+```text
+Mailbox: INBOX
+UIDVALIDITY: 987654
+UID: 12345
+FLAGS:
+  \\Seen
+  \\Flagged
+  $label1
+```
+
+このコマンドは mailbox を読み取り専用で開き、指定 UID の `FLAGS` を取得するだけで、タグやメール状態を書き換えません。
+
+Thunderbird でタグを付ける前、付けた後、再び外した後の3回を比較して、表示名と IMAP keyword の対応を確認してください。
+
+詳細な手順と記録表は [`docs/tag_test.md`](docs/tag_test.md) を参照してください。
+
 ## PyCharm から実行する
 
 ### Python Interpreter
@@ -236,6 +270,21 @@ Python interpreter: /path/to/WorkInBox/.venv/bin/python
 http://127.0.0.1:8000/
 ```
 
+### IMAP FLAGS 診断の Run/Debug Configuration
+
+タグ確認用には次の構成を作れます。
+
+```text
+Name: WorkInBox IMAP Flags
+Run: module
+Module name: workinbox.imap_debug
+Script parameters: --config config.yaml --uid 12345
+Working directory: /path/to/WorkInBox
+Python interpreter: /path/to/WorkInBox/.venv/bin/python
+```
+
+対象メールを変えるときは `--uid` の値だけ変更します。
+
 `No module named workinbox` や FastAPI 関連の import error が表示された場合は、PyCharm が使っている同じ venv で次を実行してください。
 
 ```bash
@@ -285,5 +334,6 @@ PyCharm の Database ツールや SQLite 対応ツールを使って内容を確
 
 設計の詳細は `docs/` 以下を参照してください。
 
-特に v0.2 の追跡・同期仕様は `docs/design_v0_2.md`、
-メール処理全体の考え方は `docs/design_workflow.md` にまとめています。
+- `docs/design_v0_2.md`: v0.2 の追跡・同期・Web UI 仕様
+- `docs/design_workflow.md`: メール処理全体の考え方
+- `docs/tag_test.md`: Thunderbird タグと IMAP keyword の確認手順
