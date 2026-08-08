@@ -53,6 +53,7 @@ class SynchronizationService:
 
         checks, messages = self.imap_client.synchronize(existing)
         inactivated = 0
+        reactivated_from_checks = 0
         errors: list[SyncError] = []
 
         for check in checks:
@@ -71,16 +72,20 @@ class SynchronizationService:
                 ImapCheckState.MISSING: TrackingStatus.INACTIVE_MOVED,
             }[check.state]
             changed = self.database.update_tracking_status(check.message_id, target)
-            if changed and target != TrackingStatus.ACTIVE:
+            if not changed:
+                continue
+            if target == TrackingStatus.ACTIVE:
+                reactivated_from_checks += 1
+            else:
                 inactivated += 1
 
-        added, reactivated = self.database.synchronize(messages)
+        added, reactivated_from_discovery = self.database.synchronize(messages)
         return SyncResult(
             mode=mode,
             checked=len(checks),
             flagged=len(messages),
             added=added,
-            reactivated=reactivated,
+            reactivated=reactivated_from_checks + reactivated_from_discovery,
             inactivated=inactivated,
             errors=tuple(errors),
         )
