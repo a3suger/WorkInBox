@@ -116,6 +116,10 @@ database:
 
 venv を有効にした状態で、リポジトリ直下から実行します。
 
+### 通常同期
+
+通常同期では、SQLite 上の `active` メールを既存確認対象にし、あわせて新規のスター付きメールを探索します。
+
 ```bash
 python -m workinbox.main --config config.yaml
 ```
@@ -126,10 +130,28 @@ editable install 後は、次のコマンドでも実行できます。
 workinbox --config config.yaml
 ```
 
+### 全件再確認
+
+全件再確認では、`active` に加えて `inactive_unstarred` / `inactive_moved` の既存レコードも保存済み IMAP UID で再確認します。
+再びスター付きとして確認できたメールは `active` に復帰できます。
+
+```bash
+python -m workinbox.main --config config.yaml --full-recheck
+```
+
+または:
+
+```bash
+workinbox --config config.yaml --full-recheck
+```
+
+同期処理の業務ロジックは `SynchronizationService` に分離されており、CLI は Application Service を呼び出す入口として動作します。将来の FastAPI UI からも同じサービスを利用する前提です。
+
 正常に同期できると、例として次のようなログが表示されます。
 
 ```text
 INFO Connecting IMAP server
+INFO Checked ... existing messages
 INFO Found ... flagged messages
 INFO Added ... messages
 INFO Reactivated ... messages
@@ -153,7 +175,7 @@ PyCharm の Project Interpreter には、このプロジェクト用に作成し
 
 PyCharm の `Run` → `Edit Configurations...` から Python の実行構成を作成します。
 
-設定例:
+通常同期の設定例:
 
 ```text
 Name: WorkInBox
@@ -164,9 +186,15 @@ Working directory: /path/to/WorkInBox
 Python interpreter: /path/to/WorkInBox/.venv/bin/python
 ```
 
+全件再確認用の実行構成を別に作る場合は、`Script parameters` を次にします。
+
+```text
+--config config.yaml --full-recheck
+```
+
 `Working directory` は `pyproject.toml`、`config.yaml`、`src` があるリポジトリ直下を指定します。
 
-この設定は、ターミナルで次を実行するのと同じです。
+通常同期の設定は、ターミナルで次を実行するのと同じです。
 
 ```bash
 python -m workinbox.main --config config.yaml
@@ -195,6 +223,7 @@ IMAP 同期を変更した場合は、自動テストに加えて実環境でも
 - 既に登録済みの古いメールは追跡が継続される
 - スターを外したメールが `inactive_unstarred` になる
 - 対象 mailbox から移動したメールが `inactive_moved` になる
+- 全件再確認で inactive メールも再確認対象になる
 
 ## SQLite データ
 
