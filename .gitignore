@@ -17,3 +17,4 @@ __pycache__/
 /dev-*.sh
 
 *.egg-info/
+memo*.txt
