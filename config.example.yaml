@@ -4,6 +4,7 @@ imap:
   username: user@example.jp
   password: secret
   mailbox: INBOX
+  new_mail_lookback_days: 7
 
 database:
   path: data/workinbox.db
