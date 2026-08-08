@@ -10,10 +10,17 @@ from email.message import Message
 from email.utils import getaddresses
 
 from .config import ImapConfig
-from .models import EmailMessage, ImapCheckResult, ImapCheckState, ImapReference
+from .models import (
+    EmailMessage,
+    ImapCheckResult,
+    ImapCheckState,
+    ImapFlagsSnapshot,
+    ImapReference,
+)
 
 
 _FLAGGED_RE = re.compile(rb"(?:^|[ (])\\Flagged(?:[ )]|$)", re.IGNORECASE)
+_FLAGS_RE = re.compile(rb"FLAGS \(([^)]*)\)", re.IGNORECASE)
 
 
 def _decode_header(value: str | None) -> str | None:
@@ -92,6 +99,19 @@ def _fetch_has_flagged(fetched: list[bytes | tuple[bytes, bytes] | None]) -> boo
     return any(isinstance(item, bytes) and _FLAGGED_RE.search(item) for item in metadata)
 
 
+def _parse_flags(fetched: list[bytes | tuple[bytes, bytes] | None]) -> tuple[str, ...]:
+    for item in fetched:
+        metadata = item[0] if isinstance(item, tuple) else item
+        if not isinstance(metadata, bytes):
+            continue
+        match = _FLAGS_RE.search(metadata)
+        if match is None:
+            continue
+        raw_flags = match.group(1).decode("utf-8", errors="replace").strip()
+        return tuple(raw_flags.split()) if raw_flags else ()
+    raise RuntimeError("IMAP FLAGS are unavailable for the requested UID")
+
+
 def _new_mail_since(today: date, lookback_days: int) -> date:
     return today - timedelta(days=lookback_days - 1)
 
@@ -99,6 +119,25 @@ def _new_mail_since(today: date, lookback_days: int) -> date:
 class ImapClient:
     def __init__(self, config: ImapConfig) -> None:
         self.config = config
+
+    def inspect_flags(self, uid: int) -> ImapFlagsSnapshot:
+        with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
+            client.login(self.config.username, self.config.password)
+            status, _ = client.select(self.config.mailbox, readonly=True)
+            if status != "OK":
+                raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
+
+            current_uidvalidity = _uidvalidity(client)
+            status, fetched = client.uid("fetch", str(uid), "(UID FLAGS)")
+            if status != "OK":
+                raise RuntimeError(f"IMAP fetch failed for UID {uid}")
+            flags = _parse_flags(fetched)
+            return ImapFlagsSnapshot(
+                mailbox=self.config.mailbox,
+                uidvalidity=current_uidvalidity,
+                uid=uid,
+                flags=flags,
+            )
 
     def synchronize(
         self,
