@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .models import EmailMessage, ImapReference, TrackingStatus
+from .models import EmailMessage, ImapReference, TrackedEmail, TrackingStatus
 
 
 class EmailDatabase:
@@ -78,6 +78,42 @@ class EmailDatabase:
         with sqlite3.connect(self.path) as connection:
             rows = connection.execute("SELECT message_id FROM emails")
             return {str(row[0]) for row in rows}
+
+    def list_tracked_emails(
+        self,
+        *,
+        active: bool,
+    ) -> list[TrackedEmail]:
+        if active:
+            condition = "tracking_status = ?"
+            parameters: tuple[object, ...] = (TrackingStatus.ACTIVE.value,)
+        else:
+            condition = "tracking_status != ?"
+            parameters = (TrackingStatus.ACTIVE.value,)
+
+        with sqlite3.connect(self.path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT message_id, sender, subject, received_at,
+                       tracking_status, status_changed_at, last_imap_checked_at
+                FROM emails
+                WHERE {condition}
+                ORDER BY received_at DESC, id DESC
+                """,
+                parameters,
+            ).fetchall()
+        return [
+            TrackedEmail(
+                message_id=str(row[0]),
+                sender=str(row[1]),
+                subject=str(row[2]) if row[2] is not None else None,
+                received_at=str(row[3]) if row[3] is not None else None,
+                tracking_status=TrackingStatus(str(row[4])),
+                status_changed_at=str(row[5]) if row[5] is not None else None,
+                last_imap_checked_at=str(row[6]) if row[6] is not None else None,
+            )
+            for row in rows
+        ]
 
     def imap_references(
         self,
