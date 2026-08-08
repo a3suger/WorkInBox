@@ -54,3 +54,11 @@ class TrackedEmail:
     tracking_status: TrackingStatus
     status_changed_at: str | None
     last_imap_checked_at: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ImapFlagsSnapshot:
+    mailbox: str
+    uidvalidity: int
+    uid: int
+    flags: tuple[str, ...]
