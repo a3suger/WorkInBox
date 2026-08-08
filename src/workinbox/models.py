@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
+
+
+class TrackingStatus(StrEnum):
+    ACTIVE = "active"
+    INACTIVE_UNSTARRED = "inactive_unstarred"
+    INACTIVE_MOVED = "inactive_moved"
 
 
 @dataclass(frozen=True, slots=True)
