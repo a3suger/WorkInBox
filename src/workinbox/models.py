@@ -10,6 +10,13 @@ class TrackingStatus(StrEnum):
     INACTIVE_MOVED = "inactive_moved"
 
 
+class ImapCheckState(StrEnum):
+    FLAGGED = "flagged"
+    UNSTARRED = "unstarred"
+    MISSING = "missing"
+    ERROR = "error"
+
+
 @dataclass(frozen=True, slots=True)
 class EmailMessage:
     message_id: str
@@ -18,3 +25,21 @@ class EmailMessage:
     subject: str | None
     received_at: str | None
     body: str | None
+    mailbox: str | None = None
+    uidvalidity: int | None = None
+    uid: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ImapReference:
+    message_id: str
+    mailbox: str
+    uidvalidity: int
+    uid: int
+
+
+@dataclass(frozen=True, slots=True)
+class ImapCheckResult:
+    message_id: str
+    state: ImapCheckState
+    error: str | None = None
