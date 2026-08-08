@@ -9,21 +9,43 @@ from pathlib import Path
 from .config import load_config
 from .database import EmailDatabase
 from .imap_client import ImapClient
+from .models import ImapCheckState, TrackingStatus
 
 
 def synchronize(config_path: str | Path) -> tuple[int, int, int]:
     config = load_config(config_path)
-    logging.info("Connecting IMAP server")
-    messages = ImapClient(config.imap).fetch_flagged()
-    logging.info("Found %d flagged messages", len(messages))
-
     database = EmailDatabase(config.database.path)
     database.initialize()
-    added, removed = database.synchronize(messages)
+    existing = database.active_imap_references(config.imap.mailbox)
+
+    logging.info("Connecting IMAP server")
+    checks, messages = ImapClient(config.imap).synchronize(existing)
+
+    inactivated = 0
+    for check in checks:
+        if check.state == ImapCheckState.ERROR:
+            logging.warning(
+                "Unable to check %s: %s",
+                check.message_id,
+                check.error or "unknown IMAP error",
+            )
+            continue
+        target = {
+            ImapCheckState.FLAGGED: TrackingStatus.ACTIVE,
+            ImapCheckState.UNSTARRED: TrackingStatus.INACTIVE_UNSTARRED,
+            ImapCheckState.MISSING: TrackingStatus.INACTIVE_MOVED,
+        }[check.state]
+        if database.update_tracking_status(check.message_id, target):
+            if target != TrackingStatus.ACTIVE:
+                inactivated += 1
+
+    logging.info("Found %d flagged messages", len(messages))
+    added, reactivated = database.synchronize(messages)
     logging.info("Added %d messages", added)
-    logging.info("Removed %d messages", removed)
+    logging.info("Reactivated %d messages", reactivated)
+    logging.info("Inactivated %d messages", inactivated)
     logging.info("Synchronization completed")
-    return len(messages), added, removed
+    return len(messages), added, inactivated
 
 
 def cli() -> int:
