@@ -6,7 +6,7 @@ from enum import StrEnum
 from .config import AppConfig
 from .database import EmailDatabase
 from .imap_client import ImapClient
-from .models import ImapCheckState, TrackingStatus
+from .models import ImapCheckState, TrackedEmail, TrackingStatus
 
 
 class SyncMode(StrEnum):
@@ -95,3 +95,22 @@ class SynchronizationService:
 
     def full_recheck(self) -> SyncResult:
         return self.synchronize(SyncMode.FULL_RECHECK)
+
+
+class TrackingQueryService:
+    def __init__(
+        self,
+        config: AppConfig,
+        *,
+        database: EmailDatabase | None = None,
+    ) -> None:
+        self.config = config
+        self.database = database or EmailDatabase(config.database.path)
+
+    def active_emails(self) -> list[TrackedEmail]:
+        self.database.initialize()
+        return self.database.list_tracked_emails(active=True)
+
+    def inactive_emails(self) -> list[TrackedEmail]:
+        self.database.initialize()
+        return self.database.list_tracked_emails(active=False)
