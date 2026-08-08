@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .models import EmailMessage, TrackingStatus
+from .models import EmailMessage, ImapReference, TrackingStatus
 
 
 class EmailDatabase:
@@ -79,42 +79,110 @@ class EmailDatabase:
             rows = connection.execute("SELECT message_id FROM emails")
             return {str(row[0]) for row in rows}
 
+    def active_imap_references(self, mailbox: str) -> list[ImapReference]:
+        with sqlite3.connect(self.path) as connection:
+            rows = connection.execute(
+                """
+                SELECT message_id, mailbox, uidvalidity, uid
+                FROM emails
+                WHERE tracking_status = ?
+                  AND mailbox = ?
+                  AND uidvalidity IS NOT NULL
+                  AND uid IS NOT NULL
+                ORDER BY id
+                """,
+                (TrackingStatus.ACTIVE.value, mailbox),
+            ).fetchall()
+        return [
+            ImapReference(
+                message_id=str(row[0]),
+                mailbox=str(row[1]),
+                uidvalidity=int(row[2]),
+                uid=int(row[3]),
+            )
+            for row in rows
+        ]
+
     def synchronize(self, messages: Iterable[EmailMessage]) -> tuple[int, int]:
         incoming = {message.message_id: message for message in messages}
-        existing = self.message_ids()
-        added_ids = incoming.keys() - existing
-        removed_ids = existing - incoming.keys()
         synchronized_at = datetime.now(timezone.utc).isoformat()
+        added = 0
+        reactivated = 0
 
         with sqlite3.connect(self.path) as connection:
-            connection.executemany(
-                """
-                INSERT INTO emails (
-                    message_id, sender, recipients, subject,
-                    received_at, body, synchronized_at,
-                    tracking_status, status_changed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        incoming[message_id].message_id,
-                        incoming[message_id].sender,
-                        incoming[message_id].recipients,
-                        incoming[message_id].subject,
-                        incoming[message_id].received_at,
-                        incoming[message_id].body,
-                        synchronized_at,
-                        TrackingStatus.ACTIVE.value,
-                        synchronized_at,
+            for message in incoming.values():
+                row = connection.execute(
+                    "SELECT tracking_status FROM emails WHERE message_id = ?",
+                    (message.message_id,),
+                ).fetchone()
+                if row is None:
+                    connection.execute(
+                        """
+                        INSERT INTO emails (
+                            message_id, sender, recipients, subject,
+                            received_at, body, synchronized_at,
+                            mailbox, uidvalidity, uid,
+                            tracking_status, status_changed_at,
+                            last_imap_checked_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            message.message_id,
+                            message.sender,
+                            message.recipients,
+                            message.subject,
+                            message.received_at,
+                            message.body,
+                            synchronized_at,
+                            message.mailbox,
+                            message.uidvalidity,
+                            message.uid,
+                            TrackingStatus.ACTIVE.value,
+                            synchronized_at,
+                            synchronized_at,
+                        ),
                     )
-                    for message_id in added_ids
-                ],
-            )
-            connection.executemany(
-                "DELETE FROM emails WHERE message_id = ?",
-                [(message_id,) for message_id in removed_ids],
-            )
-        return len(added_ids), len(removed_ids)
+                    added += 1
+                    continue
+
+                current_status = str(row[0])
+                next_changed_at = (
+                    synchronized_at
+                    if current_status != TrackingStatus.ACTIVE.value
+                    else None
+                )
+                connection.execute(
+                    """
+                    UPDATE emails
+                    SET sender = ?, recipients = ?, subject = ?,
+                        received_at = ?, body = ?, synchronized_at = ?,
+                        mailbox = COALESCE(?, mailbox),
+                        uidvalidity = COALESCE(?, uidvalidity),
+                        uid = COALESCE(?, uid),
+                        tracking_status = ?,
+                        status_changed_at = COALESCE(?, status_changed_at),
+                        last_imap_checked_at = ?
+                    WHERE message_id = ?
+                    """,
+                    (
+                        message.sender,
+                        message.recipients,
+                        message.subject,
+                        message.received_at,
+                        message.body,
+                        synchronized_at,
+                        message.mailbox,
+                        message.uidvalidity,
+                        message.uid,
+                        TrackingStatus.ACTIVE.value,
+                        next_changed_at,
+                        synchronized_at,
+                        message.message_id,
+                    ),
+                )
+                if current_status != TrackingStatus.ACTIVE.value:
+                    reactivated += 1
+        return added, reactivated
 
     def set_imap_identity(
         self,
