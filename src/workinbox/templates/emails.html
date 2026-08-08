@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}{% if active_view %}Active{% else %}Inactive{% endif %} - WorkInBox{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2>{% if active_view %}Active メール{% else %}Inactive メール{% endif %}</h2>
+    <div class="muted">{{ emails | length }} 件</div>
+  </div>
+  <div class="actions">
+    <form method="post" action="/sync">
+      <button class="primary" type="submit">通常同期</button>
+    </form>
+    <form method="post" action="/full-recheck">
+      <button type="submit">全件再確認</button>
+    </form>
+  </div>
+</div>
+
+{% if sync_result %}
+<div class="notice">
+  <strong>{% if sync_result.mode.value == "full_recheck" %}全件再確認{% else %}通常同期{% endif %} 完了</strong><br>
+  既存確認 {{ sync_result.checked }} 件 / スター付き検出 {{ sync_result.flagged }} 件 /
+  新規 {{ sync_result.added }} 件 / 再活性化 {{ sync_result.reactivated }} 件 /
+  inactive化 {{ sync_result.inactivated }} 件
+  {% if sync_result.errors %}
+  <div style="margin-top: 8px;">
+    <strong>メール単位エラー: {{ sync_result.errors | length }} 件</strong>
+    <ul>
+      {% for error in sync_result.errors %}
+      <li>{{ error.message_id }}: {{ error.message }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if sync_failure %}
+<div class="notice error">
+  <strong>同期に失敗しました。</strong><br>
+  {{ sync_failure }}
+</div>
+{% endif %}
+
+{% if emails %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>件名</th>
+      <th>差出人</th>
+      <th>受信日時</th>
+      <th>追跡状態</th>
+      <th>作業タグ</th>
+      <th>状態変更日時</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for email in emails %}
+    <tr>
+      <td>{{ email.subject or "(件名なし)" }}</td>
+      <td>{{ email.sender }}</td>
+      <td>{{ email.received_at or "-" }}</td>
+      <td class="status">{{ email.tracking_status.value }}</td>
+      <td class="muted">未取得</td>
+      <td>{{ email.status_changed_at or "-" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty">
+  {% if active_view %}現在 active のメールはありません。{% else %}現在 inactive のメールはありません。{% endif %}
+</div>
+{% endif %}
+{% endblock %}
