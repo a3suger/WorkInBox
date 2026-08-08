@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
 from unittest.mock import patch
 
 from workinbox.config import ImapConfig
-from workinbox.imap_client import ImapClient
+from workinbox.imap_client import ImapClient, _new_mail_since
 from workinbox.models import ImapCheckState, ImapReference
 
 
@@ -20,6 +21,8 @@ RAW_MESSAGE = (
 
 
 class FakeImap:
+    last_search_args: tuple[object, ...] | None = None
+
     def __init__(self, *args: object) -> None:
         self.fetch_responses: dict[int, tuple[str, list[object]]] = {
             10: ("OK", [(b"1 (UID 10 FLAGS (\\Seen))", b"")]),
@@ -45,6 +48,7 @@ class FakeImap:
 
     def uid(self, command: str, *args: object) -> tuple[str, list[object]]:
         if command == "search":
+            FakeImap.last_search_args = args
             return "OK", [b"40 50"]
         uid = int(args[0])
         query = str(args[1])
@@ -59,10 +63,17 @@ class FakeImap:
 
 class ImapClientTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.config = ImapConfig("imap.example", 993, "user", "pass", "INBOX")
+        FakeImap.last_search_args = None
+        self.config = ImapConfig(
+            "imap.example", 993, "user", "pass", "INBOX", 7
+        )
 
     @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
-    def test_synchronize_distinguishes_unstarred_missing_error_and_flagged(self) -> None:
+    @patch("workinbox.imap_client.date")
+    def test_synchronize_distinguishes_states_and_limits_new_discovery(
+        self, mock_date
+    ) -> None:
+        mock_date.today.return_value = date(2026, 8, 8)
         existing = [
             ImapReference("<unstarred@example>", "INBOX", 55, 10),
             ImapReference("<missing@example>", "INBOX", 55, 20),
@@ -80,11 +91,19 @@ class ImapClientTest(unittest.TestCase):
                 ImapCheckState.FLAGGED,
             ],
         )
+        self.assertEqual(
+            FakeImap.last_search_args,
+            (None, "FLAGGED", "SINCE", "02-Aug-2026"),
+        )
         self.assertEqual(len(messages), 1)
         self.assertEqual(messages[0].message_id, "<new@example>")
         self.assertEqual(messages[0].mailbox, "INBOX")
         self.assertEqual(messages[0].uidvalidity, 55)
         self.assertEqual(messages[0].uid, 40)
+
+    def test_new_mail_since_counts_today_as_one_calendar_day(self) -> None:
+        self.assertEqual(_new_mail_since(date(2026, 8, 8), 1), date(2026, 8, 8))
+        self.assertEqual(_new_mail_since(date(2026, 8, 8), 7), date(2026, 8, 2))
 
     @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
     def test_uidvalidity_change_aborts_before_state_results(self) -> None:
