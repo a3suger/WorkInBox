@@ -75,6 +75,9 @@ python -m pip install -e .
 ```
 
 これにより `src/workinbox` を編集した内容が、そのまま現在の仮想環境から利用できます。
+FastAPI / Jinja2 / Uvicorn などの必要な依存パッケージも同時にインストールされます。
+
+既に venv を作成済みの場合も、`pyproject.toml` の依存関係が更新された後は同じコマンドを再実行してください。
 
 ## 設定ファイル
 
@@ -112,7 +115,7 @@ database:
 `config.yaml` には認証情報が入るため、Git にコミットしないでください。
 このリポジトリでは `config.yaml` は `.gitignore` の対象です。
 
-## 実行
+## CLI で同期する
 
 venv を有効にした状態で、リポジトリ直下から実行します。
 
@@ -145,18 +148,42 @@ python -m workinbox.main --config config.yaml --full-recheck
 workinbox --config config.yaml --full-recheck
 ```
 
-同期処理の業務ロジックは `SynchronizationService` に分離されており、CLI は Application Service を呼び出す入口として動作します。将来の FastAPI UI からも同じサービスを利用する前提です。
+同期処理の業務ロジックは `SynchronizationService` に分離されており、CLI と Web UI は同じ Application Service を利用します。
 
-正常に同期できると、例として次のようなログが表示されます。
+## Web UI を起動する
+
+FastAPI + Jinja2 のサーバーサイドHTML UIを起動します。
+
+```bash
+workinbox-web --config config.yaml
+```
+
+または:
+
+```bash
+python -m workinbox.web --config config.yaml
+```
+
+既定ではローカルホストだけにバインドします。
 
 ```text
-INFO Connecting IMAP server
-INFO Checked ... existing messages
-INFO Found ... flagged messages
-INFO Added ... messages
-INFO Reactivated ... messages
-INFO Inactivated ... messages
-INFO Synchronization completed
+http://127.0.0.1:8000/
+```
+
+ブラウザで開くと、次の操作ができます。
+
+- Active メール一覧の表示
+- Inactive メール一覧の表示
+- 通常同期
+- 全件再確認
+- 同期結果とメール単位エラーの確認
+
+現段階の Web UI は v0.2 の基盤です。IMAP 上の作業タグ読み取りは次の実装ステップのため、作業タグ欄は現在 `未取得` と表示されます。
+
+ホストやポートを変更する場合:
+
+```bash
+workinbox-web --config config.yaml --host 127.0.0.1 --port 8080
 ```
 
 ## PyCharm から実行する
@@ -171,9 +198,7 @@ PyCharm の Project Interpreter には、このプロジェクト用に作成し
 <WorkInBox>/.venv/bin/python
 ```
 
-### Run/Debug Configuration
-
-PyCharm の `Run` → `Edit Configurations...` から Python の実行構成を作成します。
+### CLI の Run/Debug Configuration
 
 通常同期の設定例:
 
@@ -192,15 +217,26 @@ Python interpreter: /path/to/WorkInBox/.venv/bin/python
 --config config.yaml --full-recheck
 ```
 
-`Working directory` は `pyproject.toml`、`config.yaml`、`src` があるリポジトリ直下を指定します。
+### Web UI の Run/Debug Configuration
 
-通常同期の設定は、ターミナルで次を実行するのと同じです。
+Web UI 用には別の Python 実行構成を作ると便利です。
 
-```bash
-python -m workinbox.main --config config.yaml
+```text
+Name: WorkInBox Web
+Run: module
+Module name: workinbox.web
+Script parameters: --config config.yaml
+Working directory: /path/to/WorkInBox
+Python interpreter: /path/to/WorkInBox/.venv/bin/python
 ```
 
-`No module named workinbox` と表示された場合は、PyCharm が使っている同じ venv で次を実行してください。
+実行後、ブラウザで次を開きます。
+
+```text
+http://127.0.0.1:8000/
+```
+
+`No module named workinbox` や FastAPI 関連の import error が表示された場合は、PyCharm が使っている同じ venv で次を実行してください。
 
 ```bash
 python -m pip install -e .
@@ -224,6 +260,8 @@ IMAP 同期を変更した場合は、自動テストに加えて実環境でも
 - スターを外したメールが `inactive_unstarred` になる
 - 対象 mailbox から移動したメールが `inactive_moved` になる
 - 全件再確認で inactive メールも再確認対象になる
+
+Web UI を変更した場合は、起動後に Active / Inactive の両画面と、通常同期 / 全件再確認の両ボタンも確認してください。
 
 ## SQLite データ
 
