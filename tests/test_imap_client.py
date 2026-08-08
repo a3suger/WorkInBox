@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from datetime import date
+from pathlib import Path
 from unittest.mock import patch
 
 from workinbox.config import ImapConfig
@@ -22,6 +24,7 @@ RAW_MESSAGE = (
 
 class FakeImap:
     last_search_args: tuple[object, ...] | None = None
+    last_select_readonly: bool | None = None
 
     def __init__(self, *args: object) -> None:
         self.fetch_responses: dict[int, tuple[str, list[object]]] = {
@@ -29,6 +32,10 @@ class FakeImap:
             20: ("OK", [None]),
             30: ("NO", []),
             40: ("OK", [(b"4 (UID 40 FLAGS (\\Flagged \\Seen))", b"")]),
+            60: (
+                "OK",
+                [(b"6 (UID 60 FLAGS (\\Seen \\Flagged $label1 WorkInBoxTest))", b"")],
+            ),
         }
 
     def __enter__(self) -> "FakeImap":
@@ -41,7 +48,8 @@ class FakeImap:
         return "OK", [b""]
 
     def select(self, mailbox: str, readonly: bool = False) -> tuple[str, list[bytes]]:
-        return "OK", [b"4"]
+        FakeImap.last_select_readonly = readonly
+        return "OK", [b"6"]
 
     def response(self, code: str) -> tuple[str, list[bytes]]:
         return "UIDVALIDITY", [b"55"]
@@ -64,6 +72,7 @@ class FakeImap:
 class ImapClientTest(unittest.TestCase):
     def setUp(self) -> None:
         FakeImap.last_search_args = None
+        FakeImap.last_select_readonly = None
         self.config = ImapConfig(
             "imap.example", 993, "user", "pass", "INBOX", 7
         )
@@ -100,6 +109,19 @@ class ImapClientTest(unittest.TestCase):
         self.assertEqual(messages[0].mailbox, "INBOX")
         self.assertEqual(messages[0].uidvalidity, 55)
         self.assertEqual(messages[0].uid, 40)
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
+    def test_inspect_flags_reads_keywords_without_write_access(self) -> None:
+        snapshot = ImapClient(self.config).inspect_flags(60)
+
+        self.assertTrue(FakeImap.last_select_readonly)
+        self.assertEqual(snapshot.mailbox, "INBOX")
+        self.assertEqual(snapshot.uidvalidity, 55)
+        self.assertEqual(snapshot.uid, 60)
+        self.assertEqual(
+            snapshot.flags,
+            ("\\Seen", "\\Flagged", "$label1", "WorkInBoxTest"),
+        )
 
     def test_new_mail_since_counts_today_as_one_calendar_day(self) -> None:
         self.assertEqual(_new_mail_since(date(2026, 8, 8), 1), date(2026, 8, 8))
