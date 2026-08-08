@@ -3,6 +3,7 @@ from __future__ import annotations
 import imaplib
 import re
 from collections.abc import Iterable
+from datetime import date, timedelta
 from email import message_from_bytes, policy
 from email.header import decode_header
 from email.message import Message
@@ -91,6 +92,10 @@ def _fetch_has_flagged(fetched: list[bytes | tuple[bytes, bytes] | None]) -> boo
     return any(isinstance(item, bytes) and _FLAGGED_RE.search(item) for item in metadata)
 
 
+def _new_mail_since(today: date, lookback_days: int) -> date:
+    return today - timedelta(days=lookback_days - 1)
+
+
 class ImapClient:
     def __init__(self, config: ImapConfig) -> None:
         self.config = config
@@ -149,7 +154,10 @@ class ImapClient:
                         ImapCheckResult(reference.message_id, ImapCheckState.UNSTARRED)
                     )
 
-            status, data = client.uid("search", None, "FLAGGED")
+            since = _new_mail_since(date.today(), self.config.new_mail_lookback_days)
+            status, data = client.uid(
+                "search", None, "FLAGGED", "SINCE", since.strftime("%d-%b-%Y")
+            )
             if status != "OK":
                 raise RuntimeError("IMAP FLAGGED search failed")
 
