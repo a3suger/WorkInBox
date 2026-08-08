@@ -10,7 +10,7 @@ from workinbox.models import EmailMessage, TrackingStatus
 
 
 class EmailDatabaseTest(unittest.TestCase):
-    def test_add_and_remove_messages(self) -> None:
+    def test_synchronize_keeps_missing_messages_and_adds_new_ones(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
             database = EmailDatabase(path)
@@ -20,13 +20,13 @@ class EmailDatabaseTest(unittest.TestCase):
             second = EmailMessage("<2@example>", "b@example", None, "Two", None, "B")
 
             self.assertEqual(database.synchronize([first, second]), (2, 0))
-            self.assertEqual(database.synchronize([second]), (0, 1))
+            self.assertEqual(database.synchronize([second]), (0, 0))
 
             with sqlite3.connect(path) as connection:
                 rows = connection.execute(
                     "SELECT message_id FROM emails ORDER BY message_id"
                 ).fetchall()
-            self.assertEqual(rows, [("<2@example>",)])
+            self.assertEqual(rows, [("<1@example>",), ("<2@example>",)])
 
     def test_duplicate_message_id_is_not_added_twice(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -35,6 +35,55 @@ class EmailDatabaseTest(unittest.TestCase):
             message = EmailMessage("<1@example>", "a@example", None, None, None, None)
             self.assertEqual(database.synchronize([message]), (1, 0))
             self.assertEqual(database.synchronize([message]), (0, 0))
+
+    def test_inactive_message_is_reactivated_by_flagged_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            database.initialize()
+            message = EmailMessage(
+                "<1@example>", "a@example", None, None, None, None,
+                mailbox="INBOX", uidvalidity=10, uid=20,
+            )
+            database.synchronize([message])
+            database.update_tracking_status(
+                message.message_id,
+                TrackingStatus.INACTIVE_UNSTARRED,
+                checked_at="2026-08-08T00:00:00+00:00",
+            )
+
+            moved_identity = EmailMessage(
+                "<1@example>", "a@example", None, None, None, None,
+                mailbox="INBOX", uidvalidity=10, uid=30,
+            )
+            self.assertEqual(database.synchronize([moved_identity]), (0, 1))
+
+            with sqlite3.connect(path) as connection:
+                row = connection.execute(
+                    "SELECT tracking_status, mailbox, uidvalidity, uid FROM emails"
+                ).fetchone()
+            self.assertEqual(row, ("active", "INBOX", 10, 30))
+
+    def test_active_imap_references_only_include_identified_active_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            database.initialize()
+            active = EmailMessage(
+                "<1@example>", "a@example", None, None, None, None,
+                mailbox="INBOX", uidvalidity=10, uid=20,
+            )
+            no_identity = EmailMessage("<2@example>", "b@example", None, None, None, None)
+            database.synchronize([active, no_identity])
+            database.update_tracking_status(
+                no_identity.message_id,
+                TrackingStatus.INACTIVE_MOVED,
+            )
+
+            refs = database.active_imap_references("INBOX")
+            self.assertEqual(len(refs), 1)
+            self.assertEqual(refs[0].message_id, active.message_id)
+            self.assertEqual(refs[0].uid, 20)
 
     def test_initialize_migrates_v01_database(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
