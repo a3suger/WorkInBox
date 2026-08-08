@@ -43,3 +43,14 @@ class ImapCheckResult:
     message_id: str
     state: ImapCheckState
     error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TrackedEmail:
+    message_id: str
+    sender: str
+    subject: str | None
+    received_at: str | None
+    tracking_status: TrackingStatus
+    status_changed_at: str | None
+    last_imap_checked_at: str | None
