@@ -79,20 +79,27 @@ class EmailDatabase:
             rows = connection.execute("SELECT message_id FROM emails")
             return {str(row[0]) for row in rows}
 
-    def active_imap_references(self, mailbox: str) -> list[ImapReference]:
+    def imap_references(
+        self,
+        mailbox: str,
+        *,
+        include_inactive: bool = False,
+    ) -> list[ImapReference]:
+        query = """
+            SELECT message_id, mailbox, uidvalidity, uid
+            FROM emails
+            WHERE mailbox = ?
+              AND uidvalidity IS NOT NULL
+              AND uid IS NOT NULL
+        """
+        parameters: list[object] = [mailbox]
+        if not include_inactive:
+            query += " AND tracking_status = ?"
+            parameters.append(TrackingStatus.ACTIVE.value)
+        query += " ORDER BY id"
+
         with sqlite3.connect(self.path) as connection:
-            rows = connection.execute(
-                """
-                SELECT message_id, mailbox, uidvalidity, uid
-                FROM emails
-                WHERE tracking_status = ?
-                  AND mailbox = ?
-                  AND uidvalidity IS NOT NULL
-                  AND uid IS NOT NULL
-                ORDER BY id
-                """,
-                (TrackingStatus.ACTIVE.value, mailbox),
-            ).fetchall()
+            rows = connection.execute(query, parameters).fetchall()
         return [
             ImapReference(
                 message_id=str(row[0]),
@@ -102,6 +109,9 @@ class EmailDatabase:
             )
             for row in rows
         ]
+
+    def active_imap_references(self, mailbox: str) -> list[ImapReference]:
+        return self.imap_references(mailbox)
 
     def synchronize(self, messages: Iterable[EmailMessage]) -> tuple[int, int]:
         incoming = {message.message_id: message for message in messages}
