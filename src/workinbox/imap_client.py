@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import imaplib
+import re
+from collections.abc import Iterable
 from email import message_from_bytes, policy
 from email.header import decode_header
 from email.message import Message
 from email.utils import getaddresses
 
 from .config import ImapConfig
-from .models import EmailMessage
+from .models import EmailMessage, ImapCheckResult, ImapCheckState, ImapReference
+
+
+_FLAGGED_RE = re.compile(rb"(?:^|[ (])\\Flagged(?:[ )]|$)", re.IGNORECASE)
 
 
 def _decode_header(value: str | None) -> str | None:
@@ -65,11 +70,36 @@ def _body(message: Message) -> str | None:
     return "\n".join(selected) if selected else None
 
 
+def _uidvalidity(client: imaplib.IMAP4_SSL) -> int:
+    status, data = client.response("UIDVALIDITY")
+    if status != "UIDVALIDITY" or not data or data[0] is None:
+        raise RuntimeError("IMAP UIDVALIDITY is unavailable")
+    try:
+        return int(data[0])
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("Invalid IMAP UIDVALIDITY response") from exc
+
+
+def _fetch_has_flagged(fetched: list[bytes | tuple[bytes, bytes] | None]) -> bool | None:
+    metadata = [
+        item[0] if isinstance(item, tuple) else item
+        for item in fetched
+        if item is not None
+    ]
+    if not metadata:
+        return None
+    return any(isinstance(item, bytes) and _FLAGGED_RE.search(item) for item in metadata)
+
+
 class ImapClient:
     def __init__(self, config: ImapConfig) -> None:
         self.config = config
 
-    def fetch_flagged(self) -> list[EmailMessage]:
+    def synchronize(
+        self,
+        existing: Iterable[ImapReference],
+    ) -> tuple[list[ImapCheckResult], list[EmailMessage]]:
+        checks: list[ImapCheckResult] = []
         messages: list[EmailMessage] = []
         with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
             client.login(self.config.username, self.config.password)
@@ -77,14 +107,62 @@ class ImapClient:
             if status != "OK":
                 raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
 
+            current_uidvalidity = _uidvalidity(client)
+            for reference in existing:
+                if reference.uidvalidity != current_uidvalidity:
+                    raise RuntimeError(
+                        "IMAP UIDVALIDITY changed; automatic recovery is not supported"
+                    )
+                try:
+                    status, fetched = client.uid(
+                        "fetch", str(reference.uid), "(UID FLAGS)"
+                    )
+                except (imaplib.IMAP4.error, OSError) as exc:
+                    checks.append(
+                        ImapCheckResult(
+                            reference.message_id,
+                            ImapCheckState.ERROR,
+                            str(exc),
+                        )
+                    )
+                    continue
+                if status != "OK":
+                    checks.append(
+                        ImapCheckResult(
+                            reference.message_id,
+                            ImapCheckState.ERROR,
+                            f"IMAP fetch failed for UID {reference.uid}",
+                        )
+                    )
+                    continue
+                flagged = _fetch_has_flagged(fetched)
+                if flagged is None:
+                    checks.append(
+                        ImapCheckResult(reference.message_id, ImapCheckState.MISSING)
+                    )
+                elif flagged:
+                    checks.append(
+                        ImapCheckResult(reference.message_id, ImapCheckState.FLAGGED)
+                    )
+                else:
+                    checks.append(
+                        ImapCheckResult(reference.message_id, ImapCheckState.UNSTARRED)
+                    )
+
             status, data = client.uid("search", None, "FLAGGED")
             if status != "OK":
                 raise RuntimeError("IMAP FLAGGED search failed")
 
-            for uid in data[0].split() if data and data[0] else []:
-                status, fetched = client.uid("fetch", uid, "(BODY.PEEK[])")
+            for uid_bytes in data[0].split() if data and data[0] else []:
+                uid = int(uid_bytes)
+                try:
+                    status, fetched = client.uid(
+                        "fetch", uid_bytes, "(UID BODY.PEEK[])"
+                    )
+                except (imaplib.IMAP4.error, OSError):
+                    continue
                 if status != "OK":
-                    raise RuntimeError(f"IMAP fetch failed for UID {uid.decode()}")
+                    continue
                 raw = next(
                     (item[1] for item in fetched if isinstance(item, tuple)),
                     None,
@@ -103,6 +181,13 @@ class ImapClient:
                         subject=_decode_header(parsed.get("Subject")),
                         received_at=parsed.get("Date"),
                         body=_body(parsed),
+                        mailbox=self.config.mailbox,
+                        uidvalidity=current_uidvalidity,
+                        uid=uid,
                     )
                 )
+        return checks, messages
+
+    def fetch_flagged(self) -> list[EmailMessage]:
+        _, messages = self.synchronize(())
         return messages
