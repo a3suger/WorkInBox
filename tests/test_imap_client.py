@@ -25,6 +25,8 @@ RAW_MESSAGE = (
 class FakeImap:
     last_search_args: tuple[object, ...] | None = None
     last_select_readonly: bool | None = None
+    last_store_args: tuple[object, ...] | None = None
+    flags_60: tuple[str, ...] = ("\\Seen", "\\Flagged", "$label1", "WorkInBoxTest")
 
     def __init__(self, *args: object) -> None:
         self.fetch_responses: dict[int, tuple[str, list[object]]] = {
@@ -32,10 +34,6 @@ class FakeImap:
             20: ("OK", [None]),
             30: ("NO", []),
             40: ("OK", [(b"4 (UID 40 FLAGS (\\Flagged \\Seen))", b"")]),
-            60: (
-                "OK",
-                [(b"6 (UID 60 FLAGS (\\Seen \\Flagged $label1 WorkInBoxTest))", b"")],
-            ),
         }
 
     def __enter__(self) -> "FakeImap":
@@ -58,9 +56,27 @@ class FakeImap:
         if command == "search":
             FakeImap.last_search_args = args
             return "OK", [b"40 50"]
+        if command == "store":
+            FakeImap.last_store_args = args
+            uid = int(args[0])
+            operation = str(args[1])
+            keyword = str(args[2]).strip("()")
+            if uid != 60:
+                raise AssertionError((command, args))
+            flags = list(FakeImap.flags_60)
+            if operation == "+FLAGS.SILENT" and keyword not in flags:
+                flags.append(keyword)
+            elif operation == "-FLAGS.SILENT":
+                flags = [flag for flag in flags if flag != keyword]
+            FakeImap.flags_60 = tuple(flags)
+            return "OK", [b""]
+
         uid = int(args[0])
         query = str(args[1])
         if query == "(UID FLAGS)":
+            if uid == 60:
+                flags = " ".join(FakeImap.flags_60).encode()
+                return "OK", [(b"6 (UID 60 FLAGS (" + flags + b"))", b"")]
             return self.fetch_responses[uid]
         if uid == 40:
             return "OK", [(b"4 (UID 40 BODY[] {10})", RAW_MESSAGE), b")"]
@@ -73,6 +89,8 @@ class ImapClientTest(unittest.TestCase):
     def setUp(self) -> None:
         FakeImap.last_search_args = None
         FakeImap.last_select_readonly = None
+        FakeImap.last_store_args = None
+        FakeImap.flags_60 = ("\\Seen", "\\Flagged", "$label1", "WorkInBoxTest")
         self.config = ImapConfig(
             "imap.example", 993, "user", "pass", "INBOX", 7
         )
@@ -122,6 +140,45 @@ class ImapClientTest(unittest.TestCase):
             snapshot.flags,
             ("\\Seen", "\\Flagged", "$label1", "WorkInBoxTest"),
         )
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
+    def test_set_keyword_adds_only_requested_keyword(self) -> None:
+        snapshot = ImapClient(self.config).set_keyword(60, "wib-deadline", enabled=True)
+
+        self.assertFalse(FakeImap.last_select_readonly)
+        self.assertEqual(
+            FakeImap.last_store_args,
+            ("60", "+FLAGS.SILENT", "(wib-deadline)"),
+        )
+        self.assertEqual(
+            snapshot.flags,
+            ("\\Seen", "\\Flagged", "$label1", "WorkInBoxTest", "wib-deadline"),
+        )
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
+    def test_set_keyword_removes_only_requested_keyword(self) -> None:
+        FakeImap.flags_60 = (
+            "\\Seen",
+            "\\Flagged",
+            "$label1",
+            "WorkInBoxTest",
+            "wib-deadline",
+        )
+
+        snapshot = ImapClient(self.config).set_keyword(60, "wib-deadline", enabled=False)
+
+        self.assertEqual(
+            FakeImap.last_store_args,
+            ("60", "-FLAGS.SILENT", "(wib-deadline)"),
+        )
+        self.assertEqual(
+            snapshot.flags,
+            ("\\Seen", "\\Flagged", "$label1", "WorkInBoxTest"),
+        )
+
+    def test_set_keyword_rejects_invalid_keyword(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Invalid IMAP keyword"):
+            ImapClient(self.config).set_keyword(60, "bad keyword", enabled=True)
 
     def test_new_mail_since_counts_today_as_one_calendar_day(self) -> None:
         self.assertEqual(_new_mail_since(date(2026, 8, 8), 1), date(2026, 8, 8))
