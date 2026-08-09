@@ -21,6 +21,7 @@ from .models import (
 
 _FLAGGED_RE = re.compile(rb"(?:^|[ (])\\Flagged(?:[ )]|$)", re.IGNORECASE)
 _FLAGS_RE = re.compile(rb"FLAGS \(([^)]*)\)", re.IGNORECASE)
+_KEYWORD_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 def _decode_header(value: str | None) -> str | None:
@@ -112,6 +113,11 @@ def _parse_flags(fetched: list[bytes | tuple[bytes, bytes] | None]) -> tuple[str
     raise RuntimeError("IMAP FLAGS are unavailable for the requested UID")
 
 
+def _validate_keyword(keyword: str) -> None:
+    if not _KEYWORD_RE.fullmatch(keyword):
+        raise ValueError(f"Invalid IMAP keyword: {keyword!r}")
+
+
 def _new_mail_since(today: date, lookback_days: int) -> date:
     return today - timedelta(days=lookback_days - 1)
 
@@ -131,6 +137,35 @@ class ImapClient:
             status, fetched = client.uid("fetch", str(uid), "(UID FLAGS)")
             if status != "OK":
                 raise RuntimeError(f"IMAP fetch failed for UID {uid}")
+            flags = _parse_flags(fetched)
+            return ImapFlagsSnapshot(
+                mailbox=self.config.mailbox,
+                uidvalidity=current_uidvalidity,
+                uid=uid,
+                flags=flags,
+            )
+
+    def set_keyword(self, uid: int, keyword: str, *, enabled: bool) -> ImapFlagsSnapshot:
+        _validate_keyword(keyword)
+        operation = "+FLAGS.SILENT" if enabled else "-FLAGS.SILENT"
+
+        with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
+            client.login(self.config.username, self.config.password)
+            status, _ = client.select(self.config.mailbox, readonly=False)
+            if status != "OK":
+                raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
+
+            current_uidvalidity = _uidvalidity(client)
+            status, _ = client.uid("store", str(uid), operation, f"({keyword})")
+            if status != "OK":
+                action = "add" if enabled else "remove"
+                raise RuntimeError(
+                    f"Unable to {action} IMAP keyword {keyword!r} for UID {uid}"
+                )
+
+            status, fetched = client.uid("fetch", str(uid), "(UID FLAGS)")
+            if status != "OK":
+                raise RuntimeError(f"IMAP fetch failed for UID {uid} after keyword update")
             flags = _parse_flags(fetched)
             return ImapFlagsSnapshot(
                 mailbox=self.config.mailbox,
