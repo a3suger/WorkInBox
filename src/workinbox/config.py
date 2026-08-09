@@ -29,7 +29,7 @@ class AiConfig:
     body_max_chars: int = 4000
     timeout_seconds: float = 120.0
     keep_alive: str = "30m"
-    max_workers: int = 2
+    max_workers: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +63,7 @@ def load_config(path: str | Path) -> AppConfig:
         ai_raw = raw.get("ai", {}) or {}
         body_max_chars = int(ai_raw.get("body_max_chars", 4000))
         timeout_seconds = float(ai_raw.get("timeout_seconds", 120.0))
-        max_workers = int(ai_raw.get("max_workers", 2))
+        max_workers = int(ai_raw.get("max_workers", 1))
         if body_max_chars < 1:
             raise ValueError("ai.body_max_chars must be at least 1")
         if timeout_seconds <= 0:
