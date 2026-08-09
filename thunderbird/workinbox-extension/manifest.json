@@ -2,11 +2,11 @@
   "manifest_version": 2,
   "name": "WorkInBox Thunderbird Connector",
   "description": "Provides Thunderbird-side UI for WorkInBox tag backup, provisioning, and restore.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "browser_specific_settings": {
     "gecko": {
       "id": "workinbox-connector@workinbox.local",
-      "strict_min_version": "128.0"
+      "strict_min_version": "140.0"
     }
   },
   "permissions": [
