@@ -92,6 +92,7 @@ class OllamaClassifier:
                 "prompt": prompt,
                 "stream": False,
                 "format": CLASSIFICATION_SCHEMA,
+                "keep_alive": self.config.keep_alive,
                 "options": {"temperature": 0},
             }
         ).encode("utf-8")
