@@ -29,7 +29,7 @@ database:
             self.assertEqual(config.ai.body_max_chars, 4000)
             self.assertEqual(config.ai.timeout_seconds, 120.0)
             self.assertEqual(config.ai.keep_alive, "30m")
-            self.assertEqual(config.ai.max_workers, 2)
+            self.assertEqual(config.ai.max_workers, 1)
 
     def test_loads_ai_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
