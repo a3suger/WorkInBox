@@ -79,6 +79,31 @@ class EmailDatabase:
             rows = connection.execute("SELECT message_id FROM emails")
             return {str(row[0]) for row in rows}
 
+    def email_message(self, message_id: str) -> EmailMessage | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT message_id, sender, recipients, subject, received_at, body,
+                       mailbox, uidvalidity, uid
+                FROM emails
+                WHERE message_id = ?
+                """,
+                (message_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return EmailMessage(
+            message_id=str(row[0]),
+            sender=str(row[1]),
+            recipients=str(row[2]) if row[2] is not None else None,
+            subject=str(row[3]) if row[3] is not None else None,
+            received_at=str(row[4]) if row[4] is not None else None,
+            body=str(row[5]) if row[5] is not None else None,
+            mailbox=str(row[6]) if row[6] is not None else None,
+            uidvalidity=int(row[7]) if row[7] is not None else None,
+            uid=int(row[8]) if row[8] is not None else None,
+        )
+
     def list_tracked_emails(
         self,
         *,
