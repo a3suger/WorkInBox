@@ -14,3 +14,5 @@ ai:
   model: qwen2.5:7b
   body_max_chars: 4000
   timeout_seconds: 120
+  keep_alive: 30m
+  max_workers: 2
