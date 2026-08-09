@@ -126,7 +126,7 @@ class ImapClient:
     def __init__(self, config: ImapConfig) -> None:
         self.config = config
 
-    def inspect_flags(self, uid: int) -> ImapFlagsSnapshot:
+    def inspect_flags(self, uid: int, *, expected_uidvalidity: int | None = None) -> ImapFlagsSnapshot:
         with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
             client.login(self.config.username, self.config.password)
             status, _ = client.select(self.config.mailbox, readonly=True)
@@ -134,6 +134,8 @@ class ImapClient:
                 raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
 
             current_uidvalidity = _uidvalidity(client)
+            if expected_uidvalidity is not None and current_uidvalidity != expected_uidvalidity:
+                raise RuntimeError("IMAP UIDVALIDITY changed; tag operation aborted")
             status, fetched = client.uid("fetch", str(uid), "(UID FLAGS)")
             if status != "OK":
                 raise RuntimeError(f"IMAP fetch failed for UID {uid}")
@@ -145,7 +147,14 @@ class ImapClient:
                 flags=flags,
             )
 
-    def set_keyword(self, uid: int, keyword: str, *, enabled: bool) -> ImapFlagsSnapshot:
+    def set_keyword(
+        self,
+        uid: int,
+        keyword: str,
+        *,
+        enabled: bool,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
         _validate_keyword(keyword)
         operation = "+FLAGS.SILENT" if enabled else "-FLAGS.SILENT"
 
@@ -156,6 +165,8 @@ class ImapClient:
                 raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
 
             current_uidvalidity = _uidvalidity(client)
+            if expected_uidvalidity is not None and current_uidvalidity != expected_uidvalidity:
+                raise RuntimeError("IMAP UIDVALIDITY changed; tag operation aborted")
             status, _ = client.uid("store", str(uid), operation, f"({keyword})")
             if status != "OK":
                 action = "add" if enabled else "remove"
