@@ -4,295 +4,123 @@
 
 このテストの目的は、**WorkInBox が先に決めたタグを Thunderbird でも同じタグとして利用できるか**を確認することである。
 
-今回確認したい構成は次のとおり。
+今回確認する構成は次のとおり。
 
 ```text
 WorkInBox がタグを定義する
-  key: wib-deadline
-  表示名: 締切あり
-  色: （テスト用の色）
         ↓
 Thunderbird に同じ key のタグ定義を登録する
         ↓
-Thunderbird で「締切あり」として表示・付与・解除できる
+Thunderbird で日本語表示名として表示・付与・解除できる
         ↓
-IMAP 上には wib-deadline が保存される
+IMAP 上には WorkInBox が決めた key が保存される
         ↓
-WorkInBox からも同じ wib-deadline を読み書きできる
+WorkInBox からも同じ key を読み書きできる
 ```
 
-つまり、**Thunderbird が作ったタグを WorkInBox が調べて合わせるテストではない**。
+つまり、Thunderbird が作ったタグを WorkInBox が後から調べて合わせる方式ではない。
 
-WorkInBox がタグの key を決め、その key を Thunderbird に登録できることを先に確認する。
+**WorkInBox がタグ定義の基準を持ち、Thunderbird はそのタグを表示・操作する。**
 
 この方針は `docs/design_notes_tags_and_external_intake.md` に基づく。
 
 ---
 
-## 2. テストの考え方
+## 2. 1タグでの相互運用テスト
 
-最初から全タグを作らない。
-
-まず `締切あり` 1個だけを使い、次の一連の流れが成立するかを確認する。
-
-1. WorkInBox 側で固定 key を決める。
-2. Thunderbird の公式 API を使って、その key の表示タグを登録する。
-3. Thunderbird からそのタグを付ける。
-4. IMAP 上に同じ key が保存されることを確認する。
-5. Thunderbird からタグを外すと、IMAP 上から同じ key が外れることを確認する。
-6. WorkInBox から同じ key を付けた場合、Thunderbird 上で `締切あり` と表示されることを確認する。
-7. WorkInBox から外した場合、Thunderbird 上でも外れることを確認する。
-
-ここまで成功したら、他の WorkInBox タグへ展開する。
-
----
-
-## 3. 最初のテストタグ
-
-最初の検証には `締切あり` を使う。
-
-テスト用定義:
+最初の検証には `締切あり` を使用した。
 
 | 項目 | 値 |
 | --- | --- |
-| WorkInBox 表示名 | `締切あり` |
 | WorkInBox key | `wib-deadline` |
 | Thunderbird 表示名 | `締切あり` |
-| 色 | テスト時に決定 |
 
-`wib-deadline` はこの相互運用テスト用の key とする。
+テスト用 Thunderbird MailExtension を使い、`wib-deadline` を Thunderbird のローカルタグ定義へ登録した。
 
-このテストが成功した後、全タグの正式 key をまとめて確定する。
+確認した流れは次のとおり。
 
----
+1. WorkInBox 側で `wib-deadline` を定義する。
+2. Extension から Thunderbird に `wib-deadline` / `締切あり` を登録する。
+3. Thunderbird で `締切あり` を付ける。
+4. IMAP FLAGS に `wib-deadline` が保存されることを確認する。
+5. Thunderbird でタグを外すと IMAP FLAGS から `wib-deadline` が消えることを確認する。
+6. WorkInBox の診断CLIから `wib-deadline` を追加する。
+7. Thunderbird 上で `締切あり` と表示されることを確認する。
+8. WorkInBox の診断CLIから `wib-deadline` を削除する。
+9. Thunderbird 上でも `締切あり` が外れることを確認する。
 
-## 4. Thunderbird 側のテスト用アドオン
+### 結果
 
-Thunderbird には、既知の key を指定してメッセージタグを作成できる公式 API がある。
+**すべて成功した。**
 
-そのため、このテストでは **最小の Thunderbird MailExtension** を作る。
-
-このアドオンの役割は WorkInBox 本体を Thunderbird 内で動かすことではない。
-
-役割は1つだけである。
-
-```text
-WorkInBox が決めたタグ定義を
-Thunderbird のローカルタグ定義へ登録する
-```
-
-最初のテストでは、アドオンが以下の1タグだけを登録すればよい。
-
-```text
-key      = wib-deadline
-表示名   = 締切あり
-color    = テスト用の色
-```
-
-Thunderbird の公式 `messages.tags` API を利用する。
-
-想定する処理は概念的には次のようになる。
-
-```javascript
-messenger.messages.tags.create(
-    "wib-deadline",
-    "締切あり",
-    "#......"
-)
-```
-
-実際の manifest、permission、API 呼び出し方法は、使用する Thunderbird バージョンに合わせて実装時に確認する。
-
----
-
-## 5. テスト1: Thunderbird に WIB タグを登録できるか
-
-### 手順
-
-1. テスト用 MailExtension を Thunderbird に読み込む。
-2. `wib-deadline` / `締切あり` のタグ定義を登録する。
-3. Thunderbird のタグ一覧を開く。
-4. `締切あり` が表示されることを確認する。
-5. Thunderbird を再起動する。
-6. 再起動後も `締切あり` が利用可能であることを確認する。
-
-### 成功条件
-
-- WorkInBox が指定した `wib-deadline` という key で Thunderbird のタグ定義を作れる。
-- Thunderbird 上では人向けの表示名 `締切あり` として利用できる。
-
-この段階で登録できない場合、IMAP のテストには進まない。
-
----
-
-## 6. テスト2: Thunderbird で付けた WIB タグが IMAP に保存されるか
-
-### テストメール
-
-本番メールではなく、自分宛てのテストメールを1通用意する。
-
-対象メールは INBOX に置いておく。
-
-### 手順
-
-1. Thunderbird でテストメールを選択する。
-2. WorkInBox アドオンで登録した `締切あり` を付ける。
-3. Thunderbird の IMAP 同期を待つ。
-4. WorkInBox の診断コマンドで FLAGS を確認する。
-
-```bash
-workinbox-imap-flags --config config.yaml --uid 12345
-```
-
-または:
-
-```bash
-python -m workinbox.imap_debug --config config.yaml --uid 12345
-```
-
-### 期待する結果
-
-FLAGS に次の keyword が見える。
-
-```text
-wib-deadline
-```
-
-重要なのは、Thunderbird が別の key を生成するのではなく、**WorkInBox が指定した `wib-deadline` がそのまま IMAP keyword として使われること**である。
-
----
-
-## 7. テスト3: Thunderbird で WIB タグを外せるか
-
-### 手順
-
-1. Thunderbird でテストメールから `締切あり` を外す。
-2. IMAP 同期を待つ。
-3. 再度診断コマンドを実行する。
-
-### 成功条件
-
-FLAGS から `wib-deadline` が消える。
-
-これにより、Thunderbird 上の付与・解除と IMAP keyword の付与・解除が同じ状態として扱えることを確認する。
-
----
-
-## 8. テスト4: WorkInBox から付けたタグを Thunderbird が認識するか
-
-これは v0.2 の IMAP タグ書き込み機能を実装した後に行う。
-
-### 手順
-
-1. Thunderbird では対象メールから `締切あり` を外しておく。
-2. WorkInBox から対象メールへ `wib-deadline` を IMAP keyword として追加する。
-3. Thunderbird を同期する。
-4. Thunderbird 上でメールに `締切あり` が付いていることを確認する。
-
-### 成功条件
-
-```text
-WorkInBox
-  wib-deadline を追加
-        ↓
-IMAP
-  wib-deadline
-        ↓
-Thunderbird
-  締切あり と表示
-```
-
-WorkInBox が IMAP keyword を直接追加しても、Thunderbird で人間向けのタグとして正しく見えることが重要である。
-
----
-
-## 9. テスト5: WorkInBox からタグを外せるか
-
-### 手順
-
-1. `wib-deadline` が付いた状態から開始する。
-2. WorkInBox から `wib-deadline` を削除する。
-3. Thunderbird を同期する。
-4. Thunderbird 上で `締切あり` が外れたことを確認する。
-
-これで双方向の基本テストが完了する。
+したがって、次の双方向相互運用が成立することを実機で確認できた。
 
 ```text
 Thunderbird → IMAP → WorkInBox
 WorkInBox   → IMAP → Thunderbird
 ```
 
----
-
-## 10. テスト6: 別の Thunderbird でも同じタグになるか
-
-固定 key を採用する大きな理由は、複数 PC で同じタグを扱えるようにすることである。
-
-可能であれば2つ目の Thunderbird プロファイルまたは別 PC でも確認する。
-
-### 手順
-
-1. PC-A の Thunderbird にテスト用 MailExtension を入れる。
-2. PC-B の Thunderbird にも同じ MailExtension を入れる。
-3. 両方で `wib-deadline` → `締切あり` が登録されることを確認する。
-4. PC-A でメールへ `締切あり` を付ける。
-5. IMAP 同期する。
-6. PC-B でも同じメールに `締切あり` が表示されることを確認する。
-7. PC-B でタグを外す。
-8. PC-A と WorkInBox の双方で `wib-deadline` が外れたことを確認する。
-
-### 成功条件
-
-各 PC が独自の key を作るのではなく、どの Thunderbird でも同じ `wib-deadline` を利用する。
+また、WorkInBox 側の IMAP 書き込みは FLAGS 全体を置換せず、対象 keyword のみを `+FLAGS.SILENT` / `-FLAGS.SILENT` で追加・削除する方式とする。
 
 ---
 
-## 11. 1タグの検証後に全タグへ展開する
+## 3. 採用する基本方式
 
-`締切あり` のテストが成功したら、WorkInBox の全タグについて正式な key、表示名、色を決める。
+1タグでの検証成功を受け、以下の方式を採用する。
 
-現時点のタグは次の12種類である。
-
-| 種別 | 表示名 | key |
-| --- | --- | --- |
-| 参照 | `重要` | 未決定 |
-| 作業 | `締切あり` | `wib-deadline`（テスト候補） |
-| 作業 | `スケジュール調整` | 未決定 |
-| 作業 | `回答必要` | 未決定 |
-| 作業 | `読む・検討` | 未決定 |
-| 判定状態 | `判定保留` | 未決定 |
-| 処理完了 | `締切登録済み` | 未決定 |
-| 処理完了 | `スケジュール対応済み` | 未決定 |
-| 待機 | `返信待ち` | 未決定 |
-| 待機 | `対応待ち` | 未決定 |
-| 履歴 | `依頼済み` | 未決定 |
-| 終了 | `一括処理` | 未決定 |
-
-最初から12個の key を仮決めして実装せず、**1個で仕組みを確認してから正式定義を決める**。
+- WorkInBox が IMAP keyword を正式定義する。
+- WorkInBox 用 keyword は `wib-` prefix を使う。
+- Thunderbird Extension は同じ key に対する表示名と色を登録する。
+- Thunderbird での人手によるタグ付与・解除を許容する。
+- WorkInBox は自分が管理する `wib-*` keyword だけを変更する。
+- Thunderbird 標準flagや利用者独自タグを勝手に削除・上書きしない。
 
 ---
 
-## 12. `重要` の既存タグについて
+## 4. 12タグの正式候補
 
-現在 Thunderbird で利用している `重要` タグの移行は、この基本テストとは分けて考える。
+以下を現時点の正式候補とする。
 
-まず確認すべきことは、WorkInBox が決めた新しいタグ key を Thunderbird で問題なく利用できるかどうかである。
+| 種別 | 正式 key | 表示名 | 色案 |
+| --- | --- | --- | --- |
+| 参照 | `wib-important` | `重要` | `#7B1FA2` |
+| 作業 | `wib-deadline` | `締切あり` | `#D32F2F` |
+| 作業 | `wib-schedule` | `スケジュール調整` | `#F57C00` |
+| 作業 | `wib-answer` | `回答必要` | `#1976D2` |
+| 作業 | `wib-review` | `読む・検討` | `#039BE5` |
+| 判定状態 | `wib-pending` | `判定保留` | `#757575` |
+| 処理完了 | `wib-deadline-done` | `締切登録済み` | `#8E2424` |
+| 処理完了 | `wib-schedule-done` | `スケジュール対応済み` | `#A65300` |
+| 待機 | `wib-waiting-reply` | `返信待ち` | `#388E3C` |
+| 待機 | `wib-waiting-action` | `対応待ち` | `#7CB342` |
+| 履歴 | `wib-requested` | `依頼済み` | `#795548` |
+| 終了 | `wib-batch` | `一括処理` | `#424242` |
 
-それが確認できた後で、既存 `重要` について次を決める。
-
-- 現在の `重要` の IMAP keyword をそのまま利用するか。
-- WorkInBox の正式 key を新しく決めるか。
-- 新しい key にする場合、既存メールをどう一括移行するか。
-
-したがって、`重要` の既存 keyword 調査を、今回のテストの前提条件にはしない。
+色は Thunderbird 上で実際に見たうえで微調整してよいが、key と表示名はこの候補を基準に実装を進める。
 
 ---
 
-## 13. キーボード操作の確認
+## 5. 色の考え方
 
-全タグを正式登録する段階では、Thunderbird の数字キーによるタグ操作も確認する。
+色は意味の近い状態を同系統にする。
 
-現時点の配置候補は次のとおり。
+- `締切あり` / `締切登録済み`: 赤系
+- `スケジュール調整` / `スケジュール対応済み`: オレンジ系
+- `回答必要`: 青
+- `読む・検討`: 水色
+- `返信待ち` / `対応待ち`: 緑系
+- `判定保留`: グレー
+- `重要`: 紫
+- `依頼済み`: 茶
+- `一括処理`: 濃いグレー
+
+処理前と処理後は同系統の色にしつつ、Thunderbird の一覧で識別できる程度に差を付ける。
+
+---
+
+## 6. Thunderbird 数字キー配置候補
+
+人が直接修正する頻度が高いタグについては、以下の配置を候補とする。
 
 ```text
 1 = 重要
@@ -303,37 +131,38 @@ WorkInBox   → IMAP → Thunderbird
 6 = 判定保留
 ```
 
-これはまだ最終仕様ではない。
+完了・待機・履歴・終了系のタグは主要な数字キー枠に入れない。
 
-まず `wib-deadline` の相互運用テストを成功させ、その後にタグ順序とキー操作を調整する。
-
----
-
-## 14. WorkInBox 管理外タグを壊さないこと
-
-WorkInBox は、自分が定義した `wib-*` key だけを操作する。
-
-利用者が Thunderbird で独自に作成したタグや、標準 IMAP flag を変更してはいけない。
-
-IMAP タグ書き込み実装では、FLAGS 全体を置換せず、対象の WorkInBox keyword だけを追加・削除する。
-
-この点は v0.2 の実装テストでも必ず確認する。
+数字キーの最終配置については Thunderbird 上で実際の並び順と操作性を確認してから確定する。
 
 ---
 
-## 15. このテストの完了条件
+## 7. `重要` の既存タグについて
 
-まず `締切あり` 1タグについて、以下がすべて成功すれば基本方式を採用できる。
+既存 Thunderbird の `重要` タグ移行は、相互運用方式そのものとは分けて扱う。
 
-- WorkInBox が決めた `wib-deadline` を Thunderbird のタグ key として登録できる。
-- Thunderbird 上では `締切あり` と表示される。
-- Thunderbird で付与すると IMAP に `wib-deadline` が保存される。
-- Thunderbird で解除すると IMAP から `wib-deadline` が削除される。
-- WorkInBox が `wib-deadline` を読み取れる。
-- WorkInBox が `wib-deadline` を付けると Thunderbird に `締切あり` と表示される。
-- WorkInBox が `wib-deadline` を外すと Thunderbird でもタグが外れる。
-- 可能であれば別 PC / 別 Thunderbird プロファイルでも同じ key と表示名を利用できる。
+今後、以下を確認する。
 
-ここまで確認できたら、**「WorkInBox がタグ定義の基準を持ち、Thunderbird はそのタグを表示・操作する」方式を採用する**。
+- 現在使っている `重要` の IMAP keyword。
+- 既存 key をそのまま使うか。
+- `wib-important` へ移行するか。
+- 移行する場合、既存メールに付いたタグをどう変換するか。
 
-その後に12タグの正式 key、色、数字キー配置を決め、v0.2 の IMAP タグ読み書き実装へ進む。
+基本方式の成立はすでに `wib-deadline` で確認済みなので、この調査は v0.2 のタグ相互運用方式を採用する前提条件ではない。
+
+---
+
+## 8. 次の実装段階
+
+相互運用方式の検証は完了した。
+
+次は以下へ進む。
+
+1. 上記12タグの定義を WorkInBox 側へ実装する。
+2. Thunderbird Extension でも同じ key / 表示名 / 色を登録する。
+3. v0.2 の IMAP タグ読み取りを実装する。
+4. v0.2 の IMAP タグ書き込みを実装する。
+5. WorkInBox Web UI に実際のタグ状態を表示する。
+6. AI 初期分類結果を同じ WorkInBox tag key へ反映する。
+
+これ以降、タグ相互運用の基本方式そのものを再検証するのではなく、**確認済みの方式を12タグへ展開する段階**とする。
