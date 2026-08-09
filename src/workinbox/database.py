@@ -95,7 +95,8 @@ class EmailDatabase:
             rows = connection.execute(
                 f"""
                 SELECT message_id, sender, subject, received_at,
-                       tracking_status, status_changed_at, last_imap_checked_at
+                       tracking_status, status_changed_at, last_imap_checked_at,
+                       mailbox, uidvalidity, uid
                 FROM emails
                 WHERE {condition}
                 ORDER BY received_at DESC, id DESC
@@ -111,6 +112,9 @@ class EmailDatabase:
                 tracking_status=TrackingStatus(str(row[4])),
                 status_changed_at=str(row[5]) if row[5] is not None else None,
                 last_imap_checked_at=str(row[6]) if row[6] is not None else None,
+                mailbox=str(row[7]) if row[7] is not None else None,
+                uidvalidity=int(row[8]) if row[8] is not None else None,
+                uid=int(row[9]) if row[9] is not None else None,
             )
             for row in rows
         ]
@@ -145,6 +149,28 @@ class EmailDatabase:
             )
             for row in rows
         ]
+
+    def imap_reference(self, message_id: str) -> ImapReference | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT message_id, mailbox, uidvalidity, uid
+                FROM emails
+                WHERE message_id = ?
+                  AND mailbox IS NOT NULL
+                  AND uidvalidity IS NOT NULL
+                  AND uid IS NOT NULL
+                """,
+                (message_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return ImapReference(
+            message_id=str(row[0]),
+            mailbox=str(row[1]),
+            uidvalidity=int(row[2]),
+            uid=int(row[3]),
+        )
 
     def active_imap_references(self, mailbox: str) -> list[ImapReference]:
         return self.imap_references(mailbox)
