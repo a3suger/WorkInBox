@@ -3,11 +3,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from .ai_classifier import OllamaClassifier
 from .config import AppConfig
 from .database import EmailDatabase
 from .imap_client import ImapClient
 from .models import ImapCheckState, TrackedEmail, TrackingStatus
 from .work_tags import WorkTagDefinition, definitions_for_flags, require_work_tag
+
+
+_INITIAL_CLASSIFICATION_KEYS = frozenset(
+    {
+        "wib-deadline",
+        "wib-schedule",
+        "wib-answer",
+        "wib-review",
+        "wib-pending",
+    }
+)
 
 
 class SyncMode(StrEnum):
@@ -30,6 +42,8 @@ class SyncResult:
     reactivated: int
     inactivated: int
     errors: tuple[SyncError, ...]
+    ai_classified: int = 0
+    ai_errors: tuple[SyncError, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,10 +60,12 @@ class SynchronizationService:
         *,
         database: EmailDatabase | None = None,
         imap_client: ImapClient | None = None,
+        classifier: OllamaClassifier | None = None,
     ) -> None:
         self.config = config
         self.database = database or EmailDatabase(config.database.path)
         self.imap_client = imap_client or ImapClient(config.imap)
+        self.classifier = classifier or OllamaClassifier(config.ai)
 
     def synchronize(self, mode: SyncMode = SyncMode.NORMAL) -> SyncResult:
         self.database.initialize()
@@ -88,6 +104,11 @@ class SynchronizationService:
                 inactivated += 1
 
         added, reactivated_from_discovery = self.database.synchronize(messages)
+        ai_classified = 0
+        ai_errors: tuple[SyncError, ...] = ()
+        if mode == SyncMode.NORMAL:
+            ai_classified, ai_errors = self._classify_unclassified_active()
+
         return SyncResult(
             mode=mode,
             checked=len(checks),
@@ -96,7 +117,44 @@ class SynchronizationService:
             reactivated=reactivated_from_checks + reactivated_from_discovery,
             inactivated=inactivated,
             errors=tuple(errors),
+            ai_classified=ai_classified,
+            ai_errors=ai_errors,
         )
+
+    def _classify_unclassified_active(self) -> tuple[int, tuple[SyncError, ...]]:
+        classified = 0
+        errors: list[SyncError] = []
+
+        for tracked in self.database.list_tracked_emails(active=True):
+            if tracked.uid is None or tracked.uidvalidity is None or tracked.mailbox is None:
+                continue
+            if tracked.mailbox != self.config.imap.mailbox:
+                continue
+            try:
+                snapshot = self.imap_client.inspect_flags(
+                    tracked.uid,
+                    expected_uidvalidity=tracked.uidvalidity,
+                )
+                if _INITIAL_CLASSIFICATION_KEYS.intersection(snapshot.flags):
+                    continue
+
+                message = self.database.email_message(tracked.message_id)
+                if message is None:
+                    raise RuntimeError("email content is unavailable in SQLite")
+                classification = self.classifier.classify(message)
+                tag_keys = classification.tag_keys()
+                for key in tag_keys:
+                    self.imap_client.set_keyword(
+                        tracked.uid,
+                        key,
+                        enabled=True,
+                        expected_uidvalidity=tracked.uidvalidity,
+                    )
+                classified += 1
+            except (OSError, RuntimeError, ValueError) as exc:
+                errors.append(SyncError(tracked.message_id, str(exc)))
+
+        return classified, tuple(errors)
 
     def normal_sync(self) -> SyncResult:
         return self.synchronize(SyncMode.NORMAL)
