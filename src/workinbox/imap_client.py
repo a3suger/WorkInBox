@@ -155,8 +155,28 @@ class ImapClient:
         enabled: bool,
         expected_uidvalidity: int | None = None,
     ) -> ImapFlagsSnapshot:
-        _validate_keyword(keyword)
+        return self.set_keywords(
+            uid,
+            (keyword,),
+            enabled=enabled,
+            expected_uidvalidity=expected_uidvalidity,
+        )
+
+    def set_keywords(
+        self,
+        uid: int,
+        keywords: Iterable[str],
+        *,
+        enabled: bool,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
+        unique_keywords = tuple(dict.fromkeys(keywords))
+        if not unique_keywords:
+            raise ValueError("At least one IMAP keyword is required")
+        for keyword in unique_keywords:
+            _validate_keyword(keyword)
         operation = "+FLAGS.SILENT" if enabled else "-FLAGS.SILENT"
+        keyword_list = " ".join(unique_keywords)
 
         with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
             client.login(self.config.username, self.config.password)
@@ -167,11 +187,11 @@ class ImapClient:
             current_uidvalidity = _uidvalidity(client)
             if expected_uidvalidity is not None and current_uidvalidity != expected_uidvalidity:
                 raise RuntimeError("IMAP UIDVALIDITY changed; tag operation aborted")
-            status, _ = client.uid("store", str(uid), operation, f"({keyword})")
+            status, _ = client.uid("store", str(uid), operation, f"({keyword_list})")
             if status != "OK":
                 action = "add" if enabled else "remove"
                 raise RuntimeError(
-                    f"Unable to {action} IMAP keyword {keyword!r} for UID {uid}"
+                    f"Unable to {action} IMAP keywords {unique_keywords!r} for UID {uid}"
                 )
 
             status, fetched = client.uid("fetch", str(uid), "(UID FLAGS)")
