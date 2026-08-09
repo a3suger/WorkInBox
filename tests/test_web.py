@@ -88,6 +88,8 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/"])
         self.assertIn("GET", routes["/active"])
         self.assertIn("GET", routes["/inactive"])
+        self.assertIn("GET", routes["/pending"])
+        self.assertIn("POST", routes["/pending/resolve"])
         self.assertIn("POST", routes["/sync"])
         self.assertIn("POST", routes["/full-recheck"])
         self.assertIn("POST", routes["/tags/{key}/{operation}"])
@@ -95,6 +97,7 @@ class WebFoundationTest(unittest.TestCase):
     def test_templates_are_loadable(self) -> None:
         self.assertIsNotNone(_TEMPLATES.get_template("base.html"))
         self.assertIsNotNone(_TEMPLATES.get_template("emails.html"))
+        self.assertIsNotNone(_TEMPLATES.get_template("pending.html"))
 
 
 if __name__ == "__main__":
