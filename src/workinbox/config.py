@@ -28,6 +28,8 @@ class AiConfig:
     model: str = "qwen2.5:7b"
     body_max_chars: int = 4000
     timeout_seconds: float = 120.0
+    keep_alive: str = "30m"
+    max_workers: int = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,15 +63,20 @@ def load_config(path: str | Path) -> AppConfig:
         ai_raw = raw.get("ai", {}) or {}
         body_max_chars = int(ai_raw.get("body_max_chars", 4000))
         timeout_seconds = float(ai_raw.get("timeout_seconds", 120.0))
+        max_workers = int(ai_raw.get("max_workers", 2))
         if body_max_chars < 1:
             raise ValueError("ai.body_max_chars must be at least 1")
         if timeout_seconds <= 0:
             raise ValueError("ai.timeout_seconds must be greater than 0")
+        if max_workers < 1 or max_workers > 4:
+            raise ValueError("ai.max_workers must be between 1 and 4")
         ai = AiConfig(
             url=str(ai_raw.get("url", "http://127.0.0.1:11434")),
             model=str(ai_raw.get("model", "qwen2.5:7b")),
             body_max_chars=body_max_chars,
             timeout_seconds=timeout_seconds,
+            keep_alive=str(ai_raw.get("keep_alive", "30m")),
+            max_workers=max_workers,
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"Invalid configuration: {exc}") from exc
