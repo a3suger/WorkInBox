@@ -145,7 +145,25 @@ AI classification finished: 12/12 messages in 102.31s
 
 並列数を増やせば必ず高速になるとは限らない。特に Ollama 側の同時推論数が 1 の状態で WorkInBox だけを 2 以上にすると、待ち行列によって1件あたりの待機時間が増え、WorkInBox の API タイムアウトに到達しやすくなる。そのため既定値は `max_workers: 1` とする。
 
-## 8. IMAP 書き込み
+## 8. 判定保留 UI
+
+Web UI の `/pending` に、active メールのうち IMAP に `wib-pending` が付いているメールだけを表示する。
+
+判定保留画面では、件名・差出人・受信日時・現在の WorkInBox タグを表示し、必要に応じて SQLite に保存済みの本文を展開して確認できる。
+
+利用者は次のいずれかへ手動確定できる。
+
+- `締切あり`
+- `スケジュール調整`
+- `締切あり + スケジュール調整`
+- `回答必要`
+- `読む・検討`
+
+確定時は選択した初期分類タグを IMAP に付与し、`wib-pending` と、もし残っていれば選択結果と矛盾する他の初期分類タグを IMAP から外す。タグ状態の正本は引き続き IMAP とし、SQLite に分類状態を複製しない。
+
+`判定保留` は AI の技術的エラーを表すタグではない。Ollama のタイムアウトや通信失敗時は未分類のまま残し、次回の通常同期で再試行する。
+
+## 9. IMAP 書き込み
 
 分類結果は SQLite へタグ状態として保存せず、IMAP を正本とする。
 
@@ -155,7 +173,7 @@ AI classification finished: 12/12 messages in 102.31s
 
 既存の Thunderbird 標準 flag や WorkInBox 管理外 keyword は変更しない。
 
-## 9. エラー処理
+## 10. エラー処理
 
 Ollama が停止している、タイムアウトする、JSON が不正などの AI エラーは、IMAP 同期そのものの失敗とは分離する。
 
@@ -167,7 +185,7 @@ Ollama が停止している、タイムアウトする、JSON が不正など�
 
 IMAP FLAGS の事前確認に失敗した場合も AI 分類エラーとして扱い、他メールの処理は継続する。
 
-## 10. プロンプト管理
+## 11. プロンプト管理
 
 実際の system prompt と JSON Schema は `src/workinbox/ai_classifier.py` に置く。
 
