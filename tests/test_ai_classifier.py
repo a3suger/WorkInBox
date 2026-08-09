@@ -24,7 +24,7 @@ class FakeResponse:
 
 
 class OllamaClassifierTest(unittest.TestCase):
-    def test_classify_uses_structured_json_and_truncates_body(self) -> None:
+    def test_classify_uses_structured_json_truncates_body_and_keeps_model_alive(self) -> None:
         captured: dict[str, object] = {}
 
         def fake_urlopen(request, timeout):
@@ -55,6 +55,8 @@ class OllamaClassifierTest(unittest.TestCase):
                 model="qwen2.5:7b",
                 body_max_chars=5,
                 timeout_seconds=30,
+                keep_alive="15m",
+                max_workers=2,
             )
         )
 
@@ -66,6 +68,7 @@ class OllamaClassifierTest(unittest.TestCase):
         self.assertEqual(captured["timeout"], 30)
         request_body = captured["body"]
         self.assertEqual(request_body["model"], "qwen2.5:7b")
+        self.assertEqual(request_body["keep_alive"], "15m")
         self.assertFalse(request_body["stream"])
         self.assertIsInstance(request_body["format"], dict)
         self.assertIn("abcde", request_body["prompt"])
