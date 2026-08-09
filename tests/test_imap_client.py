@@ -142,8 +142,18 @@ class ImapClientTest(unittest.TestCase):
         )
 
     @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
+    def test_inspect_flags_checks_expected_uidvalidity(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "UIDVALIDITY changed"):
+            ImapClient(self.config).inspect_flags(60, expected_uidvalidity=54)
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
     def test_set_keyword_adds_only_requested_keyword(self) -> None:
-        snapshot = ImapClient(self.config).set_keyword(60, "wib-deadline", enabled=True)
+        snapshot = ImapClient(self.config).set_keyword(
+            60,
+            "wib-deadline",
+            enabled=True,
+            expected_uidvalidity=55,
+        )
 
         self.assertFalse(FakeImap.last_select_readonly)
         self.assertEqual(
@@ -175,6 +185,18 @@ class ImapClientTest(unittest.TestCase):
             snapshot.flags,
             ("\\Seen", "\\Flagged", "$label1", "WorkInBoxTest"),
         )
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
+    def test_set_keyword_aborts_before_store_when_uidvalidity_changed(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "UIDVALIDITY changed"):
+            ImapClient(self.config).set_keyword(
+                60,
+                "wib-deadline",
+                enabled=True,
+                expected_uidvalidity=54,
+            )
+
+        self.assertIsNone(FakeImap.last_store_args)
 
     def test_set_keyword_rejects_invalid_keyword(self) -> None:
         with self.assertRaisesRegex(ValueError, "Invalid IMAP keyword"):
