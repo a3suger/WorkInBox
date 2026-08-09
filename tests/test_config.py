@@ -8,7 +8,7 @@ from workinbox.config import load_config
 
 
 class ConfigTest(unittest.TestCase):
-    def test_loads_new_mail_lookback_days(self) -> None:
+    def test_loads_new_mail_lookback_days_and_ai_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.yaml"
             path.write_text(
@@ -24,6 +24,33 @@ database:
             )
             config = load_config(path)
             self.assertEqual(config.imap.new_mail_lookback_days, 7)
+            self.assertEqual(config.ai.url, "http://127.0.0.1:11434")
+            self.assertEqual(config.ai.model, "qwen2.5:7b")
+            self.assertEqual(config.ai.body_max_chars, 4000)
+            self.assertEqual(config.ai.timeout_seconds, 120.0)
+
+    def test_loads_ai_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text(
+                """imap:
+  host: imap.example
+  username: user
+  password: pass
+  new_mail_lookback_days: 7
+database:
+  path: workinbox.db
+ai:
+  url: http://localhost:11434
+  model: qwen2.5:7b
+  body_max_chars: 2500
+  timeout_seconds: 45
+""",
+                encoding="utf-8",
+            )
+            config = load_config(path)
+            self.assertEqual(config.ai.body_max_chars, 2500)
+            self.assertEqual(config.ai.timeout_seconds, 45.0)
 
     def test_lookback_days_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -56,6 +83,25 @@ database:
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "at least 1"):
+                load_config(path)
+
+    def test_ai_body_max_chars_must_be_positive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text(
+                """imap:
+  host: imap.example
+  username: user
+  password: pass
+  new_mail_lookback_days: 7
+database:
+  path: workinbox.db
+ai:
+  body_max_chars: 0
+""",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "ai.body_max_chars"):
                 load_config(path)
 
 
