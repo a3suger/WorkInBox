@@ -44,6 +44,17 @@
 </div>
 {% endif %}
 
+{% if tag_message %}
+<div class="notice">{{ tag_message }}</div>
+{% endif %}
+
+{% if tag_failure %}
+<div class="notice error">
+  <strong>タグ更新に失敗しました。</strong><br>
+  {{ tag_failure }}
+</div>
+{% endif %}
+
 {% if emails %}
 <div class="table-wrap">
 <table>
@@ -53,18 +64,45 @@
       <th>差出人</th>
       <th>受信日時</th>
       <th>追跡状態</th>
-      <th>作業タグ</th>
+      <th>WorkInBox タグ</th>
       <th>状態変更日時</th>
     </tr>
   </thead>
   <tbody>
-    {% for email in emails %}
+    {% for item in emails %}
+    {% set email = item.email %}
+    {% set present_keys = item.tags | map(attribute='key') | list %}
     <tr>
       <td>{{ email.subject or "(件名なし)" }}</td>
       <td>{{ email.sender }}</td>
       <td>{{ email.received_at or "-" }}</td>
       <td class="status">{{ email.tracking_status.value }}</td>
-      <td class="muted">未取得</td>
+      <td class="tag-cell">
+        {% if item.error %}
+        <div class="tag-error">取得失敗: {{ item.error }}</div>
+        {% else %}
+        <div class="tag-list">
+          {% for tag in item.tags %}
+          <span class="tag-badge" style="--tag-color: {{ tag.color }}">{{ tag.label }}</span>
+          {% else %}
+          <span class="muted">WIBタグなし</span>
+          {% endfor %}
+        </div>
+        <details class="tag-editor">
+          <summary>タグを変更</summary>
+          <div class="tag-controls">
+            {% for tag in work_tags %}
+            {% set is_present = tag.key in present_keys %}
+            <form method="post" action="/tags/{{ tag.key }}/{{ 'remove' if is_present else 'add' }}?message_id={{ email.message_id | urlencode }}&amp;view={{ 'active' if active_view else 'inactive' }}">
+              <button type="submit" class="tag-toggle {% if is_present %}selected{% endif %}" style="--tag-color: {{ tag.color }}">
+                {{ '✓ ' if is_present else '' }}{{ tag.label }}
+              </button>
+            </form>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+      </td>
       <td>{{ email.status_changed_at or "-" }}</td>
     </tr>
     {% endfor %}
