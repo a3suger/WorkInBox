@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from workinbox.ai_classifier import AiClassification
-from workinbox.application import SyncMode, SynchronizationService
+from workinbox.application import SyncMode, SynchronizationService, WorkTagService
 from workinbox.config import AppConfig, DatabaseConfig, ImapConfig
 from workinbox.database import EmailDatabase
 from workinbox.models import (
@@ -186,6 +186,66 @@ class SynchronizationServiceTest(unittest.TestCase):
             self.assertEqual(
                 imap.keyword_updates,
                 [(3, ("wib-deadline", "wib-schedule"), True, 10)],
+            )
+
+    def test_pending_view_and_resolution_use_imap_tags(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            database.initialize()
+            database.synchronize(
+                [
+                    EmailMessage(
+                        "<pending@example>",
+                        "sender@example.com",
+                        "me@example.com",
+                        "要確認",
+                        None,
+                        "添付を確認して回答してください。",
+                        mailbox="INBOX",
+                        uidvalidity=10,
+                        uid=4,
+                    ),
+                    EmailMessage(
+                        "<review@example>",
+                        "sender@example.com",
+                        "me@example.com",
+                        "通常",
+                        None,
+                        "確認だけです。",
+                        mailbox="INBOX",
+                        uidvalidity=10,
+                        uid=5,
+                    ),
+                ]
+            )
+            imap = FakeImapClient(
+                [],
+                flags_by_uid={
+                    4: ("\\Flagged", "wib-pending"),
+                    5: ("\\Flagged", "wib-review"),
+                },
+            )
+            service = WorkTagService(
+                self.make_config(path), database=database, imap_client=imap,
+            )
+
+            pending = service.pending_emails()
+
+            self.assertEqual([item.email.message_id for item in pending], ["<pending@example>"])
+            self.assertEqual(pending[0].body, "添付を確認して回答してください。")
+
+            service.resolve_pending("<pending@example>", "deadline_schedule")
+
+            self.assertIn("wib-deadline", imap.flags_by_uid[4])
+            self.assertIn("wib-schedule", imap.flags_by_uid[4])
+            self.assertNotIn("wib-pending", imap.flags_by_uid[4])
+            self.assertEqual(
+                imap.keyword_updates,
+                [
+                    (4, ("wib-deadline", "wib-schedule"), True, 10),
+                    (4, ("wib-pending",), False, 10),
+                ],
             )
 
     def test_full_recheck_includes_inactive_and_can_reactivate(self) -> None:
