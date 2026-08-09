@@ -31,8 +31,12 @@ def _log_result(result: SyncResult) -> None:
     logging.info("Added %d messages", result.added)
     logging.info("Reactivated %d messages", result.reactivated)
     logging.info("Inactivated %d messages", result.inactivated)
+    if result.mode == SyncMode.NORMAL:
+        logging.info("AI-classified %d messages", result.ai_classified)
     for error in result.errors:
         logging.warning("Unable to check %s: %s", error.message_id, error.message)
+    for error in result.ai_errors:
+        logging.warning("Unable to AI-classify %s: %s", error.message_id, error.message)
     logging.info("Synchronization completed")
 
 
