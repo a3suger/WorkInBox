@@ -63,14 +63,19 @@ class WebFoundationTest(unittest.TestCase):
             )
 
             service = TrackingQueryService(config, database=database)
+            active = service.active_emails()
+            inactive = service.inactive_emails()
             self.assertEqual(
-                [email.message_id for email in service.active_emails()],
+                [email.message_id for email in active],
                 ["<active@example>"],
             )
             self.assertEqual(
-                [email.message_id for email in service.inactive_emails()],
+                [email.message_id for email in inactive],
                 ["<inactive@example>"],
             )
+            self.assertEqual(active[0].uid, 1)
+            self.assertEqual(active[0].uidvalidity, 10)
+            self.assertEqual(active[0].mailbox, "INBOX")
 
     def test_web_app_has_expected_routes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -85,6 +90,7 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/inactive"])
         self.assertIn("POST", routes["/sync"])
         self.assertIn("POST", routes["/full-recheck"])
+        self.assertIn("POST", routes["/tags/{key}/{operation}"])
 
     def test_templates_are_loadable(self) -> None:
         self.assertIsNotNone(_TEMPLATES.get_template("base.html"))
