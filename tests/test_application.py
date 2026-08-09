@@ -41,7 +41,7 @@ class FakeImapClient:
         self.messages = messages or []
         self.received_references: list[ImapReference] = []
         self.flags_by_uid = flags_by_uid or {}
-        self.keyword_updates: list[tuple[int, str, bool, int | None]] = []
+        self.keyword_updates: list[tuple[int, tuple[str, ...], bool, int | None]] = []
 
     def synchronize(
         self,
@@ -59,20 +59,23 @@ class FakeImapClient:
         flags = self.flags_by_uid.get(uid, ("wib-review",))
         return ImapFlagsSnapshot("INBOX", expected_uidvalidity or 10, uid, flags)
 
-    def set_keyword(
+    def set_keywords(
         self,
         uid: int,
-        keyword: str,
+        keywords: tuple[str, ...],
         *,
         enabled: bool,
         expected_uidvalidity: int | None = None,
     ) -> ImapFlagsSnapshot:
-        self.keyword_updates.append((uid, keyword, enabled, expected_uidvalidity))
+        keys = tuple(keywords)
+        self.keyword_updates.append((uid, keys, enabled, expected_uidvalidity))
         current = list(self.flags_by_uid.get(uid, ()))
-        if enabled and keyword not in current:
-            current.append(keyword)
-        elif not enabled:
-            current = [flag for flag in current if flag != keyword]
+        if enabled:
+            for keyword in keys:
+                if keyword not in current:
+                    current.append(keyword)
+        else:
+            current = [flag for flag in current if flag not in keys]
         self.flags_by_uid[uid] = tuple(current)
         return ImapFlagsSnapshot("INBOX", expected_uidvalidity or 10, uid, tuple(current))
 
@@ -168,7 +171,7 @@ class SynchronizationServiceTest(unittest.TestCase):
             )
             imap = FakeImapClient([], [message], flags_by_uid={3: ("\\Flagged",)})
             classifier = FakeClassifier(
-                AiClassification(True, False, False, False, False, "期限がある")
+                AiClassification(True, True, False, False, False, "期限付きの日程調整")
             )
             service = SynchronizationService(
                 self.make_config(path), database=database, imap_client=imap,
@@ -180,7 +183,10 @@ class SynchronizationServiceTest(unittest.TestCase):
             self.assertEqual(result.ai_classified, 1)
             self.assertEqual(result.ai_errors, ())
             self.assertEqual([item.message_id for item in classifier.messages], ["<new@example>"])
-            self.assertEqual(imap.keyword_updates, [(3, "wib-deadline", True, 10)])
+            self.assertEqual(
+                imap.keyword_updates,
+                [(3, ("wib-deadline", "wib-schedule"), True, 10)],
+            )
 
     def test_full_recheck_includes_inactive_and_can_reactivate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
