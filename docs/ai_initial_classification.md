@@ -19,14 +19,14 @@ ai:
   body_max_chars: 4000
   timeout_seconds: 120
   keep_alive: 30m
-  max_workers: 2
+  max_workers: 1
 ```
 
 本文長は設定値とする。既定では本文の先頭 4,000 文字だけを分類入力へ渡す。
 
 `keep_alive` は Ollama の `/api/generate` へそのまま渡し、分類処理の途中でモデルがアンロードされにくいようにする。
 
-`max_workers` は WorkInBox 側で同時に処理するメール数である。v0.2 では安全側に 1〜4 の範囲に制限し、既定値を 2 とする。実際に Ollama が同時推論する数は Ollama サーバー側の並列設定にも依存する。
+`max_workers` は WorkInBox 側で同時に処理するメール数である。v0.2 では安全側に 1〜4 の範囲に制限し、既定値を 1 とする。Ollama サーバー側で並列実行を明示的に有効化し、GPU/VRAM に余裕があることを確認した場合にだけ 2 以上を試す。
 
 ## 3. AI へ渡す情報
 
@@ -120,9 +120,11 @@ IMAP / SQLite 通常同期
 
 全件再確認では AI 初期分類を自動実行しない。
 
+Web UI からの通常同期と全件再確認は同時実行しない。同じ Web プロセスで同期処理が進行中に別の同期要求が来た場合は、2本目を開始せず「同期処理は既に実行中」と表示する。これにより二重クリックなどで同じ未分類メールが同時に Ollama へ送られることを防ぐ。
+
 ## 7. 並列化と性能計測
 
-未分類メールの抽出は先に行い、その後の AI 推論と結果タグ付与を `ai.max_workers` 件まで並列化する。
+未分類メールの抽出は先に行い、その後の AI 推論と結果タグ付与を `ai.max_workers` 件まで並列化できる。
 
 各メールについて、AI分類開始から IMAP タグ付与完了までの時間をログへ記録する。
 
@@ -135,13 +137,13 @@ AI classified <message-id> in 8.42s -> wib-deadline
 全体についても件数と総時間をログへ記録する。
 
 ```text
-AI classification starting: 12 messages, 2 worker(s)
-AI classification finished: 12/12 messages in 54.31s
+AI classification starting: 12 messages, 1 worker(s)
+AI classification finished: 12/12 messages in 102.31s
 ```
 
 このログにより、本文長や並列数を変更したときの効果を実測できるようにする。
 
-並列数を増やせば必ず高速になるとは限らない。GPU/VRAMやOllama側の実行条件によっては、同時実行により1件あたりの処理が遅くなることもある。まず `max_workers: 2` を基準に計測する。
+並列数を増やせば必ず高速になるとは限らない。特に Ollama 側の同時推論数が 1 の状態で WorkInBox だけを 2 以上にすると、待ち行列によって1件あたりの待機時間が増え、WorkInBox の API タイムアウトに到達しやすくなる。そのため既定値は `max_workers: 1` とする。
 
 ## 8. IMAP 書き込み
 
