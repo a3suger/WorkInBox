@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sqlite3
 from pathlib import Path
 
@@ -143,6 +144,7 @@ def cli() -> None:
     parser.add_argument("--port", type=int, default=8000, help="Web server port")
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     config = load_config(args.config)
     uvicorn.run(create_app(config), host=args.host, port=args.port)
 
