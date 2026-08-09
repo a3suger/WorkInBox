@@ -22,7 +22,7 @@ Thunderbird ではタグをキーボードから操作できるため、日常�
 
 WorkInBox 側では IMAP keyword を安定した識別子として扱い、Thunderbird 側では同じ key に対して日本語表示名と色を定義する構成を目指す。
 
-Thunderbird には、既知の key を指定してタグ定義を作成・更新できる公式 API があるため、将来的には小さな Thunderbird MailExtension を用意し、複数 PC の Thunderbird プロファイルへ同じ WorkInBox タグ定義を登録する方式を候補とする。
+Thunderbird には、既知の key を指定してタグ定義を作成・更新できる公式 API があるため、小さな Thunderbird MailExtension を用意し、複数 PC の Thunderbird プロファイルへ同じ WorkInBox タグ定義を登録する方式を採用候補とする。
 
 ただし、WorkInBox 用 IMAP keyword の具体的な key 名、色、数字キー上の最終配置はまだ確定しない。
 
@@ -147,7 +147,64 @@ WorkInBox はタスク管理ツールではなく、利用者へ専用のタス�
 
 ---
 
-## 6. v0.2 以後の付加データ管理構想
+## 6. Thunderbird Extension の役割
+
+タグ連携の検討から、Thunderbird MailExtension を WorkInBox と Thunderbird の **薄い接着層** として利用する案が有効であることが分かった。
+
+Extension に業務ロジックや WorkInBox の正本データを持たせない。
+
+WorkInBox の分類、状態管理、締切管理などの中核処理は従来どおり WorkInBox 側で行い、Extension は Thunderbird 固有 API が必要な処理だけを担当する。
+
+### 想定する主な役割
+
+1. **WorkInBox タグ定義の登録**
+   - WorkInBox が決めた固定 key に対して、Thunderbird の日本語表示名と色を登録する。
+   - 複数 PC の Thunderbird でも同じ key を利用できるようにする。
+
+2. **WorkInBox Web UI を Thunderbird 内で開く**
+   - WorkInBox の FastAPI + Jinja2 Web UI を作り直すのではなく、ローカルで稼働する Web UI を Thunderbird のタブから開けるようにする。
+   - Thunderbird を日常の入口として維持しつつ、WorkInBox の整理画面へ移動できるようにする。
+
+3. **WorkInBox の一覧から該当メールを Thunderbird で開く**
+   - WorkInBox の Web UI でメールを選択した際、Extension が Thunderbird のメッセージ表示 API を使って該当メールを開く。
+   - WorkInBox 側では Message-ID 等の安定した識別情報を使い、Thunderbird 固有 API 呼び出しは Extension 側へ寄せる。
+
+概念的には以下の構成を想定する。
+
+```text
+Thunderbird
+  ├─ メール閲覧・返信・タグ操作
+  ├─ VTODO の閲覧
+  └─ WorkInBox Web UI タブ
+          ↓
+Thunderbird Extension
+  ├─ WIB タグ定義を登録
+  ├─ WIB Web UI を開く
+  └─ 指定メールを Thunderbird で開く
+          ↓
+WorkInBox
+  ├─ FastAPI / Jinja2
+  ├─ Application Service
+  ├─ IMAP
+  └─ SQLite
+```
+
+Extension は Thunderbird と WorkInBox の橋渡しだけを行い、可能な限り小さく保つ。
+
+### 正本の扱いは変更しない
+
+Extension を利用してもデータの正本方針は変更しない。
+
+- **SQLite = WorkInBox 内部状態の正本**
+- **VTODO = Thunderbird で閲覧・操作できる外部表現**
+
+VTODO が Thunderbird 上で閲覧できることは UI 上の利点であるが、WorkInBox の内部状態の正本を VTODO へ移すことを意味しない。
+
+同様に、Extension 自体も正本データを保持しない。
+
+---
+
+## 7. v0.2 以後の付加データ管理構想
 
 タグ設計とは別に、将来的に WorkInBox が以下の付加情報を管理する案が出ている。
 
@@ -165,7 +222,7 @@ WorkInBox はタスク管理ツールではなく、利用者へ専用のタス�
 
 ### 例
 
-- 締切データ: iCalendar (`.ics`)
+- 締切データ: iCalendar / VTODO (`.ics`)
 - 概要・メモ: XNote 互換形式、または将来決定する可搬形式
 - WorkInBox 固有メタデータ: JSON 等
 
@@ -182,7 +239,7 @@ SQLite
   └─ WorkInBox 固有データ
        ⇅ import / export
 交換形式
-  ├─ deadlines.ics
+  ├─ deadlines.ics (VTODO)
   ├─ notes/...
   └─ metadata.json
 ```
@@ -205,19 +262,22 @@ SQLite
 
 ---
 
-## 7. v0.2 と将来バージョンの境界
+## 8. v0.2 と将来バージョンの境界
 
 ### v0.2 で扱う
 
 - IMAP タグの読み書き
 - WorkInBox タグと Thunderbird 表示タグの安定した対応方法の検証
+- Thunderbird Extension による WorkInBox タグ定義の登録検証
 - 参照タグ `重要` の追加
 - 自分宛て備忘メールを考慮した TriageBox 設計
 - 自分発メールを一律に `返信待ち` とみなさないこと
 
-### v0.2 以後に扱う
+### v0.2 以後または必要性に応じて扱う
 
-- 締切データの iCalendar import / export
+- Extension から WorkInBox Web UI を Thunderbird 内タブで開く機能
+- WorkInBox Web UI から指定メールを Thunderbird で開く連携
+- 締切データの iCalendar / VTODO import / export
 - XNote 等からの既存メモ取り込み
 - WorkInBox 内の概要・メモ管理
 - SQLite から可搬形式へのバックアップ
@@ -227,7 +287,7 @@ SQLite
 
 ---
 
-## 8. 未決事項
+## 9. 未決事項
 
 以下は今後決める。
 
@@ -236,6 +296,8 @@ SQLite
 - Thunderbird 数字キーの最終割り当て
 - `重要` の既存 Thunderbird keyword をそのまま利用するか、WorkInBox 用 key へ移行するか
 - Thunderbird MailExtension の最低対応バージョン
+- WorkInBox Web UI と Extension の連携方法
+- Message-ID を使ったメールオープン連携の具体的な実装方法
 - 自分宛て備忘メールを TriageBox がどの条件で自動判定するか
 - 将来のメモ交換形式
 - XNote 既存データの具体的な取り込み方法
