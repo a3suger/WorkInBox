@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WorkInBox</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>WorkInBox</h1>
+    <p id="status" class="status">状態を確認しています…</p>
+
+    <section>
+      <h2>1. 導入前バックアップ</h2>
+      <p>現在の Thunderbird タグ定義を、WIBタグ登録前のスナップショットとして一度だけ保存します。</p>
+      <button id="create-snapshot" type="button">導入前スナップショットを保存</button>
+      <button id="export-snapshot" type="button">JSONを書き出す</button>
+    </section>
+
+    <section>
+      <h2>2. WIBタグ登録</h2>
+      <p>導入前スナップショットを保存した後に、12個のWIBタグを登録します。</p>
+      <button id="provision-tags" type="button">12個のWIBタグを登録</button>
+    </section>
+
+    <section>
+      <h2>3. 復元</h2>
+      <p>WIBタグ定義を削除し、保存済みスナップショットのタグ定義へ戻します。メール上のIMAP keywordは削除しません。</p>
+      <button id="restore-snapshot" type="button" class="danger">保存済みスナップショットから復元</button>
+      <label class="file-label">
+        JSONから復元
+        <input id="restore-file" type="file" accept="application/json,.json">
+      </label>
+    </section>
+
+    <details>
+      <summary>現在のタグを表示</summary>
+      <pre id="current-tags"></pre>
+    </details>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
