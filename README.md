@@ -29,7 +29,8 @@ WorkInBox はタスクを登録するツールではありません。
 元のメールやメッセージを正本として扱います。
 
 現在は Thunderbird でスターを付けた IMAP メールを SQLite に同期し、
-WorkInBox 側で追跡状態を管理する基盤を開発しています。
+WorkInBox 側で追跡状態を管理します。
+作業タグは IMAP を正本とし、未分類の active メールは通常同期後にローカル Ollama で初期分類します。
 
 ## 開発環境
 
@@ -38,6 +39,8 @@ WorkInBox 側で追跡状態を管理する基盤を開発しています。
 - Python 3.14 以上
 - Git
 - IMAP 接続可能なメールアカウント
+- Ollama
+- `qwen2.5:7b` モデル
 - PyCharm は任意ですが、ローカル開発環境として利用できます
 
 Python のバージョンは次で確認できます。
@@ -45,6 +48,14 @@ Python のバージョンは次で確認できます。
 ```bash
 python --version
 ```
+
+Ollama をインストール後、モデルを用意します。
+
+```bash
+ollama pull qwen2.5:7b
+```
+
+Ollama のローカル API は既定で `http://127.0.0.1:11434` を使用します。
 
 ## セットアップ
 
@@ -100,6 +111,12 @@ imap:
 
 database:
   path: data/workinbox.db
+
+ai:
+  url: http://127.0.0.1:11434
+  model: qwen2.5:7b
+  body_max_chars: 4000
+  timeout_seconds: 120
 ```
 
 各項目の意味:
@@ -111,6 +128,12 @@ database:
 - `mailbox`: 対象 mailbox。現在は通常 `INBOX`
 - `new_mail_lookback_days`: 新規メール探索の対象日数。今日を含む N 暦日を対象とする
 - `database.path`: SQLite データベースの保存先
+- `ai.url`: Ollama API のベース URL
+- `ai.model`: 初期分類に使用する Ollama モデル
+- `ai.body_max_chars`: AI へ渡す本文の最大文字数。本文先頭から切り出す
+- `ai.timeout_seconds`: 1メールあたりの Ollama API タイムアウト秒数
+
+`ai` セクションを省略した場合は、`qwen2.5:7b`、本文 4000 文字、タイムアウト 120 秒を使用します。
 
 `config.yaml` には認証情報が入るため、Git にコミットしないでください。
 このリポジトリでは `config.yaml` は `.gitignore` の対象です。
@@ -123,6 +146,8 @@ venv を有効にした状態で、リポジトリ直下から実行します。
 
 通常同期では、SQLite 上の `active` メールを既存確認対象にし、あわせて新規のスター付きメールを探索します。
 
+同期完了後、active メールのうち `締切あり` / `スケジュール調整` / `回答必要` / `読む・検討` / `判定保留` のいずれも付いていないメールを Ollama で自動分類し、結果を IMAP タグへ反映します。
+
 ```bash
 python -m workinbox.main --config config.yaml
 ```
@@ -132,6 +157,8 @@ editable install 後は、次のコマンドでも実行できます。
 ```bash
 workinbox --config config.yaml
 ```
+
+Ollama が停止している、タイムアウトする、JSON が不正などの AI エラーは IMAP 同期エラーと分離されます。対象メールは未分類のまま残り、次回の通常同期で再試行されます。
 
 ### 全件再確認
 
@@ -148,7 +175,26 @@ python -m workinbox.main --config config.yaml --full-recheck
 workinbox --config config.yaml --full-recheck
 ```
 
+全件再確認では AI 初期分類を自動実行しません。
 同期処理の業務ロジックは `SynchronizationService` に分離されており、CLI と Web UI は同じ Application Service を利用します。
+
+## AI 初期分類
+
+AI へ渡す情報は、件名・差出人・宛先・本文先頭 `ai.body_max_chars` 文字です。添付ファイル自体は v0.2 では渡しません。
+
+分類結果は Ollama の Structured Outputs を使った JSON とし、Python 側でも型と許可されるタグ組み合わせを確認します。
+
+分類の優先順は次のとおりです。
+
+1. `締切あり`
+2. `スケジュール調整`（`締切あり` と重複可）
+3. `回答必要`
+4. `読む・検討`
+5. 分類材料そのものが不足するときだけ `判定保留`
+
+`締切あり`、`スケジュール調整`、`回答必要` は見逃しを減らすため再現率を重視します。
+
+詳細は [`docs/ai_initial_classification.md`](docs/ai_initial_classification.md) を参照してください。
 
 ## Web UI を起動する
 
@@ -174,11 +220,11 @@ http://127.0.0.1:8000/
 
 - Active メール一覧の表示
 - Inactive メール一覧の表示
+- 現在の WorkInBox IMAP タグの表示
+- WorkInBox タグの手動付与・解除
 - 通常同期
 - 全件再確認
-- 同期結果とメール単位エラーの確認
-
-現段階の Web UI は v0.2 の基盤です。IMAP 上の作業タグ読み取りは次の実装ステップのため、作業タグ欄は現在 `未取得` と表示されます。
+- 通常同期後の AI 初期分類件数と AI 分類エラーの確認
 
 ホストやポートを変更する場合:
 
@@ -188,7 +234,7 @@ workinbox-web --config config.yaml --host 127.0.0.1 --port 8080
 
 ## Thunderbird タグの IMAP FLAGS を確認する
 
-ステップ6の作業タグ読み書きを実装する前に、Thunderbird の表示タグと IMAP keyword の対応を実測するための読み取り専用診断コマンドがあります。
+Thunderbird の表示タグと IMAP keyword の対応を診断する読み取り専用コマンドがあります。
 
 SQLite の `emails.uid` で対象メールの UID を確認した後、次を実行します。
 
@@ -211,14 +257,12 @@ UID: 12345
 FLAGS:
   \\Seen
   \\Flagged
-  $label1
+  wib-deadline
 ```
 
 このコマンドは mailbox を読み取り専用で開き、指定 UID の `FLAGS` を取得するだけで、タグやメール状態を書き換えません。
 
-Thunderbird でタグを付ける前、付けた後、再び外した後の3回を比較して、表示名と IMAP keyword の対応を確認してください。
-
-詳細な手順と記録表は [`docs/tag_test.md`](docs/tag_test.md) を参照してください。
+詳細な検証記録は [`docs/tag_test.md`](docs/tag_test.md) を参照してください。
 
 ## PyCharm から実行する
 
@@ -309,6 +353,9 @@ IMAP 同期を変更した場合は、自動テストに加えて実環境でも
 - スターを外したメールが `inactive_unstarred` になる
 - 対象 mailbox から移動したメールが `inactive_moved` になる
 - 全件再確認で inactive メールも再確認対象になる
+- 通常同期後に未分類 active メールだけが AI 分類される
+- 既に初期分類タグがあるメールは再分類されない
+- Ollama エラー時にも IMAP 同期結果は維持される
 
 Web UI を変更した場合は、起動後に Active / Inactive の両画面と、通常同期 / 全件再確認の両ボタンも確認してください。
 
@@ -328,6 +375,8 @@ PyCharm の Database ツールや SQLite 対応ツールを使って内容を確
 - `inactive_unstarred`: mailbox にはあるが、スターが外された
 - `inactive_moved`: 保存していた UID が対象 mailbox から見つからなくなった
 
+作業タグは SQLite を正本にせず、IMAP 上の keyword を正本とします。
+
 `data/` も `.gitignore` の対象で、ローカルの SQLite データはリポジトリへコミットしません。
 
 ## 設計資料
@@ -337,3 +386,4 @@ PyCharm の Database ツールや SQLite 対応ツールを使って内容を確
 - `docs/design_v0_2.md`: v0.2 の追跡・同期・Web UI 仕様
 - `docs/design_workflow.md`: メール処理全体の考え方
 - `docs/tag_test.md`: Thunderbird タグと IMAP keyword の確認手順
+- `docs/ai_initial_classification.md`: Ollama による AI 初期分類の仕様とプロンプト原則
