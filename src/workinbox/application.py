@@ -328,7 +328,11 @@ class WorkTagService:
                     expected_uidvalidity=email.uidvalidity,
                 )
             except (OSError, RuntimeError) as exc:
-                views.append(PendingEmailView(email, (), None, str(exc)))
+                logging.warning(
+                    "Pending view IMAP check failed for %s: %s",
+                    email.message_id,
+                    exc,
+                )
                 continue
             if "wib-pending" not in snapshot.flags:
                 continue
