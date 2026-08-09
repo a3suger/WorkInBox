@@ -30,7 +30,7 @@
       border-radius: 6px;
     }
     nav a.current { background: #374151; }
-    main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    main { max-width: 1280px; margin: 0 auto; padding: 24px; }
     .toolbar {
       display: flex;
       gap: 10px;
@@ -81,6 +81,29 @@
       color: #64748b;
     }
     .table-wrap { overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 8px; }
+    .tag-cell { min-width: 310px; }
+    .tag-list, .tag-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag-badge {
+      border-left: 4px solid var(--tag-color);
+      background: #f8fafc;
+      border-radius: 5px;
+      padding: 4px 7px;
+      white-space: nowrap;
+    }
+    .tag-editor { margin-top: 8px; }
+    .tag-editor summary { cursor: pointer; color: #475569; }
+    .tag-controls { margin-top: 8px; }
+    .tag-controls form { margin: 0; }
+    button.tag-toggle {
+      border-left: 4px solid var(--tag-color);
+      padding: 5px 8px;
+      font-size: 0.82rem;
+    }
+    button.tag-toggle.selected {
+      background: #f1f5f9;
+      font-weight: 600;
+    }
+    .tag-error { color: #991b1b; font-size: 0.85rem; }
   </style>
 </head>
 <body>
