@@ -4,6 +4,8 @@ import argparse
 import logging
 import sqlite3
 from pathlib import Path
+from threading import Lock
+from typing import Callable
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -33,6 +35,7 @@ def create_app(
     sync_service = synchronization_service or SynchronizationService(config)
     tracking_service = query_service or TrackingQueryService(config)
     tag_service = work_tag_service or WorkTagService(config)
+    sync_lock = Lock()
 
     app = FastAPI(title="WorkInBox")
 
@@ -65,6 +68,29 @@ def create_app(
             },
         )
 
+    def run_sync(request: Request, operation: Callable[[], SyncResult]):
+        if not sync_lock.acquire(blocking=False):
+            logging.warning("Synchronization request ignored because another sync is running")
+            return render_mail_list(
+                request,
+                active=True,
+                sync_failure=(
+                    "同期処理は既に実行中です。完了後にもう一度実行してください。"
+                ),
+            )
+        try:
+            try:
+                result = operation()
+            except (OSError, RuntimeError, sqlite3.Error) as exc:
+                return render_mail_list(
+                    request,
+                    active=True,
+                    sync_failure=str(exc),
+                )
+            return render_mail_list(request, active=True, sync_result=result)
+        finally:
+            sync_lock.release()
+
     @app.get("/")
     def index() -> RedirectResponse:
         return RedirectResponse(url="/active", status_code=303)
@@ -79,27 +105,11 @@ def create_app(
 
     @app.post("/sync")
     def normal_sync(request: Request):
-        try:
-            result = sync_service.normal_sync()
-        except (OSError, RuntimeError, sqlite3.Error) as exc:
-            return render_mail_list(
-                request,
-                active=True,
-                sync_failure=str(exc),
-            )
-        return render_mail_list(request, active=True, sync_result=result)
+        return run_sync(request, sync_service.normal_sync)
 
     @app.post("/full-recheck")
     def full_recheck(request: Request):
-        try:
-            result = sync_service.full_recheck()
-        except (OSError, RuntimeError, sqlite3.Error) as exc:
-            return render_mail_list(
-                request,
-                active=True,
-                sync_failure=str(exc),
-            )
-        return render_mail_list(request, active=True, sync_result=result)
+        return run_sync(request, sync_service.full_recheck)
 
     @app.post("/tags/{key}/{operation}")
     def update_tag(
