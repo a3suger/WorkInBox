@@ -24,11 +24,24 @@
   既存確認 {{ sync_result.checked }} 件 / スター付き検出 {{ sync_result.flagged }} 件 /
   新規 {{ sync_result.added }} 件 / 再活性化 {{ sync_result.reactivated }} 件 /
   inactive化 {{ sync_result.inactivated }} 件
+  {% if sync_result.mode.value == "normal" %}
+  / AI初期分類 {{ sync_result.ai_classified }} 件
+  {% endif %}
   {% if sync_result.errors %}
   <div style="margin-top: 8px;">
     <strong>メール単位エラー: {{ sync_result.errors | length }} 件</strong>
     <ul>
       {% for error in sync_result.errors %}
+      <li>{{ error.message_id }}: {{ error.message }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if sync_result.ai_errors %}
+  <div style="margin-top: 8px;">
+    <strong>AI分類エラー: {{ sync_result.ai_errors | length }} 件</strong>
+    <ul>
+      {% for error in sync_result.ai_errors %}
       <li>{{ error.message_id }}: {{ error.message }}</li>
       {% endfor %}
     </ul>
