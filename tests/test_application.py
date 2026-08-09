@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from workinbox.ai_classifier import AiClassification
 from workinbox.application import SyncMode, SynchronizationService
 from workinbox.config import AppConfig, DatabaseConfig, ImapConfig
 from workinbox.database import EmailDatabase
@@ -12,9 +13,20 @@ from workinbox.models import (
     EmailMessage,
     ImapCheckResult,
     ImapCheckState,
+    ImapFlagsSnapshot,
     ImapReference,
     TrackingStatus,
 )
+
+
+class FakeClassifier:
+    def __init__(self, result: AiClassification | None = None) -> None:
+        self.result = result or AiClassification(False, False, False, True, False, "review")
+        self.messages: list[EmailMessage] = []
+
+    def classify(self, message: EmailMessage) -> AiClassification:
+        self.messages.append(message)
+        return self.result
 
 
 class FakeImapClient:
@@ -22,10 +34,14 @@ class FakeImapClient:
         self,
         checks: list[ImapCheckResult],
         messages: list[EmailMessage] | None = None,
+        *,
+        flags_by_uid: dict[int, tuple[str, ...]] | None = None,
     ) -> None:
         self.checks = checks
         self.messages = messages or []
         self.received_references: list[ImapReference] = []
+        self.flags_by_uid = flags_by_uid or {}
+        self.keyword_updates: list[tuple[int, str, bool, int | None]] = []
 
     def synchronize(
         self,
@@ -33,6 +49,32 @@ class FakeImapClient:
     ) -> tuple[list[ImapCheckResult], list[EmailMessage]]:
         self.received_references = list(existing)
         return self.checks, self.messages
+
+    def inspect_flags(
+        self,
+        uid: int,
+        *,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
+        flags = self.flags_by_uid.get(uid, ("wib-review",))
+        return ImapFlagsSnapshot("INBOX", expected_uidvalidity or 10, uid, flags)
+
+    def set_keyword(
+        self,
+        uid: int,
+        keyword: str,
+        *,
+        enabled: bool,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
+        self.keyword_updates.append((uid, keyword, enabled, expected_uidvalidity))
+        current = list(self.flags_by_uid.get(uid, ()))
+        if enabled and keyword not in current:
+            current.append(keyword)
+        elif not enabled:
+            current = [flag for flag in current if flag != keyword]
+        self.flags_by_uid[uid] = tuple(current)
+        return ImapFlagsSnapshot("INBOX", expected_uidvalidity or 10, uid, tuple(current))
 
 
 class SynchronizationServiceTest(unittest.TestCase):
@@ -73,35 +115,21 @@ class SynchronizationServiceTest(unittest.TestCase):
             database = EmailDatabase(path)
             database.initialize()
             self.seed(database, "<active@example>", 1)
-            self.seed(
-                database,
-                "<inactive@example>",
-                2,
-                TrackingStatus.INACTIVE_UNSTARRED,
-            )
+            self.seed(database, "<inactive@example>", 2, TrackingStatus.INACTIVE_UNSTARRED)
 
             imap = FakeImapClient(
                 [ImapCheckResult("<active@example>", ImapCheckState.MISSING)],
                 [
                     EmailMessage(
-                        "<new@example>",
-                        "new@example.com",
-                        None,
-                        None,
-                        None,
-                        None,
-                        mailbox="INBOX",
-                        uidvalidity=10,
-                        uid=3,
+                        "<new@example>", "new@example.com", None, None, None, None,
+                        mailbox="INBOX", uidvalidity=10, uid=3,
                     )
                 ],
             )
             service = SynchronizationService(
-                self.make_config(path),
-                database=database,
-                imap_client=imap,
+                self.make_config(path), database=database, imap_client=imap,
+                classifier=FakeClassifier(),
             )
-
             result = service.normal_sync()
 
             self.assertEqual(
@@ -114,16 +142,45 @@ class SynchronizationServiceTest(unittest.TestCase):
             self.assertEqual(result.added, 1)
             self.assertEqual(result.reactivated, 0)
             self.assertEqual(result.inactivated, 1)
+            self.assertEqual(result.ai_classified, 0)
 
             with sqlite3.connect(path) as connection:
-                rows = dict(
-                    connection.execute(
-                        "SELECT message_id, tracking_status FROM emails"
-                    ).fetchall()
-                )
+                rows = dict(connection.execute("SELECT message_id, tracking_status FROM emails").fetchall())
             self.assertEqual(rows["<active@example>"], "inactive_moved")
             self.assertEqual(rows["<inactive@example>"], "inactive_unstarred")
             self.assertEqual(rows["<new@example>"], "active")
+
+    def test_normal_sync_classifies_unclassified_active_mail(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            database.initialize()
+            message = EmailMessage(
+                "<new@example>",
+                "sender@example.com",
+                "me@example.com",
+                "提出してください",
+                None,
+                "8月20日までに提出してください。",
+                mailbox="INBOX",
+                uidvalidity=10,
+                uid=3,
+            )
+            imap = FakeImapClient([], [message], flags_by_uid={3: ("\\Flagged",)})
+            classifier = FakeClassifier(
+                AiClassification(True, False, False, False, False, "期限がある")
+            )
+            service = SynchronizationService(
+                self.make_config(path), database=database, imap_client=imap,
+                classifier=classifier,
+            )
+
+            result = service.normal_sync()
+
+            self.assertEqual(result.ai_classified, 1)
+            self.assertEqual(result.ai_errors, ())
+            self.assertEqual([item.message_id for item in classifier.messages], ["<new@example>"])
+            self.assertEqual(imap.keyword_updates, [(3, "wib-deadline", True, 10)])
 
     def test_full_recheck_includes_inactive_and_can_reactivate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -131,18 +188,8 @@ class SynchronizationServiceTest(unittest.TestCase):
             database = EmailDatabase(path)
             database.initialize()
             self.seed(database, "<active@example>", 1)
-            self.seed(
-                database,
-                "<unstarred@example>",
-                2,
-                TrackingStatus.INACTIVE_UNSTARRED,
-            )
-            self.seed(
-                database,
-                "<moved@example>",
-                3,
-                TrackingStatus.INACTIVE_MOVED,
-            )
+            self.seed(database, "<unstarred@example>", 2, TrackingStatus.INACTIVE_UNSTARRED)
+            self.seed(database, "<moved@example>", 3, TrackingStatus.INACTIVE_MOVED)
 
             imap = FakeImapClient(
                 [
@@ -152,32 +199,23 @@ class SynchronizationServiceTest(unittest.TestCase):
                 ]
             )
             service = SynchronizationService(
-                self.make_config(path),
-                database=database,
-                imap_client=imap,
+                self.make_config(path), database=database, imap_client=imap,
+                classifier=FakeClassifier(),
             )
-
             result = service.full_recheck()
 
             self.assertEqual(
                 [reference.message_id for reference in imap.received_references],
-                [
-                    "<active@example>",
-                    "<unstarred@example>",
-                    "<moved@example>",
-                ],
+                ["<active@example>", "<unstarred@example>", "<moved@example>"],
             )
             self.assertEqual(result.mode, SyncMode.FULL_RECHECK)
             self.assertEqual(result.checked, 3)
             self.assertEqual(result.reactivated, 1)
             self.assertEqual(result.inactivated, 0)
+            self.assertEqual(result.ai_classified, 0)
 
             with sqlite3.connect(path) as connection:
-                rows = dict(
-                    connection.execute(
-                        "SELECT message_id, tracking_status FROM emails"
-                    ).fetchall()
-                )
+                rows = dict(connection.execute("SELECT message_id, tracking_status FROM emails").fetchall())
             self.assertEqual(rows["<active@example>"], "active")
             self.assertEqual(rows["<unstarred@example>"], "active")
             self.assertEqual(rows["<moved@example>"], "inactive_moved")
@@ -190,20 +228,12 @@ class SynchronizationServiceTest(unittest.TestCase):
             self.seed(database, "<error@example>", 1)
 
             imap = FakeImapClient(
-                [
-                    ImapCheckResult(
-                        "<error@example>",
-                        ImapCheckState.ERROR,
-                        "temporary failure",
-                    )
-                ]
+                [ImapCheckResult("<error@example>", ImapCheckState.ERROR, "temporary failure")]
             )
             service = SynchronizationService(
-                self.make_config(path),
-                database=database,
-                imap_client=imap,
+                self.make_config(path), database=database, imap_client=imap,
+                classifier=FakeClassifier(),
             )
-
             result = service.normal_sync()
 
             self.assertEqual(len(result.errors), 1)
