@@ -54,6 +54,9 @@ class TrackedEmail:
     tracking_status: TrackingStatus
     status_changed_at: str | None
     last_imap_checked_at: str | None
+    mailbox: str | None = None
+    uidvalidity: int | None = None
+    uid: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
