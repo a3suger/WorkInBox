@@ -61,10 +61,29 @@ def create_app(
                 "emails": tagged_emails,
                 "work_tags": WORK_TAGS,
                 "active_view": active,
+                "pending_view": False,
                 "sync_result": sync_result,
                 "sync_failure": sync_failure,
                 "tag_message": tag_message,
                 "tag_failure": tag_failure,
+            },
+        )
+
+    def render_pending(
+        request: Request,
+        *,
+        message: str | None = None,
+        failure: str | None = None,
+    ):
+        return _TEMPLATES.TemplateResponse(
+            request=request,
+            name="pending.html",
+            context={
+                "emails": tag_service.pending_emails(),
+                "active_view": False,
+                "pending_view": True,
+                "message": message,
+                "failure": failure,
             },
         )
 
@@ -102,6 +121,18 @@ def create_app(
     @app.get("/inactive")
     def inactive_emails(request: Request):
         return render_mail_list(request, active=False)
+
+    @app.get("/pending")
+    def pending_emails(request: Request):
+        return render_pending(request)
+
+    @app.post("/pending/resolve")
+    def resolve_pending(request: Request, message_id: str, resolution: str):
+        try:
+            tag_service.resolve_pending(message_id, resolution)
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            return render_pending(request, failure=str(exc))
+        return render_pending(request, message="判定保留を解消しました。")
 
     @app.post("/sync")
     def normal_sync(request: Request):
