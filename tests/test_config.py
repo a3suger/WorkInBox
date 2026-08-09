@@ -28,6 +28,8 @@ database:
             self.assertEqual(config.ai.model, "qwen2.5:7b")
             self.assertEqual(config.ai.body_max_chars, 4000)
             self.assertEqual(config.ai.timeout_seconds, 120.0)
+            self.assertEqual(config.ai.keep_alive, "30m")
+            self.assertEqual(config.ai.max_workers, 2)
 
     def test_loads_ai_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -45,12 +47,16 @@ ai:
   model: qwen2.5:7b
   body_max_chars: 2500
   timeout_seconds: 45
+  keep_alive: 10m
+  max_workers: 3
 """,
                 encoding="utf-8",
             )
             config = load_config(path)
             self.assertEqual(config.ai.body_max_chars, 2500)
             self.assertEqual(config.ai.timeout_seconds, 45.0)
+            self.assertEqual(config.ai.keep_alive, "10m")
+            self.assertEqual(config.ai.max_workers, 3)
 
     def test_lookback_days_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -102,6 +108,25 @@ ai:
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "ai.body_max_chars"):
+                load_config(path)
+
+    def test_ai_max_workers_is_limited(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text(
+                """imap:
+  host: imap.example
+  username: user
+  password: pass
+  new_mail_lookback_days: 7
+database:
+  path: workinbox.db
+ai:
+  max_workers: 5
+""",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "ai.max_workers"):
                 load_config(path)
 
 
