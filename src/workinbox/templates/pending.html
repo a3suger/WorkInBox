@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}判定保留 - WorkInBox{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2>判定保留</h2>
+    <div class="muted">{{ emails | length }} 件</div>
+  </div>
+</div>
+
+{% if message %}
+<div class="notice">{{ message }}</div>
+{% endif %}
+
+{% if failure %}
+<div class="notice error">
+  <strong>判定保留の更新に失敗しました。</strong><br>
+  {{ failure }}
+</div>
+{% endif %}
+
+{% if emails %}
+<div class="pending-list">
+  {% for item in emails %}
+  {% set email = item.email %}
+  <section class="pending-card">
+    <h3>{{ email.subject or "(件名なし)" }}</h3>
+    <div class="pending-meta muted">
+      <span>差出人: {{ email.sender }}</span>
+      <span>受信日時: {{ email.received_at or "-" }}</span>
+    </div>
+
+    {% if item.error %}
+    <div class="notice error">IMAP状態の取得に失敗しました: {{ item.error }}</div>
+    {% else %}
+      <div class="tag-list">
+        {% for tag in item.tags %}
+        <span class="tag-badge" style="--tag-color: {{ tag.color }}">{{ tag.label }}</span>
+        {% endfor %}
+      </div>
+
+      <details class="message-preview">
+        <summary>本文を確認</summary>
+        <div class="message-body">{{ item.body or "(本文なし)" }}</div>
+      </details>
+
+      <div class="resolution-actions">
+        <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=deadline">
+          <button type="submit">締切あり</button>
+        </form>
+        <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=schedule">
+          <button type="submit">スケジュール調整</button>
+        </form>
+        <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=deadline_schedule">
+          <button type="submit">締切＋スケジュール</button>
+        </form>
+        <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=answer">
+          <button type="submit">回答必要</button>
+        </form>
+        <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=review">
+          <button type="submit">読む・検討</button>
+        </form>
+      </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">現在、判定保留のメールはありません。</div>
+{% endif %}
+{% endblock %}
