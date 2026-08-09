@@ -143,13 +143,12 @@ class SynchronizationService:
                     raise RuntimeError("email content is unavailable in SQLite")
                 classification = self.classifier.classify(message)
                 tag_keys = classification.tag_keys()
-                for key in tag_keys:
-                    self.imap_client.set_keyword(
-                        tracked.uid,
-                        key,
-                        enabled=True,
-                        expected_uidvalidity=tracked.uidvalidity,
-                    )
+                self.imap_client.set_keywords(
+                    tracked.uid,
+                    tag_keys,
+                    enabled=True,
+                    expected_uidvalidity=tracked.uidvalidity,
+                )
                 classified += 1
             except (OSError, RuntimeError, ValueError) as exc:
                 errors.append(SyncError(tracked.message_id, str(exc)))
