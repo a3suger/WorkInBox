@@ -7,6 +7,7 @@ from .config import AppConfig
 from .database import EmailDatabase
 from .imap_client import ImapClient
 from .models import ImapCheckState, TrackedEmail, TrackingStatus
+from .work_tags import WorkTagDefinition, definitions_for_flags, require_work_tag
 
 
 class SyncMode(StrEnum):
@@ -29,6 +30,13 @@ class SyncResult:
     reactivated: int
     inactivated: int
     errors: tuple[SyncError, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TrackedEmailTagView:
+    email: TrackedEmail
+    tags: tuple[WorkTagDefinition, ...]
+    error: str | None = None
 
 
 class SynchronizationService:
@@ -114,3 +122,71 @@ class TrackingQueryService:
     def inactive_emails(self) -> list[TrackedEmail]:
         self.database.initialize()
         return self.database.list_tracked_emails(active=False)
+
+
+class WorkTagService:
+    def __init__(
+        self,
+        config: AppConfig,
+        *,
+        database: EmailDatabase | None = None,
+        imap_client: ImapClient | None = None,
+    ) -> None:
+        self.config = config
+        self.database = database or EmailDatabase(config.database.path)
+        self.imap_client = imap_client or ImapClient(config.imap)
+
+    def read_for_emails(self, emails: list[TrackedEmail]) -> list[TrackedEmailTagView]:
+        views: list[TrackedEmailTagView] = []
+        for email in emails:
+            if email.uid is None or email.uidvalidity is None or email.mailbox is None:
+                views.append(
+                    TrackedEmailTagView(
+                        email=email,
+                        tags=(),
+                        error="IMAP identity is unavailable",
+                    )
+                )
+                continue
+            if email.mailbox != self.config.imap.mailbox:
+                views.append(
+                    TrackedEmailTagView(
+                        email=email,
+                        tags=(),
+                        error=f"mailbox mismatch: {email.mailbox}",
+                    )
+                )
+                continue
+            try:
+                snapshot = self.imap_client.inspect_flags(
+                    email.uid,
+                    expected_uidvalidity=email.uidvalidity,
+                )
+            except (OSError, RuntimeError) as exc:
+                views.append(TrackedEmailTagView(email=email, tags=(), error=str(exc)))
+                continue
+            views.append(
+                TrackedEmailTagView(
+                    email=email,
+                    tags=definitions_for_flags(snapshot.flags),
+                )
+            )
+        return views
+
+    def set_tag(self, message_id: str, key: str, *, enabled: bool) -> None:
+        tag = require_work_tag(key)
+        self.database.initialize()
+        reference = self.database.imap_reference(message_id)
+        if reference is None:
+            raise RuntimeError(f"IMAP identity is unavailable for {message_id}")
+        if reference.mailbox != self.config.imap.mailbox:
+            raise RuntimeError(
+                f"Mail is stored in {reference.mailbox!r}, not configured mailbox "
+                f"{self.config.imap.mailbox!r}"
+            )
+        self.imap_client.set_keyword(
+            reference.uid,
+            tag.key,
+            enabled=enabled,
+            expected_uidvalidity=reference.uidvalidity,
+        )
