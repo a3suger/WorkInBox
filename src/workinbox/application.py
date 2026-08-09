@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from enum import StrEnum
+from time import perf_counter
 
 from .ai_classifier import OllamaClassifier
 from .config import AppConfig
@@ -50,6 +53,13 @@ class SyncResult:
 class TrackedEmailTagView:
     email: TrackedEmail
     tags: tuple[WorkTagDefinition, ...]
+    error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _AiClassificationOutcome:
+    message_id: str
+    classified: bool
     error: str | None = None
 
 
@@ -121,10 +131,8 @@ class SynchronizationService:
             ai_errors=ai_errors,
         )
 
-    def _classify_unclassified_active(self) -> tuple[int, tuple[SyncError, ...]]:
-        classified = 0
-        errors: list[SyncError] = []
-
+    def _eligible_unclassified(self) -> list[TrackedEmail]:
+        eligible: list[TrackedEmail] = []
         for tracked in self.database.list_tracked_emails(active=True):
             if tracked.uid is None or tracked.uidvalidity is None or tracked.mailbox is None:
                 continue
@@ -135,24 +143,81 @@ class SynchronizationService:
                     tracked.uid,
                     expected_uidvalidity=tracked.uidvalidity,
                 )
-                if _INITIAL_CLASSIFICATION_KEYS.intersection(snapshot.flags):
-                    continue
-
-                message = self.database.email_message(tracked.message_id)
-                if message is None:
-                    raise RuntimeError("email content is unavailable in SQLite")
-                classification = self.classifier.classify(message)
-                tag_keys = classification.tag_keys()
-                self.imap_client.set_keywords(
-                    tracked.uid,
-                    tag_keys,
-                    enabled=True,
-                    expected_uidvalidity=tracked.uidvalidity,
-                )
-                classified += 1
             except (OSError, RuntimeError, ValueError) as exc:
-                errors.append(SyncError(tracked.message_id, str(exc)))
+                logging.warning(
+                    "AI precheck failed for %s: %s",
+                    tracked.message_id,
+                    exc,
+                )
+                continue
+            if _INITIAL_CLASSIFICATION_KEYS.intersection(snapshot.flags):
+                continue
+            eligible.append(tracked)
+        return eligible
 
+    def _classify_one(self, tracked: TrackedEmail) -> _AiClassificationOutcome:
+        started = perf_counter()
+        try:
+            message = self.database.email_message(tracked.message_id)
+            if message is None:
+                raise RuntimeError("email content is unavailable in SQLite")
+            classification = self.classifier.classify(message)
+            tag_keys = classification.tag_keys()
+            self.imap_client.set_keywords(
+                tracked.uid,
+                tag_keys,
+                enabled=True,
+                expected_uidvalidity=tracked.uidvalidity,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            elapsed = perf_counter() - started
+            logging.warning(
+                "AI classification failed for %s after %.2fs: %s",
+                tracked.message_id,
+                elapsed,
+                exc,
+            )
+            return _AiClassificationOutcome(tracked.message_id, False, str(exc))
+
+        elapsed = perf_counter() - started
+        logging.info(
+            "AI classified %s in %.2fs -> %s",
+            tracked.message_id,
+            elapsed,
+            ",".join(tag_keys),
+        )
+        return _AiClassificationOutcome(tracked.message_id, True)
+
+    def _classify_unclassified_active(self) -> tuple[int, tuple[SyncError, ...]]:
+        eligible = self._eligible_unclassified()
+        if not eligible:
+            return 0, ()
+
+        workers = min(self.config.ai.max_workers, len(eligible))
+        logging.info(
+            "AI classification starting: %d messages, %d worker(s)",
+            len(eligible),
+            workers,
+        )
+        started = perf_counter()
+        classified = 0
+        errors: list[SyncError] = []
+
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wib-ai") as executor:
+            futures = {executor.submit(self._classify_one, tracked): tracked for tracked in eligible}
+            for future in as_completed(futures):
+                outcome = future.result()
+                if outcome.classified:
+                    classified += 1
+                elif outcome.error is not None:
+                    errors.append(SyncError(outcome.message_id, outcome.error))
+
+        logging.info(
+            "AI classification finished: %d/%d messages in %.2fs",
+            classified,
+            len(eligible),
+            perf_counter() - started,
+        )
         return classified, tuple(errors)
 
     def normal_sync(self) -> SyncResult:
