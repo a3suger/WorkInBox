@@ -131,8 +131,11 @@ class SynchronizationService:
             ai_errors=ai_errors,
         )
 
-    def _eligible_unclassified(self) -> list[TrackedEmail]:
+    def _eligible_unclassified(
+        self,
+    ) -> tuple[list[TrackedEmail], list[SyncError]]:
         eligible: list[TrackedEmail] = []
+        errors: list[SyncError] = []
         for tracked in self.database.list_tracked_emails(active=True):
             if tracked.uid is None or tracked.uidvalidity is None or tracked.mailbox is None:
                 continue
@@ -149,11 +152,12 @@ class SynchronizationService:
                     tracked.message_id,
                     exc,
                 )
+                errors.append(SyncError(tracked.message_id, str(exc)))
                 continue
             if _INITIAL_CLASSIFICATION_KEYS.intersection(snapshot.flags):
                 continue
             eligible.append(tracked)
-        return eligible
+        return eligible, errors
 
     def _classify_one(self, tracked: TrackedEmail) -> _AiClassificationOutcome:
         started = perf_counter()
@@ -189,9 +193,9 @@ class SynchronizationService:
         return _AiClassificationOutcome(tracked.message_id, True)
 
     def _classify_unclassified_active(self) -> tuple[int, tuple[SyncError, ...]]:
-        eligible = self._eligible_unclassified()
+        eligible, errors = self._eligible_unclassified()
         if not eligible:
-            return 0, ()
+            return 0, tuple(errors)
 
         workers = min(self.config.ai.max_workers, len(eligible))
         logging.info(
@@ -201,7 +205,6 @@ class SynchronizationService:
         )
         started = perf_counter()
         classified = 0
-        errors: list[SyncError] = []
 
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wib-ai") as executor:
             futures = {executor.submit(self._classify_one, tracked): tracked for tracked in eligible}
