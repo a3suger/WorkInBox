@@ -1,13 +1,16 @@
 const SNAPSHOT_KEY = "preWorkInBoxTagSnapshot";
 const SNAPSHOT_SCHEMA = "workinbox-thunderbird-tags/v1";
 
+// Thunderbird sorts tags by ordinal (falling back to the tag key).
+// The six primary human-classification tags use ordinals beginning with "!"
+// so they sort before normal/default tag keys and become numeric shortcuts 1-6.
 const WIB_TAGS = Object.freeze([
-  { key: "wib-important", tag: "重要", color: "#7B1FA2" },
-  { key: "wib-deadline", tag: "締切あり", color: "#D32F2F" },
-  { key: "wib-schedule", tag: "スケジュール調整", color: "#F57C00" },
-  { key: "wib-answer", tag: "回答必要", color: "#1976D2" },
-  { key: "wib-review", tag: "読む・検討", color: "#039BE5" },
-  { key: "wib-pending", tag: "判定保留", color: "#757575" },
+  { key: "wib-important", tag: "重要", color: "#7B1FA2", ordinal: "!01" },
+  { key: "wib-deadline", tag: "締切あり", color: "#D32F2F", ordinal: "!02" },
+  { key: "wib-schedule", tag: "スケジュール調整", color: "#F57C00", ordinal: "!03" },
+  { key: "wib-answer", tag: "回答必要", color: "#1976D2", ordinal: "!04" },
+  { key: "wib-review", tag: "読む・検討", color: "#039BE5", ordinal: "!05" },
+  { key: "wib-pending", tag: "判定保留", color: "#757575", ordinal: "!06" },
   { key: "wib-deadline-done", tag: "締切登録済み", color: "#8E2424" },
   { key: "wib-schedule-done", tag: "スケジュール対応済み", color: "#A65300" },
   { key: "wib-waiting-reply", tag: "返信待ち", color: "#388E3C" },
@@ -155,24 +158,37 @@ async function exportSnapshot() {
 }
 
 async function ensureWibTag(definition) {
-  const tags = await messenger.messages.tags.list();
-  const existing = tags.find((tag) => tag.key === definition.key);
+  let tags = await messenger.messages.tags.list();
+  let existing = tags.find((tag) => tag.key === definition.key);
 
-  if (existing) {
-    if (existing.tag !== definition.tag || existing.color !== definition.color.toUpperCase()) {
-      await messenger.messages.tags.update(definition.key, {
-        tag: definition.tag,
-        color: definition.color,
-      });
-    }
-    return;
+  if (!existing) {
+    await messenger.messages.tags.create(
+      definition.key,
+      definition.tag,
+      definition.color,
+    );
+    tags = await messenger.messages.tags.list();
+    existing = tags.find((tag) => tag.key === definition.key);
   }
 
-  await messenger.messages.tags.create(
-    definition.key,
-    definition.tag,
-    definition.color,
-  );
+  if (!existing) {
+    throw new Error(`${definition.key} の作成後にタグ定義を取得できませんでした。`);
+  }
+
+  const properties = {};
+  if (existing.tag !== definition.tag) {
+    properties.tag = definition.tag;
+  }
+  if (existing.color !== definition.color.toUpperCase()) {
+    properties.color = definition.color;
+  }
+  if (definition.ordinal && existing.ordinal !== definition.ordinal) {
+    properties.ordinal = definition.ordinal;
+  }
+
+  if (Object.keys(properties).length > 0) {
+    await messenger.messages.tags.update(definition.key, properties);
+  }
 }
 
 async function provisionTags() {
@@ -184,7 +200,7 @@ async function provisionTags() {
     await ensureWibTag(definition);
   }
 
-  setStatus("12個のWIBタグ定義を登録しました。");
+  setStatus("12個のWIBタグを登録し、主要6タグを数字キー 1〜6 の順に配置しました。");
   await refresh();
 }
 
