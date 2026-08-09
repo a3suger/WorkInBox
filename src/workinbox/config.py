@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -23,9 +23,18 @@ class DatabaseConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class AiConfig:
+    url: str = "http://127.0.0.1:11434"
+    model: str = "qwen2.5:7b"
+    body_max_chars: int = 4000
+    timeout_seconds: float = 120.0
+
+
+@dataclass(frozen=True, slots=True)
 class AppConfig:
     imap: ImapConfig
     database: DatabaseConfig
+    ai: AiConfig = field(default_factory=AiConfig)
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -48,9 +57,23 @@ def load_config(path: str | Path) -> AppConfig:
             new_mail_lookback_days=new_mail_lookback_days,
         )
         database_path = Path(str(database_raw["path"]))
+
+        ai_raw = raw.get("ai", {}) or {}
+        body_max_chars = int(ai_raw.get("body_max_chars", 4000))
+        timeout_seconds = float(ai_raw.get("timeout_seconds", 120.0))
+        if body_max_chars < 1:
+            raise ValueError("ai.body_max_chars must be at least 1")
+        if timeout_seconds <= 0:
+            raise ValueError("ai.timeout_seconds must be greater than 0")
+        ai = AiConfig(
+            url=str(ai_raw.get("url", "http://127.0.0.1:11434")),
+            model=str(ai_raw.get("model", "qwen2.5:7b")),
+            body_max_chars=body_max_chars,
+            timeout_seconds=timeout_seconds,
+        )
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"Invalid configuration: {exc}") from exc
 
     if not database_path.is_absolute():
         database_path = config_path.parent / database_path
-    return AppConfig(imap=imap, database=DatabaseConfig(database_path))
+    return AppConfig(imap=imap, database=DatabaseConfig(database_path), ai=ai)
