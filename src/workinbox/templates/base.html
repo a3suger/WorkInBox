@@ -104,14 +104,39 @@
       font-weight: 600;
     }
     .tag-error { color: #991b1b; font-size: 0.85rem; }
+    .pending-list { display: grid; gap: 14px; }
+    .pending-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .pending-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .pending-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .message-preview { margin: 10px 0 14px; }
+    .message-preview summary { cursor: pointer; color: #475569; }
+    .message-body {
+      white-space: pre-wrap;
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      border-radius: 7px;
+      padding: 12px;
+      max-height: 360px;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.82rem;
+    }
+    .resolution-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+    .resolution-actions form { margin: 0; }
   </style>
 </head>
 <body>
 <header>
   <h1>WorkInBox</h1>
   <nav>
-    <a href="/active" class="{% if active_view %}current{% endif %}">Active</a>
-    <a href="/inactive" class="{% if not active_view %}current{% endif %}">Inactive</a>
+    <a href="/active" class="{% if active_view and not pending_view %}current{% endif %}">Active</a>
+    <a href="/pending" class="{% if pending_view %}current{% endif %}">判定保留</a>
+    <a href="/inactive" class="{% if not active_view and not pending_view %}current{% endif %}">Inactive</a>
   </nav>
 </header>
 <main>
