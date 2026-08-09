@@ -24,6 +24,14 @@ _INITIAL_CLASSIFICATION_KEYS = frozenset(
     }
 )
 
+_PENDING_RESOLUTIONS: dict[str, tuple[str, ...]] = {
+    "deadline": ("wib-deadline",),
+    "schedule": ("wib-schedule",),
+    "deadline_schedule": ("wib-deadline", "wib-schedule"),
+    "answer": ("wib-answer",),
+    "review": ("wib-review",),
+}
+
 
 class SyncMode(StrEnum):
     NORMAL = "normal"
@@ -53,6 +61,14 @@ class SyncResult:
 class TrackedEmailTagView:
     email: TrackedEmail
     tags: tuple[WorkTagDefinition, ...]
+    error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PendingEmailView:
+    email: TrackedEmail
+    tags: tuple[WorkTagDefinition, ...]
+    body: str | None
     error: str | None = None
 
 
@@ -297,6 +313,76 @@ class WorkTagService:
                 )
             )
         return views
+
+    def pending_emails(self) -> list[PendingEmailView]:
+        self.database.initialize()
+        views: list[PendingEmailView] = []
+        for email in self.database.list_tracked_emails(active=True):
+            if email.uid is None or email.uidvalidity is None or email.mailbox is None:
+                continue
+            if email.mailbox != self.config.imap.mailbox:
+                continue
+            try:
+                snapshot = self.imap_client.inspect_flags(
+                    email.uid,
+                    expected_uidvalidity=email.uidvalidity,
+                )
+            except (OSError, RuntimeError) as exc:
+                views.append(PendingEmailView(email, (), None, str(exc)))
+                continue
+            if "wib-pending" not in snapshot.flags:
+                continue
+            message = self.database.email_message(email.message_id)
+            views.append(
+                PendingEmailView(
+                    email=email,
+                    tags=definitions_for_flags(snapshot.flags),
+                    body=message.body if message is not None else None,
+                )
+            )
+        return views
+
+    def resolve_pending(self, message_id: str, resolution: str) -> None:
+        try:
+            target_keys = _PENDING_RESOLUTIONS[resolution]
+        except KeyError as exc:
+            raise ValueError(f"Unknown pending resolution: {resolution!r}") from exc
+
+        self.database.initialize()
+        reference = self.database.imap_reference(message_id)
+        if reference is None:
+            raise RuntimeError(f"IMAP identity is unavailable for {message_id}")
+        if reference.mailbox != self.config.imap.mailbox:
+            raise RuntimeError(
+                f"Mail is stored in {reference.mailbox!r}, not configured mailbox "
+                f"{self.config.imap.mailbox!r}"
+            )
+
+        snapshot = self.imap_client.inspect_flags(
+            reference.uid,
+            expected_uidvalidity=reference.uidvalidity,
+        )
+        if "wib-pending" not in snapshot.flags:
+            raise RuntimeError("Mail is no longer pending classification")
+
+        self.imap_client.set_keywords(
+            reference.uid,
+            target_keys,
+            enabled=True,
+            expected_uidvalidity=reference.uidvalidity,
+        )
+        remove_keys = tuple(
+            key
+            for key in _INITIAL_CLASSIFICATION_KEYS
+            if key not in target_keys and key in snapshot.flags
+        )
+        if remove_keys:
+            self.imap_client.set_keywords(
+                reference.uid,
+                remove_keys,
+                enabled=False,
+                expected_uidvalidity=reference.uidvalidity,
+            )
 
     def set_tag(self, message_id: str, key: str, *, enabled: bool) -> None:
         tag = require_work_tag(key)
