@@ -60,14 +60,16 @@ class FakeImap:
             FakeImap.last_store_args = args
             uid = int(args[0])
             operation = str(args[1])
-            keyword = str(args[2]).strip("()")
+            keywords = str(args[2]).strip("()").split()
             if uid != 60:
                 raise AssertionError((command, args))
             flags = list(FakeImap.flags_60)
-            if operation == "+FLAGS.SILENT" and keyword not in flags:
-                flags.append(keyword)
+            if operation == "+FLAGS.SILENT":
+                for keyword in keywords:
+                    if keyword not in flags:
+                        flags.append(keyword)
             elif operation == "-FLAGS.SILENT":
-                flags = [flag for flag in flags if flag != keyword]
+                flags = [flag for flag in flags if flag not in keywords]
             FakeImap.flags_60 = tuple(flags)
             return "OK", [b""]
 
@@ -163,6 +165,31 @@ class ImapClientTest(unittest.TestCase):
         self.assertEqual(
             snapshot.flags,
             ("\\Seen", "\\Flagged", "$label1", "WorkInBoxTest", "wib-deadline"),
+        )
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
+    def test_set_keywords_adds_multiple_keywords_in_one_store(self) -> None:
+        snapshot = ImapClient(self.config).set_keywords(
+            60,
+            ("wib-deadline", "wib-schedule"),
+            enabled=True,
+            expected_uidvalidity=55,
+        )
+
+        self.assertEqual(
+            FakeImap.last_store_args,
+            ("60", "+FLAGS.SILENT", "(wib-deadline wib-schedule)"),
+        )
+        self.assertEqual(
+            snapshot.flags,
+            (
+                "\\Seen",
+                "\\Flagged",
+                "$label1",
+                "WorkInBoxTest",
+                "wib-deadline",
+                "wib-schedule",
+            ),
         )
 
     @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
