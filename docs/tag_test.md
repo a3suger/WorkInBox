@@ -118,9 +118,9 @@ WorkInBox   → IMAP → Thunderbird
 
 ---
 
-## 6. Thunderbird 数字キー配置候補
+## 6. Thunderbird 数字キー配置
 
-人が直接修正する頻度が高いタグについては、以下の配置を候補とする。
+人が直接修正する頻度が高いタグについては、以下の配置を採用する。
 
 ```text
 1 = 重要
@@ -131,9 +131,9 @@ WorkInBox   → IMAP → Thunderbird
 6 = 判定保留
 ```
 
-完了・待機・履歴・終了系のタグは主要な数字キー枠に入れない。
+Thunderbird 140 系の `messages.tags.update()` が扱える `ordinal` を使い、Extension がこの6タグを先頭へ配置する。
 
-数字キーの最終配置については Thunderbird 上で実際の並び順と操作性を確認してから確定する。
+完了・待機・履歴・終了系のタグは主要な数字キー枠に入れない。
 
 ---
 
@@ -152,17 +152,19 @@ WorkInBox   → IMAP → Thunderbird
 
 ---
 
-## 8. 次の実装段階
+## 8. 実装状況
 
-相互運用方式の検証は完了した。
+相互運用方式の検証は完了し、v0.2 の IMAP タグ読み書き基盤まで実装した。
 
-次は以下へ進む。
+実装済み:
 
-1. 上記12タグの定義を WorkInBox 側へ実装する。
-2. Thunderbird Extension でも同じ key / 表示名 / 色を登録する。
-3. v0.2 の IMAP タグ読み取りを実装する。
-4. v0.2 の IMAP タグ書き込みを実装する。
-5. WorkInBox Web UI に実際のタグ状態を表示する。
-6. AI 初期分類結果を同じ WorkInBox tag key へ反映する。
+1. 12タグの正式 key / 表示名 / 色を `src/workinbox/work_tags.py` に定義。
+2. Thunderbird Extension で同じ12タグを登録し、主要6タグを数字キー対象の先頭へ配置。
+3. SQLite に保存済みの mailbox / UIDVALIDITY / UID を使い、IMAP FLAGS から現在の WIB タグを読み取る。
+4. Web UI から対象の WIB keyword だけを `+FLAGS.SILENT` / `-FLAGS.SILENT` で追加・削除する。
+5. タグ書き込み前に UIDVALIDITY を照合し、保存済み識別情報が古い場合は書き込みを中止する。
+6. Web UI の `未取得` 表示を、実際の IMAP タグ表示とタグ変更UIへ置き換える。
 
-これ以降、タグ相互運用の基本方式そのものを再検証するのではなく、**確認済みの方式を12タグへ展開する段階**とする。
+作業タグの正本は引き続き IMAP とし、SQLite にタグ状態を独立した正本として保存しない。
+
+次の実装段階は、AI 初期分類結果を同じ WorkInBox tag key へ反映する処理である。
