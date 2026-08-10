@@ -109,6 +109,16 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIsNotNone(_TEMPLATES.get_template("deadlines.html"))
         self.assertIsNotNone(_TEMPLATES.get_template("schedules.html"))
 
+    def test_schedule_template_contains_support_request_bridge(self) -> None:
+        source, _, _ = _TEMPLATES.env.loader.get_source(
+            _TEMPLATES.env,
+            "schedules.html",
+        )
+        self.assertIn("data-wib-support-request-form", source)
+        self.assertIn("Thunderbirdで依頼メールを作成", source)
+        self.assertIn("対応待ち", source)
+        self.assertIn("依頼済み", source)
+
 
 if __name__ == "__main__":
     unittest.main()
