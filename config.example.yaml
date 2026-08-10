@@ -6,6 +6,14 @@ imap:
   mailbox: INBOX
   new_mail_lookback_days: 7
 
+identity:
+  mailbox_address: user@example.jp
+  self_addresses:
+    - user@example.jp
+    - alias@example.jp
+    - external@example.net
+  name: Example User
+
 database:
   path: data/workinbox.db
 
