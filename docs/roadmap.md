@@ -77,7 +77,7 @@ v0.2 では TrackingBox の主要フローを一通り成立させる。
 - 利用者による再分類
 - IMAP タグへの反映
 
-### 8.5. Thunderbird Bridge【次に実装】
+### 8.5. Thunderbird Bridge【実装中・PoC確認待ち】
 
 WorkInBox Web UI と Thunderbird Extension の間に、Thunderbird 固有操作のための共通ブリッジを作る。
 
