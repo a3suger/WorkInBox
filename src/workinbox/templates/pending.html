@@ -32,6 +32,14 @@
       <span>受信日時: {{ email.received_at or "-" }}</span>
     </div>
 
+    <div style="margin: 8px 0;">
+      <button
+        type="button"
+        data-wib-open-message-id="{{ email.message_id }}"
+        title="Thunderbird で元メールを開く"
+      >Thunderbirdで元メールを開く</button>
+    </div>
+
     {% if item.error %}
     <div class="notice error">IMAP状態の取得に失敗しました: {{ item.error }}</div>
     {% else %}
