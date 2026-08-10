@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 from threading import Lock
 from typing import Callable
+from urllib.parse import parse_qs
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -100,6 +101,8 @@ def create_app(
         *,
         extraction_result: DeadlineExtractionResult | None = None,
         extraction_failure: str | None = None,
+        action_message: str | None = None,
+        action_failure: str | None = None,
     ):
         items: list[dict[str, object]] = []
         for tagged in tag_service.read_for_emails(tracking_service.active_emails()):
@@ -127,8 +130,15 @@ def create_app(
                 "deadlines_view": True,
                 "extraction_result": extraction_result,
                 "extraction_failure": extraction_failure,
+                "action_message": action_message,
+                "action_failure": action_failure,
             },
         )
+
+    async def read_urlencoded_form(request: Request) -> dict[str, str]:
+        body = (await request.body()).decode("utf-8")
+        parsed = parse_qs(body, keep_blank_values=True)
+        return {key: values[-1] for key, values in parsed.items() if values}
 
     def run_sync(request: Request, operation: Callable[[], SyncResult]):
         if not sync_lock.acquire(blocking=False):
@@ -176,6 +186,37 @@ def create_app(
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
             return render_deadlines(request, extraction_failure=str(exc))
         return render_deadlines(request, extraction_result=result)
+
+    @app.post("/deadlines/{candidate_id}/register")
+    def register_deadline_candidate(request: Request, candidate_id: int):
+        try:
+            deadline_data_service.register_candidate(candidate_id)
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            return render_deadlines(request, action_failure=str(exc))
+        return render_deadlines(request, action_message="締切を正式登録しました。")
+
+    @app.post("/deadlines/{candidate_id}/reject")
+    def reject_deadline_candidate(request: Request, candidate_id: int):
+        try:
+            deadline_data_service.reject_candidate(candidate_id)
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            return render_deadlines(request, action_failure=str(exc))
+        return render_deadlines(request, action_message="締切候補を登録しないと判断しました。")
+
+    @app.post("/deadlines/{candidate_id}/revise")
+    async def revise_deadline_candidate(request: Request, candidate_id: int):
+        try:
+            form = await read_urlencoded_form(request)
+            deadline_data_service.revise_candidate(
+                candidate_id,
+                title=form.get("title", ""),
+                due_at=form.get("due_at", "").strip() or None,
+                source_text=form.get("source_text", "").strip() or None,
+                needs_review="needs_review" in form,
+            )
+        except (OSError, RuntimeError, ValueError, sqlite3.Error, UnicodeDecodeError) as exc:
+            return render_deadlines(request, action_failure=str(exc))
+        return render_deadlines(request, action_message="締切候補を修正しました。")
 
     @app.post("/pending/resolve")
     def resolve_pending(request: Request, message_id: str, resolution: str):
