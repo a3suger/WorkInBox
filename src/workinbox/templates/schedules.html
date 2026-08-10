@@ -63,32 +63,54 @@
     <details style="margin-top: 16px;">
       <summary>支援者へ依頼する</summary>
       <div class="notice" style="margin-top: 10px;">
-        Thunderbird の作成画面を開きます。送信に成功した後、元メールへ「依頼済み」、送信済み依頼メールへスター＋「対応待ち」を自動付与します。
+        元メールへの返信、または本文内転送で依頼メールを作成します。送信成功後、元メールへ「依頼済み」、送信済み依頼メールへスター＋「対応待ち」を自動付与します。
       </div>
-      <form data-wib-support-request-form style="display: grid; gap: 8px; max-width: 760px;">
+      <form data-wib-support-request-form style="display: grid; gap: 10px; max-width: 760px;">
         <input type="hidden" name="message_id" value="{{ email.message_id }}">
+
+        <fieldset style="border: 1px solid #e5e7eb; border-radius: 7px; padding: 10px 12px;">
+          <legend>依頼方法</legend>
+          <label style="margin-right: 16px;">
+            <input type="radio" name="method" value="reply" checked>
+            元メールに返信
+          </label>
+          <label>
+            <input type="radio" name="method" value="forward">
+            元メールを本文内転送
+          </label>
+        </fieldset>
+
+        <fieldset style="border: 1px solid #e5e7eb; border-radius: 7px; padding: 10px 12px;">
+          <legend>依頼内容</legend>
+          <label style="margin-right: 16px;">
+            <input type="radio" name="request_kind" value="schedule_adjustment" checked>
+            スケジュール調整
+          </label>
+          <label>
+            <input type="radio" name="request_kind" value="schedule_entry">
+            スケジュール入力
+          </label>
+        </fieldset>
+
         <label>
           支援者の宛先
           <input type="email" name="to" required placeholder="supporter@example.com" style="width: 100%; box-sizing: border-box; padding: 7px 8px;">
         </label>
+
         <label>
-          件名
-          <input type="text" name="subject" required value="【日程調整依頼】{{ email.subject or '(件名なし)' }}" style="width: 100%; box-sizing: border-box; padding: 7px 8px;">
+          Cc（自分）
+          <input type="email" name="cc" value="{{ self_cc }}" required style="width: 100%; box-sizing: border-box; padding: 7px 8px;">
         </label>
+
         <label>
-          本文
-          <textarea name="body" rows="10" style="width: 100%; box-sizing: border-box; padding: 7px 8px;">お疲れさまです。
-
-以下のメールについて、日程調整の対応をお願いします。
-
-件名: {{ email.subject or '(件名なし)' }}
-差出人: {{ email.sender }}
-受信日時: {{ email.received_at or '-' }}
-
-必要な確認・調整をお願いします。
-
-よろしくお願いします。</textarea>
+          <input type="checkbox" name="keep_reply_subject" checked>
+          返信形式では元メールの件名をそのまま使う
         </label>
+
+        <div class="muted">
+          件名を変更する場合、または本文内転送の場合は「スケジュール調整」または「スケジュール入力」を件名にします。本文冒頭も同じ依頼内容に合わせます。
+        </div>
+
         <div>
           <button type="submit">Thunderbirdで依頼メールを作成</button>
         </div>
