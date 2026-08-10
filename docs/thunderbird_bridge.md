@@ -41,6 +41,7 @@ FastAPI 自体は Thunderbird API を直接使用しない。
 - WorkInBox タグ定義を Thunderbird に登録する。
 - Message-ID を受け取り Thunderbird 内で該当メールを検索する。
 - 該当メール、または可能であれば Conversation 表示を開く。
+- Archive フォルダの Favorite 状態を Global Search / Gloda の索引ポリシーへ反映する。
 
 Extension に締切判定、AI 分類、SQLite 更新等の業務ロジックを持たせない。
 
@@ -195,6 +196,10 @@ Conversation 表示の実装方法は Thunderbird API / UI のバージョン依
 
 1 は共通基盤、2 は Thunderbird バージョンごとのアダプタとして扱えるようにする。
 
+Global Search / Gloda の索引状態が不完全でも、Message-ID から元メールを特定して通常のメール表示へ遷移できることを優先する。
+
+Conversation 表示は Gloda の状態に依存し得る追加機能として扱い、`Open in Thunderbird` の必須成功条件にはしない。
+
 ---
 
 ## 9. 締切登録支援との連携
@@ -255,7 +260,98 @@ FastAPI route に SQLite / IMAP の業務ロジックを直接埋め込まない
 
 ---
 
-## 12. v0.2 での実装優先順位
+## 12. Archive の Global Search / Gloda 索引ポリシー
+
+大量の古い Archive フォルダをすべて Global Search の索引対象にすると、`global-messages-db.sqlite` の再構築や維持に長い時間を要する可能性がある。
+
+一方で、現在も頻繁に参照する Archive は Global Search / Conversation から利用できる方が便利である。
+
+そのため Archive 配下では、**Thunderbird の Favorite 状態を「現在も Global Search 対象にしたい Archive」を示す利用者入力として利用する**。
+
+基本ポリシー:
+
+```text
+Archive 配下
+    │
+    ├─ Favorite = ON  → Gloda indexing ON
+    └─ Favorite = OFF → Gloda indexing OFF
+```
+
+年数やフォルダ名から自動判定する方式を標準ルールにはしない。
+
+利用者が Thunderbird の既存 UI で Favorite を付け外しすることで、検索対象として残したい Archive を選択できるようにする。
+
+### 標準 API と Experiment API の分離
+
+Favorite 状態の取得・変更など、標準 MailExtension API で実装可能な処理は標準 API を使用する。
+
+Gloda のフォルダ単位の indexing ON / OFF は標準 MailExtension API で直接操作できない場合があるため、その処理だけを最小の Experiment API に閉じ込める。
+
+概念構成:
+
+```text
+Thunderbird folders API
+    │
+    ├─ Archive 配下を列挙
+    └─ Favorite 状態を取得
+            │
+            ▼
+WorkInBox Extension
+            │
+            ▼
+Gloda Experiment adapter
+    ├─ Favorite = ON  → indexing ON
+    └─ Favorite = OFF → indexing OFF
+```
+
+Experiment API に WorkInBox の業務ロジックを持たせない。
+
+Experiment 層は Thunderbird 内部の Gloda 設定を操作するための小さなアダプタに限定する。
+
+### 初期実装
+
+初期段階では Favorite 状態の変更を常時監視して自動追随することを必須としない。
+
+Extension の設定画面等に、例えば次の操作を用意する。
+
+```text
+Archive indexing policy
+
+☑ Archive配下では Favorite フォルダだけ
+  Global Search の索引対象にする
+
+[現在の Favorite 状態と索引設定を同期]
+```
+
+同期実行前に変更予定をプレビューできることが望ましい。
+
+例:
+
+```text
+Archive/2022  Favorite OFF → indexing OFF
+Archive/2023  Favorite ON  → indexing ON
+Archive/2024  Favorite ON  → indexing ON
+```
+
+将来、動作の安定性が確認できた場合は Favorite 状態変更への自動追随を検討する。
+
+### Message-ID Bridge との役割分担
+
+Gloda 対象外の古い Archive であっても、WorkInBox の元メール参照を失わないことを重視する。
+
+```text
+Global Search / Conversation
+    = 普段検索する Favorite Archive を中心に利用
+
+Message-ID Bridge
+    = Gloda 対象外を含め、必要な元メールへ戻る経路
+```
+
+したがって、Gloda の索引対象を絞ることと、WorkInBox からメール正本へ戻れることは独立して設計する。
+
+---
+
+## 13. v0.2 での実装優先順位
 
 締切登録支援全体を実装する前または並行して、次の小さな実証を行う価値がある。
 
@@ -265,12 +361,14 @@ FastAPI route に SQLite / IMAP の業務ロジックを直接埋め込まない
 4. Thunderbird 内で Message-ID を検索する。
 5. 該当メールを表示する。
 6. 可能であれば Conversation 表示へ拡張する。
+7. Archive 配下の Favorite 状態を列挙し、索引ポリシー候補をプレビューする。
+8. Favorite 状態と Gloda indexing を手動同期できる最小 PoC を確認する。
 
 このブリッジが成立すれば、締切以外の画面でも共通利用する。
 
 ---
 
-## 13. 非目標
+## 14. 非目標
 
 Thunderbird Extension に以下を実装しない。
 
