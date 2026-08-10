@@ -20,6 +20,8 @@ var glodaIndexing = class extends ExtensionCommon.ExtensionAPI {
       return {
         enabled: glodaFolder.indexingPriority !== glodaFolder.kIndexingNeverPriority,
         priority: glodaFolder.indexingPriority,
+        neverPriority: glodaFolder.kIndexingNeverPriority,
+        folderProperty: folder.getStringProperty("indexingPriority") || "",
       };
     }
 
@@ -31,6 +33,7 @@ var glodaIndexing = class extends ExtensionCommon.ExtensionAPI {
 
         async setEnabled(accountId, path, enabled) {
           const folder = getNativeFolder(accountId, path);
+          const before = getStatus(folder);
           const glodaFolder = GlodaDatastore._mapFolder(folder);
 
           if (enabled) {
@@ -42,7 +45,18 @@ var glodaIndexing = class extends ExtensionCommon.ExtensionAPI {
             );
           }
 
-          return getStatus(folder);
+          const after = getStatus(folder);
+          return {
+            requestedEnabled: enabled,
+            beforeEnabled: before.enabled,
+            beforePriority: before.priority,
+            beforeFolderProperty: before.folderProperty,
+            afterEnabled: after.enabled,
+            afterPriority: after.priority,
+            afterFolderProperty: after.folderProperty,
+            neverPriority: after.neverPriority,
+            applied: after.enabled === enabled,
+          };
         },
       },
     };
