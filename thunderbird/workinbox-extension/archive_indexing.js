@@ -3,7 +3,10 @@ const archiveIndexingPreview = document.querySelector("#archive-indexing-preview
 const previewArchiveIndexingButton = document.querySelector("#preview-archive-indexing");
 const syncArchiveIndexingButton = document.querySelector("#sync-archive-indexing");
 
+const ARCHIVE_DIAGNOSTIC_KEY = "archiveIndexingLastDiagnostic";
+
 let archiveIndexingPlan = [];
+let syncArmed = false;
 
 function setArchiveStatus(message) {
   archiveIndexingStatus.textContent = message;
@@ -92,7 +95,34 @@ function formatDiagnostic(item, result) {
   ].join("\n");
 }
 
+async function saveDiagnostic(text) {
+  await messenger.storage.local.set({
+    [ARCHIVE_DIAGNOSTIC_KEY]: {
+      savedAt: new Date().toISOString(),
+      text,
+    },
+  });
+}
+
+async function restoreDiagnostic() {
+  const stored = await messenger.storage.local.get(ARCHIVE_DIAGNOSTIC_KEY);
+  const diagnostic = stored[ARCHIVE_DIAGNOSTIC_KEY];
+  if (!diagnostic?.text) {
+    return;
+  }
+
+  archiveIndexingPreview.textContent =
+    `前回の同期診断 (${diagnostic.savedAt})\n\n${diagnostic.text}`;
+  setArchiveStatus("前回の同期診断を表示しています。必要なら再度プレビューしてください。");
+}
+
+function resetSyncArm() {
+  syncArmed = false;
+  syncArchiveIndexingButton.textContent = "現在の Favorite 状態と索引設定を同期";
+}
+
 async function previewArchiveIndexing() {
+  resetSyncArm();
   setArchiveStatus("Archive の Favorite 状態と索引設定を確認しています…");
   archiveIndexingPlan = await buildArchiveIndexingPlan();
   archiveIndexingPreview.textContent = formatPlan(archiveIndexingPlan);
@@ -112,20 +142,23 @@ async function syncArchiveIndexing() {
   const changes = archiveIndexingPlan.filter((item) => item.needsChange);
   if (changes.length === 0) {
     setArchiveStatus("Favorite 状態と Gloda indexing はすでに一致しています。");
+    resetSyncArm();
     return;
   }
 
-  const confirmed = window.confirm(
-    `Archive ${changes.length} フォルダの Gloda indexing を Favorite 状態に合わせます。\n\n` +
-      "Favorite ON は索引対象、Favorite OFF は索引対象外になります。\n" +
-      "索引を ON に戻したフォルダでは再索引が始まる場合があります。\n\n" +
-      "診断モードでは 1 件ずつ反映を確認し、失敗した時点で停止します。\n\n続けますか？",
-  );
-  if (!confirmed) {
+  if (!syncArmed) {
+    syncArmed = true;
+    syncArchiveIndexingButton.textContent = `もう一度押して ${changes.length} 件を同期`;
+    setArchiveStatus(
+      `確認: ${changes.length} 件を Favorite 状態に合わせます。もう一度同期ボタンを押すと実行します。`,
+    );
     return;
   }
 
+  resetSyncArm();
   let completed = 0;
+  let diagnosticText = "";
+
   for (const item of changes) {
     setArchiveStatus(`索引設定を同期・検証しています… ${completed}/${changes.length}`);
     const result = await messenger.glodaIndexing.setEnabled(
@@ -134,12 +167,14 @@ async function syncArchiveIndexing() {
       item.desiredEnabled,
     );
 
+    diagnosticText = formatDiagnostic(item, result);
+    await saveDiagnostic(diagnosticText);
     archiveIndexingPreview.textContent =
-      `${formatDiagnostic(item, result)}\n\n` + archiveIndexingPreview.textContent;
+      `${diagnosticText}\n\n` + archiveIndexingPreview.textContent;
 
     if (!result.applied) {
       setArchiveStatus(
-        `ERROR: ${item.path} の索引設定が直後の確認で反映されませんでした。診断結果をコピーしてください。`,
+        `ERROR: ${item.path} の索引設定が直後の確認で反映されませんでした。診断結果は保存済みです。`,
       );
       syncArchiveIndexingButton.disabled = true;
       return;
@@ -149,7 +184,9 @@ async function syncArchiveIndexing() {
   }
 
   await previewArchiveIndexing();
-  setArchiveStatus(`Archive の索引設定を同期しました（${completed} 件変更）。`);
+  const successText = `同期完了: ${completed} 件を変更しました。`;
+  await saveDiagnostic(successText);
+  setArchiveStatus(successText);
 }
 
 function handleArchiveAction(action) {
@@ -158,6 +195,9 @@ function handleArchiveAction(action) {
       await action();
     } catch (error) {
       console.error("[WorkInBox archive indexing]", error);
+      const diagnosticText = `ERROR: ${error.stack || error.message || error}`;
+      await saveDiagnostic(diagnosticText);
+      archiveIndexingPreview.textContent = diagnosticText;
       setArchiveStatus(`ERROR: ${error.message || error}`);
       syncArchiveIndexingButton.disabled = true;
     }
@@ -172,3 +212,5 @@ syncArchiveIndexingButton.addEventListener(
   "click",
   handleArchiveAction(syncArchiveIndexing),
 );
+
+document.addEventListener("DOMContentLoaded", handleArchiveAction(restoreDiagnostic));
