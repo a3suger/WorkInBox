@@ -90,11 +90,13 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/inactive"])
         self.assertIn("GET", routes["/pending"])
         self.assertIn("GET", routes["/deadlines"])
+        self.assertIn("GET", routes["/schedules"])
         self.assertIn("GET", routes["/deadlines.ics"])
         self.assertIn("POST", routes["/deadlines/add"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/register"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/reject"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/revise"])
+        self.assertIn("POST", routes["/schedules/complete"])
         self.assertIn("POST", routes["/pending/resolve"])
         self.assertIn("POST", routes["/sync"])
         self.assertIn("POST", routes["/full-recheck"])
@@ -105,6 +107,7 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIsNotNone(_TEMPLATES.get_template("emails.html"))
         self.assertIsNotNone(_TEMPLATES.get_template("pending.html"))
         self.assertIsNotNone(_TEMPLATES.get_template("deadlines.html"))
+        self.assertIsNotNone(_TEMPLATES.get_template("schedules.html"))
 
 
 if __name__ == "__main__":
