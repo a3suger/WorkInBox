@@ -1,0 +1,41 @@
+[
+  {
+    "namespace": "glodaIndexing",
+    "description": "Minimal WorkInBox adapter for Thunderbird Gloda folder indexing policy.",
+    "functions": [
+      {
+        "name": "getStatus",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "accountId", "type": "string" },
+          { "name": "path", "type": "string" }
+        ],
+        "returns": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "priority": { "type": "integer" }
+          }
+        }
+      },
+      {
+        "name": "setEnabled",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "accountId", "type": "string" },
+          { "name": "path", "type": "string" },
+          { "name": "enabled", "type": "boolean" }
+        ],
+        "returns": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "priority": { "type": "integer" }
+          }
+        }
+      }
+    ]
+  }
+]
