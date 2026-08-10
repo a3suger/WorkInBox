@@ -4,6 +4,7 @@ from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .application import DeadlineService
+from .deadline_dates import normalize_due_at
 from .models import Deadline
 
 
@@ -59,7 +60,7 @@ class DeadlineIcsService:
 
     @staticmethod
     def _due_line(deadline: Deadline) -> str:
-        value = deadline.due_at.strip()
+        value = normalize_due_at(deadline.due_at)
         if _is_date_only(value):
             parsed = date.fromisoformat(value)
             return f"DUE;VALUE=DATE:{parsed.strftime('%Y%m%d')}"
