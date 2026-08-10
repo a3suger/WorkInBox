@@ -91,6 +91,7 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/pending"])
         self.assertIn("GET", routes["/deadlines"])
         self.assertIn("GET", routes["/deadlines.ics"])
+        self.assertIn("POST", routes["/deadlines/add"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/register"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/reject"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/revise"])
