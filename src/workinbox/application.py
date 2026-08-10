@@ -10,7 +10,14 @@ from .ai_classifier import OllamaClassifier
 from .config import AppConfig
 from .database import EmailDatabase
 from .imap_client import ImapClient
-from .models import ImapCheckState, TrackedEmail, TrackingStatus
+from .models import (
+    Deadline,
+    DeadlineCandidate,
+    DeadlineCreatedBy,
+    ImapCheckState,
+    TrackedEmail,
+    TrackingStatus,
+)
 from .work_tags import WorkTagDefinition, definitions_for_flags, require_work_tag
 
 
@@ -263,6 +270,89 @@ class TrackingQueryService:
     def inactive_emails(self) -> list[TrackedEmail]:
         self.database.initialize()
         return self.database.list_tracked_emails(active=False)
+
+
+class DeadlineService:
+    def __init__(
+        self,
+        config: AppConfig,
+        *,
+        database: EmailDatabase | None = None,
+    ) -> None:
+        self.config = config
+        self.database = database or EmailDatabase(config.database.path)
+
+    def candidates(self, message_id: str) -> list[DeadlineCandidate]:
+        self.database.initialize()
+        return self.database.deadline_candidates(message_id)
+
+    def deadlines(self, message_id: str) -> list[Deadline]:
+        self.database.initialize()
+        return self.database.deadlines(message_id)
+
+    def add_candidate(
+        self,
+        message_id: str,
+        title: str,
+        *,
+        due_at: str | None = None,
+        source_text: str | None = None,
+        created_by: DeadlineCreatedBy = DeadlineCreatedBy.USER,
+        needs_review: bool = False,
+    ) -> DeadlineCandidate:
+        self.database.initialize()
+        if self.database.email_message(message_id) is None:
+            raise ValueError(f"Unknown source message: {message_id}")
+        normalized_title = title.strip()
+        if not normalized_title:
+            raise ValueError("deadline title must not be empty")
+        return self.database.add_deadline_candidate(
+            message_id,
+            normalized_title,
+            due_at=due_at,
+            source_text=source_text,
+            created_by=created_by,
+            needs_review=needs_review,
+        )
+
+    def revise_candidate(
+        self,
+        candidate_id: int,
+        *,
+        title: str,
+        due_at: str | None,
+        source_text: str | None,
+        needs_review: bool,
+    ) -> DeadlineCandidate:
+        self.database.initialize()
+        normalized_title = title.strip()
+        if not normalized_title:
+            raise ValueError("deadline title must not be empty")
+        return self.database.update_deadline_candidate(
+            candidate_id,
+            title=normalized_title,
+            due_at=due_at,
+            source_text=source_text,
+            needs_review=needs_review,
+        )
+
+    def reject_candidate(self, candidate_id: int) -> DeadlineCandidate:
+        self.database.initialize()
+        return self.database.reject_deadline_candidate(candidate_id)
+
+    def register_candidate(
+        self,
+        candidate_id: int,
+        *,
+        timezone_name: str | None = None,
+        description: str | None = None,
+    ) -> Deadline:
+        self.database.initialize()
+        return self.database.register_deadline_candidate(
+            candidate_id,
+            timezone_name=timezone_name,
+            description=description,
+        )
 
 
 class WorkTagService:
