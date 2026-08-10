@@ -12,6 +12,7 @@ v0.2 では、v0.1 のメール追跡基盤を拡張し、TrackingBox の主要�
 - IMAP 作業タグ読み書き
 - AI 初期分類
 - 判定保留 UI
+- Thunderbird Bridge
 - 締切登録支援
 - スケジュール調整支援
 - 特殊処理後の次作業提案
@@ -159,6 +160,63 @@ FastAPI route に IMAP / SQLite の業務ロジックを直接持たせず、App
 
 ---
 
+## 8.5. Thunderbird Bridge
+
+詳細は `docs/thunderbird_bridge.md` を参照する。
+
+WorkInBox Web UI と Thunderbird Extension の間に、Thunderbird 固有操作を行うための薄い共通ブリッジを置く。
+
+### 必須 PoC
+
+v0.2 の締切登録支援に入る前に、次を成立させる。
+
+1. Thunderbird Extension からローカルの WorkInBox Web UI を Thunderbird の content tab で開く。
+2. WorkInBox Web UI の操作から Message-ID を Extension へ渡す。
+3. Extension が Thunderbird messages API で `headerMessageId` を使って該当メールを解決する。
+4. 解決した元メールを通常の message display で開く。
+
+Message-ID は WorkInBox と Thunderbird を結ぶ長期的な論理リンクキーとする。
+
+Thunderbird 内部の一時的な message id、folder UID 等を WorkInBox 側の長期リンクとして保存しない。
+
+### Gloda / Conversation との分離
+
+`Message-ID -> MessageHeader -> 通常のメール表示` を Bridge の必須基盤とする。
+
+Conversation 表示は Thunderbird 128 / 140 系で実装方法と Gloda 依存性を確認した上で追加する。
+
+Global Search / Gloda の索引状態が不完全でも元メールへ戻れることを優先し、Conversation 表示の失敗を `Open in Thunderbird` 全体の失敗とはしない。
+
+### Archive 索引ポリシー
+
+Archive 配下では Thunderbird の Favorite 状態を、Global Search / Gloda の索引対象を示す利用者入力として利用する。
+
+```text
+Archive 配下
+    ├─ Favorite = ON  → indexing ON
+    └─ Favorite = OFF → indexing OFF
+```
+
+Favorite 状態の取得・変更など標準 MailExtension API で可能な処理は標準 API を使う。
+
+Gloda の indexing ON / OFF が標準 API で扱えない場合、その処理だけを最小の Experiment API に閉じ込める。
+
+初期実装では Favorite の変更を常時監視せず、設定画面等から現在状態を確認して手動同期する PoC でよい。
+
+### 利用箇所
+
+Bridge は機能ごとに個別実装せず、共通の `Open in Thunderbird` として再利用する。
+
+主な利用箇所:
+
+- 判定保留
+- 締切候補
+- 正式締切
+- スケジュール調整
+- 返信待ち / 対応待ち
+
+---
+
 ## 9. 締切登録支援
 
 詳細は `docs/deadline_support_discussion_2026-08-10.md` を参照する。
@@ -183,6 +241,7 @@ AI が締切の存在を認識しても日時を特定できない場合は、�
 - 登録しない
 - 修正する
 - 登録する
+- Thunderbird で元メールを開く
 
 さらに `＋ 締切を追加` を用意する。
 
@@ -286,6 +345,7 @@ AI は自動確定せず、利用者が最終判断する。
 ## 14. 関連文書
 
 - `docs/design_workflow.md`
+- `docs/thunderbird_bridge.md`
 - `docs/deadline_support_discussion_2026-08-10.md`
 - `docs/design_notes_tags_and_external_intake.md`
 - `docs/roadmap.md`
