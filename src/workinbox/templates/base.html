@@ -104,15 +104,15 @@
       font-weight: 600;
     }
     .tag-error { color: #991b1b; font-size: 0.85rem; }
-    .pending-list, .deadline-list { display: grid; gap: 14px; }
-    .pending-card, .deadline-card {
+    .pending-list, .deadline-list, .schedule-list { display: grid; gap: 14px; }
+    .pending-card, .deadline-card, .schedule-card {
       background: white;
       border: 1px solid #e5e7eb;
       border-radius: 10px;
       padding: 16px;
     }
-    .pending-card h3, .deadline-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
-    .pending-meta, .deadline-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .pending-card h3, .deadline-card h3, .schedule-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .pending-meta, .deadline-meta, .schedule-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
     .message-preview { margin: 10px 0 14px; }
     .message-preview summary { cursor: pointer; color: #475569; }
     .message-body {
@@ -151,10 +151,11 @@
 <header>
   <h1>WorkInBox</h1>
   <nav>
-    <a href="/active" class="{% if active_view and not pending_view and not deadlines_view %}current{% endif %}">Active</a>
+    <a href="/active" class="{% if active_view and not pending_view and not deadlines_view and not schedules_view %}current{% endif %}">Active</a>
     <a href="/pending" class="{% if pending_view %}current{% endif %}">判定保留</a>
     <a href="/deadlines" class="{% if deadlines_view %}current{% endif %}">締切</a>
-    <a href="/inactive" class="{% if not active_view and not pending_view and not deadlines_view %}current{% endif %}">Inactive</a>
+    <a href="/schedules" class="{% if schedules_view %}current{% endif %}">スケジュール調整</a>
+    <a href="/inactive" class="{% if not active_view and not pending_view and not deadlines_view and not schedules_view %}current{% endif %}">Inactive</a>
   </nav>
 </header>
 <main>
