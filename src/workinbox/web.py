@@ -57,6 +57,14 @@ def create_app(
 
     app = FastAPI(title="WorkInBox")
 
+    def common_view_flags(*, active: bool = False, pending: bool = False, deadlines: bool = False, schedules: bool = False) -> dict[str, bool]:
+        return {
+            "active_view": active,
+            "pending_view": pending,
+            "deadlines_view": deadlines,
+            "schedules_view": schedules,
+        }
+
     def render_mail_list(
         request: Request,
         *,
@@ -78,9 +86,7 @@ def create_app(
             context={
                 "emails": tagged_emails,
                 "work_tags": WORK_TAGS,
-                "active_view": active,
-                "pending_view": False,
-                "deadlines_view": False,
+                **common_view_flags(active=active),
                 "sync_result": sync_result,
                 "sync_failure": sync_failure,
                 "tag_message": tag_message,
@@ -99,9 +105,7 @@ def create_app(
             name="pending.html",
             context={
                 "emails": tag_service.pending_emails(),
-                "active_view": False,
-                "pending_view": True,
-                "deadlines_view": False,
+                **common_view_flags(pending=True),
                 "message": message,
                 "failure": failure,
             },
@@ -136,11 +140,41 @@ def create_app(
             name="deadlines.html",
             context={
                 "items": items,
-                "active_view": False,
-                "pending_view": False,
-                "deadlines_view": True,
+                **common_view_flags(deadlines=True),
                 "extraction_result": extraction_result,
                 "extraction_failure": extraction_failure,
+                "action_message": action_message,
+                "action_failure": action_failure,
+            },
+        )
+
+    def render_schedules(
+        request: Request,
+        *,
+        action_message: str | None = None,
+        action_failure: str | None = None,
+    ):
+        items: list[dict[str, object]] = []
+        for tagged in tag_service.read_for_emails(tracking_service.active_emails()):
+            if tagged.error is not None:
+                continue
+            keys = {tag.key for tag in tagged.tags}
+            if "wib-schedule" not in keys or "wib-schedule-done" in keys:
+                continue
+            message = deadline_data_service.database.email_message(tagged.email.message_id)
+            items.append(
+                {
+                    "email": tagged.email,
+                    "tags": tagged.tags,
+                    "body": message.body if message is not None else None,
+                }
+            )
+        return _TEMPLATES.TemplateResponse(
+            request=request,
+            name="schedules.html",
+            context={
+                "items": items,
+                **common_view_flags(schedules=True),
                 "action_message": action_message,
                 "action_failure": action_failure,
             },
@@ -197,6 +231,10 @@ def create_app(
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
             return render_deadlines(request, extraction_failure=str(exc))
         return render_deadlines(request, extraction_result=result)
+
+    @app.get("/schedules")
+    def schedule_adjustments(request: Request):
+        return render_schedules(request)
 
     @app.get("/deadlines.ics", response_class=PlainTextResponse)
     def deadline_calendar() -> PlainTextResponse:
@@ -270,6 +308,17 @@ def create_app(
         except (OSError, RuntimeError, ValueError, sqlite3.Error, UnicodeDecodeError) as exc:
             return render_deadlines(request, action_failure=str(exc))
         return render_deadlines(request, action_message="締切候補を修正しました。")
+
+    @app.post("/schedules/complete")
+    def complete_schedule_adjustment(request: Request, message_id: str):
+        try:
+            tag_service.set_tag(message_id, "wib-schedule-done", enabled=True)
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            return render_schedules(request, action_failure=str(exc))
+        return render_schedules(
+            request,
+            action_message="スケジュール対応済みとして記録しました。",
+        )
 
     @app.post("/pending/resolve")
     def resolve_pending(request: Request, message_id: str, resolution: str):
