@@ -18,6 +18,15 @@
     </section>
 
     <section>
+      <h2>Archive indexing policy</h2>
+      <p>Archive 配下では Favorite のフォルダだけを Global Search / Gloda の索引対象にします。まずプレビューで変更予定を確認してください。</p>
+      <p id="archive-indexing-status" class="status">未確認です。</p>
+      <button id="preview-archive-indexing" type="button">Favorite と索引設定を確認</button>
+      <button id="sync-archive-indexing" type="button" disabled>現在の Favorite 状態と索引設定を同期</button>
+      <pre id="archive-indexing-preview" class="archive-preview">プレビューはまだありません。</pre>
+    </section>
+
+    <section>
       <h2>1. 導入前バックアップ</h2>
       <p>現在の Thunderbird タグ定義を、WIBタグ登録前のスナップショットとして一度だけ保存します。</p>
       <button id="create-snapshot" type="button">導入前スナップショットを保存</button>
@@ -47,5 +56,6 @@
   </main>
   <script src="popup.js"></script>
   <script src="popup_bridge.js"></script>
+  <script src="archive_indexing.js"></script>
 </body>
 </html>
