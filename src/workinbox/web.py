@@ -10,7 +10,7 @@ from urllib.parse import parse_qs
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .application import (
@@ -22,6 +22,7 @@ from .application import (
 )
 from .config import AppConfig, load_config
 from .deadline_application import DeadlineExtractionResult, DeadlineExtractionService
+from .deadline_ics import DeadlineIcsService
 from .deadline_workflow import DeadlineWorkflowService
 from .work_tags import WORK_TAGS
 
@@ -38,6 +39,7 @@ def create_app(
     deadline_service: DeadlineService | None = None,
     deadline_extraction_service: DeadlineExtractionService | None = None,
     deadline_workflow_service: DeadlineWorkflowService | None = None,
+    deadline_ics_service: DeadlineIcsService | None = None,
 ) -> FastAPI:
     sync_service = synchronization_service or SynchronizationService(config)
     tracking_service = query_service or TrackingQueryService(config)
@@ -48,6 +50,7 @@ def create_app(
         deadline_data_service,
         tag_service,
     )
+    deadline_calendar_service = deadline_ics_service or DeadlineIcsService(deadline_data_service)
     sync_lock = Lock()
 
     app = FastAPI(title="WorkInBox")
@@ -192,6 +195,18 @@ def create_app(
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
             return render_deadlines(request, extraction_failure=str(exc))
         return render_deadlines(request, extraction_result=result)
+
+    @app.get("/deadlines.ics", response_class=PlainTextResponse)
+    def deadline_calendar() -> PlainTextResponse:
+        try:
+            content = deadline_calendar_service.render()
+        except (RuntimeError, ValueError, sqlite3.Error) as exc:
+            return PlainTextResponse(str(exc), status_code=500)
+        return PlainTextResponse(
+            content,
+            media_type="text/calendar; charset=utf-8",
+            headers={"Content-Disposition": 'inline; filename="deadlines.ics"'},
+        )
 
     @app.post("/deadlines/{candidate_id}/register")
     def register_deadline_candidate(request: Request, candidate_id: int):
