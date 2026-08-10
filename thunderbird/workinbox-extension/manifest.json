@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "WorkInBox Thunderbird Connector",
   "description": "Provides Thunderbird-side UI and bridge functions for WorkInBox.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "browser_specific_settings": {
     "gecko": {
       "id": "workinbox-connector@workinbox.local",
@@ -10,6 +10,7 @@
     }
   },
   "permissions": [
+    "accountsRead",
     "messagesRead",
     "messagesTags",
     "messagesTagsList",
@@ -35,6 +36,22 @@
       "run_at": "document_idle"
     }
   ],
+  "experiment_apis": {
+    "glodaIndexing": {
+      "schema": "experiments/gloda_indexing/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "paths": [
+          [
+            "glodaIndexing"
+          ]
+        ],
+        "script": "experiments/gloda_indexing/implementation.js"
+      }
+    }
+  },
   "icons": {
     "32": "icons/workinbox.svg",
     "64": "icons/workinbox.svg"
