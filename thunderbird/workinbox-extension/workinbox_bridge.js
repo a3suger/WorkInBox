@@ -49,9 +49,11 @@ async function handleSupportRequest(form) {
     const response = await messenger.runtime.sendMessage({
       type: "workinbox-compose-support-request",
       messageId: data.get("message_id"),
+      method: data.get("method"),
+      requestKind: data.get("request_kind"),
       to: data.get("to"),
-      subject: data.get("subject"),
-      body: data.get("body"),
+      cc: data.get("cc"),
+      keepReplySubject: data.has("keep_reply_subject"),
     });
 
     if (!response?.ok) {
