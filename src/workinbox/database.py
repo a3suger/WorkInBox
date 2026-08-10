@@ -5,7 +5,16 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .models import EmailMessage, ImapReference, TrackedEmail, TrackingStatus
+from .models import (
+    Deadline,
+    DeadlineCandidate,
+    DeadlineCandidateStatus,
+    DeadlineCreatedBy,
+    EmailMessage,
+    ImapReference,
+    TrackedEmail,
+    TrackingStatus,
+)
 
 
 class EmailDatabase:
@@ -64,6 +73,51 @@ class EmailDatabase:
                 WHERE mailbox IS NOT NULL
                   AND uidvalidity IS NOT NULL
                   AND uid IS NOT NULL
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS deadline_candidates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_message_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    due_at TEXT,
+                    source_text TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_by TEXT NOT NULL,
+                    needs_review INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (source_message_id) REFERENCES emails(message_id)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS deadline_candidates_message
+                ON deadline_candidates (source_message_id, id)
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS deadlines (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_message_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    due_at TEXT NOT NULL,
+                    timezone TEXT,
+                    description TEXT,
+                    created_by TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (source_message_id) REFERENCES emails(message_id)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS deadlines_message
+                ON deadlines (source_message_id, id)
                 """
             )
             connection.execute(
@@ -334,3 +388,259 @@ class EmailDatabase:
                 (status.value, now, now, message_id),
             )
             return True
+
+    def add_deadline_candidate(
+        self,
+        source_message_id: str,
+        title: str,
+        *,
+        due_at: str | None = None,
+        source_text: str | None = None,
+        created_by: DeadlineCreatedBy = DeadlineCreatedBy.AI,
+        needs_review: bool = False,
+    ) -> DeadlineCandidate:
+        now = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO deadline_candidates (
+                    source_message_id, title, due_at, source_text, status,
+                    created_by, needs_review, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    source_message_id,
+                    title,
+                    due_at,
+                    source_text,
+                    DeadlineCandidateStatus.PENDING.value,
+                    created_by.value,
+                    1 if needs_review else 0,
+                    now,
+                    now,
+                ),
+            )
+            candidate_id = int(cursor.lastrowid)
+        candidate = self.deadline_candidate(candidate_id)
+        if candidate is None:
+            raise RuntimeError("failed to read inserted deadline candidate")
+        return candidate
+
+    def deadline_candidate(self, candidate_id: int) -> DeadlineCandidate | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT id, source_message_id, title, due_at, source_text,
+                       status, created_by, needs_review, created_at, updated_at
+                FROM deadline_candidates
+                WHERE id = ?
+                """,
+                (candidate_id,),
+            ).fetchone()
+        return self._deadline_candidate_from_row(row)
+
+    def deadline_candidates(self, source_message_id: str) -> list[DeadlineCandidate]:
+        with sqlite3.connect(self.path) as connection:
+            rows = connection.execute(
+                """
+                SELECT id, source_message_id, title, due_at, source_text,
+                       status, created_by, needs_review, created_at, updated_at
+                FROM deadline_candidates
+                WHERE source_message_id = ?
+                ORDER BY id
+                """,
+                (source_message_id,),
+            ).fetchall()
+        return [
+            candidate
+            for row in rows
+            if (candidate := self._deadline_candidate_from_row(row)) is not None
+        ]
+
+    def update_deadline_candidate(
+        self,
+        candidate_id: int,
+        *,
+        title: str,
+        due_at: str | None,
+        source_text: str | None,
+        needs_review: bool,
+    ) -> DeadlineCandidate:
+        now = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE deadline_candidates
+                SET title = ?, due_at = ?, source_text = ?, needs_review = ?,
+                    updated_at = ?
+                WHERE id = ? AND status = ?
+                """,
+                (
+                    title,
+                    due_at,
+                    source_text,
+                    1 if needs_review else 0,
+                    now,
+                    candidate_id,
+                    DeadlineCandidateStatus.PENDING.value,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("deadline candidate is missing or already resolved")
+        candidate = self.deadline_candidate(candidate_id)
+        if candidate is None:
+            raise RuntimeError("failed to read updated deadline candidate")
+        return candidate
+
+    def reject_deadline_candidate(self, candidate_id: int) -> DeadlineCandidate:
+        return self._set_deadline_candidate_status(
+            candidate_id,
+            DeadlineCandidateStatus.REJECTED,
+        )
+
+    def register_deadline_candidate(
+        self,
+        candidate_id: int,
+        *,
+        timezone_name: str | None = None,
+        description: str | None = None,
+    ) -> Deadline:
+        now = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT source_message_id, title, due_at, created_by, status
+                FROM deadline_candidates
+                WHERE id = ?
+                """,
+                (candidate_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError("deadline candidate does not exist")
+            if str(row[4]) != DeadlineCandidateStatus.PENDING.value:
+                raise ValueError("deadline candidate is already resolved")
+            due_at = str(row[2]) if row[2] is not None else None
+            if due_at is None:
+                raise ValueError("deadline candidate due_at is required for registration")
+            cursor = connection.execute(
+                """
+                INSERT INTO deadlines (
+                    source_message_id, title, due_at, timezone, description,
+                    created_by, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(row[0]),
+                    str(row[1]),
+                    due_at,
+                    timezone_name,
+                    description,
+                    str(row[3]),
+                    now,
+                    now,
+                ),
+            )
+            deadline_id = int(cursor.lastrowid)
+            connection.execute(
+                """
+                UPDATE deadline_candidates
+                SET status = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (DeadlineCandidateStatus.REGISTERED.value, now, candidate_id),
+            )
+        deadline = self.deadline(deadline_id)
+        if deadline is None:
+            raise RuntimeError("failed to read registered deadline")
+        return deadline
+
+    def deadline(self, deadline_id: int) -> Deadline | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT id, source_message_id, title, due_at, timezone,
+                       description, created_by, created_at, updated_at
+                FROM deadlines
+                WHERE id = ?
+                """,
+                (deadline_id,),
+            ).fetchone()
+        return self._deadline_from_row(row)
+
+    def deadlines(self, source_message_id: str) -> list[Deadline]:
+        with sqlite3.connect(self.path) as connection:
+            rows = connection.execute(
+                """
+                SELECT id, source_message_id, title, due_at, timezone,
+                       description, created_by, created_at, updated_at
+                FROM deadlines
+                WHERE source_message_id = ?
+                ORDER BY due_at, id
+                """,
+                (source_message_id,),
+            ).fetchall()
+        return [
+            deadline
+            for row in rows
+            if (deadline := self._deadline_from_row(row)) is not None
+        ]
+
+    def _set_deadline_candidate_status(
+        self,
+        candidate_id: int,
+        status: DeadlineCandidateStatus,
+    ) -> DeadlineCandidate:
+        now = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE deadline_candidates
+                SET status = ?, updated_at = ?
+                WHERE id = ? AND status = ?
+                """,
+                (
+                    status.value,
+                    now,
+                    candidate_id,
+                    DeadlineCandidateStatus.PENDING.value,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("deadline candidate is missing or already resolved")
+        candidate = self.deadline_candidate(candidate_id)
+        if candidate is None:
+            raise RuntimeError("failed to read resolved deadline candidate")
+        return candidate
+
+    @staticmethod
+    def _deadline_candidate_from_row(row: tuple[object, ...] | None) -> DeadlineCandidate | None:
+        if row is None:
+            return None
+        return DeadlineCandidate(
+            id=int(row[0]),
+            source_message_id=str(row[1]),
+            title=str(row[2]),
+            due_at=str(row[3]) if row[3] is not None else None,
+            source_text=str(row[4]) if row[4] is not None else None,
+            status=DeadlineCandidateStatus(str(row[5])),
+            created_by=DeadlineCreatedBy(str(row[6])),
+            needs_review=bool(row[7]),
+            created_at=str(row[8]),
+            updated_at=str(row[9]),
+        )
+
+    @staticmethod
+    def _deadline_from_row(row: tuple[object, ...] | None) -> Deadline | None:
+        if row is None:
+            return None
+        return Deadline(
+            id=int(row[0]),
+            source_message_id=str(row[1]),
+            title=str(row[2]),
+            due_at=str(row[3]),
+            timezone=str(row[4]) if row[4] is not None else None,
+            description=str(row[5]) if row[5] is not None else None,
+            created_by=DeadlineCreatedBy(str(row[6])),
+            created_at=str(row[7]),
+            updated_at=str(row[8]),
+        )
