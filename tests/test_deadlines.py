@@ -119,6 +119,27 @@ class DeadlineSupportTest(unittest.TestCase):
             )
             self.assertEqual(service.deadlines("<mail@example>"), [deadline])
 
+    def test_register_normalizes_japanese_weekday_suffix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            database.initialize()
+            self.seed_message(database)
+            service = DeadlineService(self.make_config(path), database=database)
+
+            candidate = service.add_candidate(
+                "<mail@example>",
+                "曜日付き締切",
+                due_at="2026-09-29 火曜日",
+            )
+            deadline = service.register_candidate(candidate.id)
+
+            self.assertEqual(deadline.due_at, "2026-09-29")
+            self.assertEqual(
+                service.candidates("<mail@example>")[0].due_at,
+                "2026-09-29",
+            )
+
     def test_candidate_without_due_at_cannot_be_registered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
