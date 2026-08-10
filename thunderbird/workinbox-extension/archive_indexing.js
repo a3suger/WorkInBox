@@ -51,6 +51,8 @@ async function buildArchiveIndexingPlan() {
       favorite: desiredEnabled,
       currentEnabled: current.enabled,
       currentPriority: current.priority,
+      currentFolderProperty: current.folderProperty,
+      neverPriority: current.neverPriority,
       desiredEnabled,
       needsChange: current.enabled !== desiredEnabled,
     });
@@ -70,9 +72,24 @@ function formatPlan(plan) {
       const current = item.currentEnabled ? "index ON " : "index OFF";
       const desired = item.desiredEnabled ? "index ON" : "index OFF";
       const arrow = item.needsChange ? ` -> ${desired}` : " (変更なし)";
-      return `${item.accountId} ${item.path}\n  Favorite ${favorite} / ${current}${arrow}`;
+      return (
+        `${item.accountId} ${item.path}\n` +
+        `  Favorite ${favorite} / ${current}${arrow}\n` +
+        `  priority=${item.currentPriority} never=${item.neverPriority} folderProperty=${JSON.stringify(item.currentFolderProperty)}`
+      );
     })
     .join("\n");
+}
+
+function formatDiagnostic(item, result) {
+  return [
+    `SYNC DIAGNOSTIC: ${item.accountId} ${item.path}`,
+    `requestedEnabled=${result.requestedEnabled}`,
+    `before: enabled=${result.beforeEnabled} priority=${result.beforePriority} folderProperty=${JSON.stringify(result.beforeFolderProperty)}`,
+    `after:  enabled=${result.afterEnabled} priority=${result.afterPriority} folderProperty=${JSON.stringify(result.afterFolderProperty)}`,
+    `neverPriority=${result.neverPriority}`,
+    `applied=${result.applied}`,
+  ].join("\n");
 }
 
 async function previewArchiveIndexing() {
@@ -101,7 +118,8 @@ async function syncArchiveIndexing() {
   const confirmed = window.confirm(
     `Archive ${changes.length} フォルダの Gloda indexing を Favorite 状態に合わせます。\n\n` +
       "Favorite ON は索引対象、Favorite OFF は索引対象外になります。\n" +
-      "索引を ON に戻したフォルダでは再索引が始まる場合があります。\n\n続けますか？",
+      "索引を ON に戻したフォルダでは再索引が始まる場合があります。\n\n" +
+      "診断モードでは 1 件ずつ反映を確認し、失敗した時点で停止します。\n\n続けますか？",
   );
   if (!confirmed) {
     return;
@@ -109,12 +127,24 @@ async function syncArchiveIndexing() {
 
   let completed = 0;
   for (const item of changes) {
-    setArchiveStatus(`索引設定を同期しています… ${completed}/${changes.length}`);
-    await messenger.glodaIndexing.setEnabled(
+    setArchiveStatus(`索引設定を同期・検証しています… ${completed}/${changes.length}`);
+    const result = await messenger.glodaIndexing.setEnabled(
       item.accountId,
       item.path,
       item.desiredEnabled,
     );
+
+    archiveIndexingPreview.textContent =
+      `${formatDiagnostic(item, result)}\n\n` + archiveIndexingPreview.textContent;
+
+    if (!result.applied) {
+      setArchiveStatus(
+        `ERROR: ${item.path} の索引設定が直後の確認で反映されませんでした。診断結果をコピーしてください。`,
+      );
+      syncArchiveIndexingButton.disabled = true;
+      return;
+    }
+
     completed += 1;
   }
 
