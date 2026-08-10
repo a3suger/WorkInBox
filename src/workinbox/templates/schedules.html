@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}スケジュール調整 - WorkInBox{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2>スケジュール調整支援</h2>
+    <div class="muted">{{ items | length }} 通のメール</div>
+  </div>
+</div>
+
+{% if action_message %}
+<div class="notice">{{ action_message }}</div>
+{% endif %}
+
+{% if action_failure %}
+<div class="notice error">
+  <strong>スケジュール調整の更新に失敗しました。</strong><br>
+  {{ action_failure }}
+</div>
+{% endif %}
+
+{% if items %}
+<div class="schedule-list">
+  {% for item in items %}
+  {% set email = item.email %}
+  <section class="schedule-card">
+    <h3>{{ email.subject or "(件名なし)" }}</h3>
+    <div class="schedule-meta muted">
+      <span>差出人: {{ email.sender }}</span>
+      <span>受信日時: {{ email.received_at or "-" }}</span>
+    </div>
+
+    <div class="tag-list">
+      {% for tag in item.tags %}
+      <span class="tag-badge" style="--tag-color: {{ tag.color }}">{{ tag.label }}</span>
+      {% endfor %}
+    </div>
+
+    <div style="margin: 10px 0;">
+      <button
+        type="button"
+        data-wib-open-message-id="{{ email.message_id }}"
+        title="Thunderbird で元メールを開く"
+      >Thunderbirdで元メールを開く</button>
+    </div>
+
+    <details class="message-preview">
+      <summary>本文を確認</summary>
+      <div class="message-body">{{ item.body or "(本文なし)" }}</div>
+    </details>
+
+    <div class="notice" style="margin-top: 14px;">
+      自分で予定確認・日程調整・予定入力等を完了した場合は、下のボタンでこのメールのスケジュール対応を完了できます。
+    </div>
+
+    <form method="post" action="/schedules/complete">
+      <input type="hidden" name="message_id" value="{{ email.message_id }}">
+      <button type="submit" class="primary">自分で対応済み</button>
+    </form>
+  </section>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">現在、スケジュール調整支援の対象メールはありません。</div>
+{% endif %}
+{% endblock %}
