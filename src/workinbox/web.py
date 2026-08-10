@@ -22,8 +22,10 @@ from .application import (
 )
 from .config import AppConfig, load_config
 from .deadline_application import DeadlineExtractionResult, DeadlineExtractionService
+from .deadline_dates import normalize_due_at
 from .deadline_ics import DeadlineIcsService
 from .deadline_workflow import DeadlineWorkflowService
+from .models import DeadlineCreatedBy
 from .work_tags import WORK_TAGS
 
 
@@ -207,6 +209,25 @@ def create_app(
             media_type="text/calendar; charset=utf-8",
             headers={"Content-Disposition": 'inline; filename="deadlines.ics"'},
         )
+
+    @app.post("/deadlines/add")
+    async def add_deadline_candidate(request: Request):
+        try:
+            form = await read_urlencoded_form(request)
+            message_id = form.get("message_id", "").strip()
+            due_value = form.get("due_at", "").strip()
+            due_at = normalize_due_at(due_value) if due_value else None
+            deadline_data_service.add_candidate(
+                message_id,
+                form.get("title", ""),
+                due_at=due_at,
+                source_text=form.get("source_text", "").strip() or None,
+                created_by=DeadlineCreatedBy.USER,
+                needs_review=due_at is None,
+            )
+        except (OSError, RuntimeError, ValueError, sqlite3.Error, UnicodeDecodeError) as exc:
+            return render_deadlines(request, action_failure=str(exc))
+        return render_deadlines(request, action_message="締切候補を手動で追加しました。")
 
     @app.post("/deadlines/{candidate_id}/register")
     def register_deadline_candidate(request: Request, candidate_id: int):
