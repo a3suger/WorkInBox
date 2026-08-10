@@ -9,6 +9,7 @@ from time import perf_counter
 from .ai_classifier import OllamaClassifier
 from .config import AppConfig
 from .database import EmailDatabase
+from .deadline_dates import normalize_due_at
 from .imap_client import ImapClient
 from .models import (
     Deadline,
@@ -328,10 +329,11 @@ class DeadlineService:
         normalized_title = title.strip()
         if not normalized_title:
             raise ValueError("deadline title must not be empty")
+        normalized_due_at = normalize_due_at(due_at) if due_at is not None else None
         return self.database.update_deadline_candidate(
             candidate_id,
             title=normalized_title,
-            due_at=due_at,
+            due_at=normalized_due_at,
             source_text=source_text,
             needs_review=needs_review,
         )
@@ -348,6 +350,20 @@ class DeadlineService:
         description: str | None = None,
     ) -> Deadline:
         self.database.initialize()
+        candidate = self.database.deadline_candidate(candidate_id)
+        if candidate is None:
+            raise ValueError("deadline candidate is missing or already resolved")
+        if candidate.due_at is None:
+            raise ValueError("deadline candidate has no due_at")
+        normalized_due_at = normalize_due_at(candidate.due_at)
+        if normalized_due_at != candidate.due_at:
+            self.database.update_deadline_candidate(
+                candidate_id,
+                title=candidate.title,
+                due_at=normalized_due_at,
+                source_text=candidate.source_text,
+                needs_review=candidate.needs_review,
+            )
         return self.database.register_deadline_candidate(
             candidate_id,
             timezone_name=timezone_name,
