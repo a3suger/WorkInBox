@@ -1,186 +1,98 @@
 # WorkInBox タグ・外部案件取り込み・将来データ管理メモ
 
-この文書は、v0.2 のタグ設計を検討する中で出た議論を記録するための設計メモである。
+この文書は、タグ設計、Thunderbird 連携、自分宛て備忘メール、外部形式との関係についての補足設計メモである。
 
-現時点で確定している方針と、v0.2 以後に検討する将来案を分けて記載する。
+正式なワークフローは `docs/design_workflow.md`、締切登録支援の詳細は `docs/deadline_support_discussion_2026-08-10.md` を参照する。
 
 ---
 
-## 1. Thunderbird タグ連携の基本方針
+## 1. Thunderbird タグ連携
 
-WorkInBox の作業タグは、Thunderbird からも人が直接付け外しできることを重視する。
+WorkInBox の作業タグは IMAP keyword を正本とし、Thunderbird からも直接付け外しできることを重視する。
 
-Thunderbird ではタグをキーボードから操作できるため、日常的に人が修正するタグは数字キーで扱いやすい位置に置くことを想定する。
+主なタグ:
 
-特に以下のタグは利用者が手動で修正する頻度が高いと考えられる。
-
+- `重要`
 - `締切あり`
 - `スケジュール調整`
 - `回答必要`
 - `読む・検討`
 - `判定保留`
+- `締切登録済み`
+- `スケジュール対応済み`
+- `返信待ち`
+- `対応待ち`
+- `依頼済み`
+- `一括処理`
 
-WorkInBox 側では IMAP keyword を安定した識別子として扱い、Thunderbird 側では同じ key に対して日本語表示名と色を定義する構成を目指す。
+Thunderbird MailExtension は固定 key に対して日本語表示名、色、キーボード順序を定義する薄い接着層として扱う。
 
-Thunderbird には、既知の key を指定してタグ定義を作成・更新できる公式 API があるため、小さな Thunderbird MailExtension を用意し、複数 PC の Thunderbird プロファイルへ同じ WorkInBox タグ定義を登録する方式を採用候補とする。
-
-ただし、WorkInBox 用 IMAP keyword の具体的な key 名、色、数字キー上の最終配置はまだ確定しない。
+Extension に業務ロジックや WorkInBox の正本データを持たせない。
 
 ---
 
 ## 2. 参照タグ `重要`
 
-既存運用では、アーカイブ後も後日参照する可能性があるメールに `重要` タグを付けている。
+`重要` は作業状態ではなく参照価値を示すタグである。
 
-この用途は作業状態とは異なるため、WorkInBox では `重要` を新しい **参照タグ** として扱う方向とする。
-
-### 性質
-
-- `重要` は「今どの作業を行うか」を表す作業タグではない。
 - アーカイブ後も保持してよい。
-- スターの有無とは独立する。
-- `一括処理` と共存してよい。
-- `締切あり`、`回答必要`、`読む・検討` などとも共存してよい。
-
-したがって、たとえば以下はすべて有効な状態とする。
-
-- `重要` + `一括処理`
-- `重要` + `読む・検討`
-- `重要` + `回答必要`
-
-現時点では参照タグは `重要` の 1 種類のみ追加する。
-
-将来的に参照・保存用途のタグが必要になった場合は、作業タグとは別カテゴリとして拡張する。
+- スターとは独立する。
+- `一括処理` や各作業タグと共存してよい。
 
 ---
 
-## 3. Thunderbird のキーボード操作との共存
+## 3. Thunderbird のキーボード操作
 
-利用者は現在 `重要` タグを日常的に使っているため、WorkInBox 導入によって既存の操作感を壊さないことを重視する。
+先頭 6 タグの想定順序:
 
-数字キーの配置案としては、たとえば以下のような構成が考えられる。
+1. `重要`
+2. `締切あり`
+3. `スケジュール調整`
+4. `回答必要`
+5. `読む・検討`
+6. `判定保留`
 
-- `1`: `重要`
-- `2`: `締切あり`
-- `3`: `スケジュール調整`
-- `4`: `回答必要`
-- `5`: `読む・検討`
-- `6`: `判定保留`
-
-これは現時点では候補であり、最終仕様ではない。
-
-また、WorkInBox は利用者が独自に作成した他の Thunderbird タグを勝手に削除・上書きしない。
+WorkInBox は利用者独自の Thunderbird タグを勝手に削除・上書きしない。
 
 ---
 
-## 4. 自分宛て備忘メールという入口
+## 4. 自分宛て備忘メール
 
-日常の仕事はメールだけから発生するとは限らない。
+LINE、Teams、Slack、口頭等で発生した仕事を、利用者が自分宛てメールとして WorkInBox に取り込む運用を正式な入力経路として扱う。
 
-たとえば、以下のような経路から利用者自身の対応案件が発生する。
+`From` が利用者自身であることだけで `返信待ち` と判断してはいけない。
 
-- LINE
-- Microsoft Teams
-- Slack
-- 口頭での依頼
-- その他の外部ツール
+自分発メールには少なくとも次がある。
 
-このような案件について、利用者が備忘のため **自分自身へメールを送る** 運用がある。
+1. 自分宛て備忘メール
+2. 相手への送信メールの自分宛てコピー等
+3. 支援者への依頼メール
 
-WorkInBox はこの運用を正式な入力経路として扱えるようにする。
+入口・目的判定は将来 TriageBox が担当する。
 
-### 基本的な役割分担
-
-入口判定は TriageBox が担当する。
-
-概念的には以下の流れとする。
-
-```text
-LINE / Teams / Slack / 口頭など
-            ↓
-       自分宛てメール
-            ↓
-         TriageBox
-            ↓
-   自分宛て備忘メールと判定
-            ↓
-       TrackingBox 対象
-            ↓
-       作業内容を分類
-```
-
-TriageBox は「差出人が自分である」という事実だけで処理先を決めてはいけない。
-
-自分が送信したメールには少なくとも以下の種類がある。
-
-1. **自分宛て備忘メール**
-   - 外部ツールや口頭から発生した仕事をメールとして WorkInBox に取り込むためのもの。
-   - 通常の TrackingBox 作業分類へ進める。
-
-2. **相手へ送信したメールの自分宛てコピー等**
-   - 相手からの回答を待つ目的であれば `返信待ち` の対象になり得る。
-
-3. **支援者への依頼メール**
-   - `対応待ち` の対象になる。
-
-したがって、`From` が利用者自身であることだけを理由に `返信待ち` を付与しない。
-
-TriageBox はメールの宛先、スレッド関係、既存の待機状態、内容等を用いて、自分発メールの役割を区別する必要がある。
-
-### v0.2 での扱い
-
-現時点の v0.2 では TrackingBox 対象となるスターは利用者が Thunderbird 上で付ける前提を維持する。
-
-そのため、まずは自分宛て備忘メールが誤って `返信待ち` や別の特殊フローへ送られないことを重要とする。
-
-将来 TriageBox がスター付与まで自動化する場合、自分宛て備忘メールは TrackingBox へ送る有力な自動スター候補となる。
+現時点では TrackingBox 対象のスターは利用者が Thunderbird 上で付与する。
 
 ---
 
-## 5. メール以外の案件を WorkInBox に取り込む考え方
+## 5. Thunderbird Extension の役割
 
-WorkInBox はタスク管理ツールではなく、利用者へ専用のタスク入力画面を要求しないという方針を維持する。
+Extension は Thunderbird 固有 API が必要な UI / 接続処理だけを担当する。
 
-そのため、メール以外で発生した仕事についても、専用フォームを追加するより、利用者が慣れている「自分宛てメール」を入力口として利用できることに価値がある。
+想定役割:
 
-この方式により、外部ツールの種類に依存せず、最終的にメールという共通形式へ集約できる。
+- WorkInBox タグ定義の登録
+- WorkInBox Web UI を Thunderbird 内で開く
+- WorkInBox の一覧から該当メールを Thunderbird で開く
 
----
-
-## 6. Thunderbird Extension の役割
-
-タグ連携の検討から、Thunderbird MailExtension を WorkInBox と Thunderbird の **薄い接着層** として利用する案が有効であることが分かった。
-
-Extension に業務ロジックや WorkInBox の正本データを持たせない。
-
-WorkInBox の分類、状態管理、締切管理などの中核処理は従来どおり WorkInBox 側で行い、Extension は Thunderbird 固有 API が必要な処理だけを担当する。
-
-### 想定する主な役割
-
-1. **WorkInBox タグ定義の登録**
-   - WorkInBox が決めた固定 key に対して、Thunderbird の日本語表示名と色を登録する。
-   - 複数 PC の Thunderbird でも同じ key を利用できるようにする。
-
-2. **WorkInBox Web UI を Thunderbird 内で開く**
-   - WorkInBox の FastAPI + Jinja2 Web UI を作り直すのではなく、ローカルで稼働する Web UI を Thunderbird のタブから開けるようにする。
-   - Thunderbird を日常の入口として維持しつつ、WorkInBox の整理画面へ移動できるようにする。
-
-3. **WorkInBox の一覧から該当メールを Thunderbird で開く**
-   - WorkInBox の Web UI でメールを選択した際、Extension が Thunderbird のメッセージ表示 API を使って該当メールを開く。
-   - WorkInBox 側では Message-ID 等の安定した識別情報を使い、Thunderbird 固有 API 呼び出しは Extension 側へ寄せる。
-
-概念的には以下の構成を想定する。
+概念構成:
 
 ```text
 Thunderbird
   ├─ メール閲覧・返信・タグ操作
-  ├─ VTODO の閲覧
-  └─ WorkInBox Web UI タブ
+  ├─ read-only ICS / VTODO の閲覧
+  └─ WorkInBox Web UI
           ↓
 Thunderbird Extension
-  ├─ WIB タグ定義を登録
-  ├─ WIB Web UI を開く
-  └─ 指定メールを Thunderbird で開く
           ↓
 WorkInBox
   ├─ FastAPI / Jinja2
@@ -189,115 +101,116 @@ WorkInBox
   └─ SQLite
 ```
 
-Extension は Thunderbird と WorkInBox の橋渡しだけを行い、可能な限り小さく保つ。
+---
 
-### 正本の扱いは変更しない
+## 6. 正本の整理
 
-Extension を利用してもデータの正本方針は変更しない。
+用途ごとに正本を分ける。
 
-- **SQLite = WorkInBox 内部状態の正本**
-- **VTODO = Thunderbird で閲覧・操作できる外部表現**
+- メール本体: メールサーバ
+- WorkInBox 作業タグ: IMAP keyword
+- WorkInBox 内部状態: SQLite
+- 正式登録された締切: SQLite
+- Thunderbird 向け VTODO: SQLite から生成した派生表現
 
-VTODO が Thunderbird 上で閲覧できることは UI 上の利点であるが、WorkInBox の内部状態の正本を VTODO へ移すことを意味しない。
+**v0.2 の締切 ICS は読み取り専用である。**
 
-同様に、Extension 自体も正本データを保持しない。
+Thunderbird 側で VTODO を編集しても WorkInBox へ逆同期しない。
+
+CalDAV は v0.2 では導入しない。
 
 ---
 
-## 7. v0.2 以後の付加データ管理構想
+## 7. 締切データと iCalendar / VTODO
 
-タグ設計とは別に、将来的に WorkInBox が以下の付加情報を管理する案が出ている。
+正式締切は SQLite に保存する。
 
-- 締切日時
-- 概要
-- XNote のような自由記述メモ
-- `読む・検討` の結果
-- AI 要約
-- 再確認日
-- その他の WorkInBox 独自情報
-
-これらを SQLite のみに保存すると、DB 破損や移行時のリスクが高くなる。
-
-そこで、SQLite 内のデータと意味的に対応する **交換可能な外部形式** を併用する構想を持つ。
-
-### 例
-
-- 締切データ: iCalendar / VTODO (`.ics`)
-- 概要・メモ: XNote 互換形式、または将来決定する可搬形式
-- WorkInBox 固有メタデータ: JSON 等
-
-概念的には以下の構成を目標とする。
+WorkInBox は SQLite の内容から `deadlines.ics` を生成し、Thunderbird が購読する。
 
 ```text
-IMAP
-  ├─ メール本体
-  └─ WorkInBox タグ
-
 SQLite
-  ├─ 締切
-  ├─ 概要・メモ
-  └─ WorkInBox 固有データ
-       ⇅ import / export
-交換形式
-  ├─ deadlines.ics (VTODO)
-  ├─ notes/...
-  └─ metadata.json
+  └─ deadlines
+       ↓ generate
+   deadlines.ics
+       ↓ subscribe (read-only)
+   Thunderbird
 ```
 
-### バックアップとしての意味
+`.ics` は SQLite から何度でも再生成できる。
 
-交換形式から SQLite を再構築できれば、単なる DB ファイルのコピーより復旧性が高くなる。
+各 VTODO の `UID` は SQLite の deadline id から安定生成する。
 
-また、OneDrive 等へ交換形式やバックアップを複製することで、PC 故障時の復旧や将来の複数 PC 利用にもつなげられる。
+例:
 
-ただし、SQLite ファイルそのものを OneDrive 上に置き、複数 PC から同時に直接書き込む方式は採用しない方向とする。
+```text
+UID:wib-deadline-123@workinbox
+```
 
-### 双方向交換
+VTODO には元メールを探しやすくするため、Message-ID、メール日時、差出人、件名等を `DESCRIPTION` に入れる。
 
-将来的には SQLite と外部形式を双方向で交換可能にすることを検討する。
-
-ただし、複数 PC で同じデータを編集する場合は競合解決が必要になるため、v0.2 では実装しない。
-
-まずは import / export と復旧可能性を優先し、同期・競合処理は後続バージョンで扱う。
+補助的な機械可読情報として `X-WORKINBOX-*` プロパティを付けてもよい。
 
 ---
 
-## 8. v0.2 と将来バージョンの境界
+## 8. バックアップと可搬性
 
-### v0.2 で扱う
+SQLite が正本であることと、可搬形式を持つことは両立する。
 
-- IMAP タグの読み書き
-- WorkInBox タグと Thunderbird 表示タグの安定した対応方法の検証
-- Thunderbird Extension による WorkInBox タグ定義の登録検証
-- 参照タグ `重要` の追加
-- 自分宛て備忘メールを考慮した TriageBox 設計
-- 自分発メールを一律に `返信待ち` とみなさないこと
+`.ics` は Thunderbird 表示用の派生データであると同時に、人間が内容を確認しやすい交換形式でもある。
 
-### v0.2 以後または必要性に応じて扱う
+ただし、v0.2 では `.ics` から SQLite を自動復元することや双方向同期を必須としない。
 
-- Extension から WorkInBox Web UI を Thunderbird 内タブで開く機能
-- WorkInBox Web UI から指定メールを Thunderbird で開く連携
-- 締切データの iCalendar / VTODO import / export
-- XNote 等からの既存メモ取り込み
-- WorkInBox 内の概要・メモ管理
-- SQLite から可搬形式へのバックアップ
-- 可搬形式から SQLite への再構築
-- OneDrive 等を利用した複数 PC 間のデータ共有
-- 双方向同期と競合解決
+SQLite 自体のバックアップは別途必要である。
+
+SQLite ファイルを OneDrive 等の同期フォルダ上に置き、複数 PC から同時に直接書き込む方式は採用しない。
 
 ---
 
-## 9. 未決事項
+## 9. 将来の双方向連携
 
-以下は今後決める。
+将来、Thunderbird から締切日時変更・完了操作等を行い、それを WorkInBox に反映する必要が明確になった場合は、CalDAV 等の双方向方式を検討する。
 
-- WorkInBox 用 IMAP keyword の正式な key 名
-- 各タグの色
-- Thunderbird 数字キーの最終割り当て
-- `重要` の既存 Thunderbird keyword をそのまま利用するか、WorkInBox 用 key へ移行するか
-- Thunderbird MailExtension の最低対応バージョン
-- WorkInBox Web UI と Extension の連携方法
-- Message-ID を使ったメールオープン連携の具体的な実装方法
-- 自分宛て備忘メールを TriageBox がどの条件で自動判定するか
-- 将来のメモ交換形式
-- XNote 既存データの具体的な取り込み方法
+その場合は以下が新たに必要になる。
+
+- 書き込み可能なサーバ側リソース
+- 更新競合の扱い
+- SQLite と外部編集の同期規則
+- 複数 PC の競合解決
+
+v0.2 ではこれらを持ち込まない。
+
+---
+
+## 10. v0.2 と将来拡張の境界
+
+### v0.2
+
+- IMAP タグ読み書き
+- Thunderbird タグ定義
+- 自分宛て備忘メールを考慮した設計
+- 締切候補抽出・確認・修正・却下
+- 複数締切対応
+- SQLite への正式締切保存
+- Message-ID 単位の締切関連付け
+- SQLite から read-only ICS / VTODO 生成
+- Thunderbird での ICS 購読
+
+### v0.2 以後
+
+- CalDAV
+- Thunderbird から SQLite への逆同期
+- メールスレッド / 案件単位の Context
+- Context 単位の関連締切一覧
+- 複数 PC の双方向同期
+- メモ等の追加交換形式
+
+---
+
+## 11. 未決事項
+
+- ICS の提供 URL / ファイル配置方法
+- Thunderbird 側の購読設定手順
+- `DESCRIPTION` と `X-WORKINBOX-*` の最終フォーマット
+- メール本文で明示された特殊なタイムゾーンの扱い
+- 将来 Context を導入する場合のグルーピング規則
+- CalDAV を導入する条件
