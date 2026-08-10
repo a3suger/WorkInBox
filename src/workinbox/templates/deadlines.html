@@ -10,6 +10,17 @@
   </div>
 </div>
 
+{% if action_message %}
+<div class="notice">{{ action_message }}</div>
+{% endif %}
+
+{% if action_failure %}
+<div class="notice error">
+  <strong>締切候補の更新に失敗しました。</strong><br>
+  {{ action_failure }}
+</div>
+{% endif %}
+
 {% if extraction_result %}
 <div class="notice">
   AI締切抽出: 対象 {{ extraction_result.eligible }} 通 / 抽出済み {{ extraction_result.extracted_messages }} 通 / 候補追加 {{ extraction_result.candidates_added }} 件
@@ -76,6 +87,42 @@
         {% endif %}
         {% if candidate.source_text %}
         <div class="muted" style="margin-top: 8px;">根拠: {{ candidate.source_text }}</div>
+        {% endif %}
+
+        {% if candidate.status.value == "pending" %}
+        <div class="deadline-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+          <form method="post" action="/deadlines/{{ candidate.id }}/register">
+            <button type="submit" class="primary" {% if not candidate.due_at %}disabled title="日付を修正してから登録してください"{% endif %}>登録する</button>
+          </form>
+          <form method="post" action="/deadlines/{{ candidate.id }}/reject">
+            <button type="submit">登録しない</button>
+          </form>
+        </div>
+
+        <details class="deadline-edit" style="margin-top: 12px;">
+          <summary>修正する</summary>
+          <form method="post" action="/deadlines/{{ candidate.id }}/revise" style="display: grid; gap: 8px; margin-top: 10px; max-width: 760px;">
+            <label>
+              タイトル
+              <input type="text" name="title" value="{{ candidate.title }}" required style="width: 100%; box-sizing: border-box; padding: 7px 8px;">
+            </label>
+            <label>
+              締切日時
+              <input type="text" name="due_at" value="{{ candidate.due_at or '' }}" placeholder="YYYY-MM-DD または ISO 8601" style="width: 100%; box-sizing: border-box; padding: 7px 8px;">
+            </label>
+            <label>
+              根拠テキスト
+              <textarea name="source_text" rows="3" style="width: 100%; box-sizing: border-box; padding: 7px 8px;">{{ candidate.source_text or '' }}</textarea>
+            </label>
+            <label>
+              <input type="checkbox" name="needs_review" value="1" {% if candidate.needs_review %}checked{% endif %}>
+              要確認
+            </label>
+            <div>
+              <button type="submit">修正内容を保存</button>
+            </div>
+          </form>
+        </details>
         {% endif %}
       </div>
       {% endfor %}
