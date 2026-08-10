@@ -24,7 +24,6 @@ async function findMessageByHeaderMessageId(messageId) {
 
 async function openInThreadedMailTab(message) {
   const tab = await messenger.mailTabs.create({
-    active: true,
     folderPaneVisible: true,
     messagePaneVisible: true,
     viewType: "groupedByThread",
@@ -32,6 +31,7 @@ async function openInThreadedMailTab(message) {
 
   try {
     await messenger.mailTabs.setSelectedMessages(tab.id, [message.id]);
+    await messenger.tabs.update(tab.id, { active: true });
   } catch (error) {
     try {
       await messenger.tabs.remove(tab.id);
