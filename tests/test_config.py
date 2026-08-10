@@ -30,6 +30,39 @@ database:
             self.assertEqual(config.ai.timeout_seconds, 120.0)
             self.assertEqual(config.ai.keep_alive, "30m")
             self.assertEqual(config.ai.max_workers, 1)
+            self.assertIsNone(config.identity)
+            self.assertIsNone(config.ai.identity)
+
+    def test_loads_identity_and_normalizes_all_addresses(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text(
+                """imap:
+  host: imap.example
+  username: user
+  password: pass
+  new_mail_lookback_days: 7
+identity:
+  mailbox_address: Main@Example.COM
+  self_addresses:
+    - main@example.com
+    - Alias@Example.com
+    - external@example.net
+  name: Example User
+database:
+  path: workinbox.db
+""",
+                encoding="utf-8",
+            )
+            config = load_config(path)
+            self.assertIsNotNone(config.identity)
+            assert config.identity is not None
+            self.assertEqual(config.identity.name, "Example User")
+            self.assertEqual(
+                config.identity.all_addresses,
+                ("main@example.com", "alias@example.com", "external@example.net"),
+            )
+            self.assertIs(config.ai.identity, config.identity)
 
     def test_loads_ai_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
