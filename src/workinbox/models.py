@@ -17,6 +17,17 @@ class ImapCheckState(StrEnum):
     ERROR = "error"
 
 
+class DeadlineCandidateStatus(StrEnum):
+    PENDING = "pending"
+    REGISTERED = "registered"
+    REJECTED = "rejected"
+
+
+class DeadlineCreatedBy(StrEnum):
+    AI = "ai"
+    USER = "user"
+
+
 @dataclass(frozen=True, slots=True)
 class EmailMessage:
     message_id: str
@@ -65,3 +76,30 @@ class ImapFlagsSnapshot:
     uidvalidity: int
     uid: int
     flags: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DeadlineCandidate:
+    id: int
+    source_message_id: str
+    title: str
+    due_at: str | None
+    source_text: str | None
+    status: DeadlineCandidateStatus
+    created_by: DeadlineCreatedBy
+    needs_review: bool
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class Deadline:
+    id: int
+    source_message_id: str
+    title: str
+    due_at: str
+    timezone: str | None
+    description: str | None
+    created_by: DeadlineCreatedBy
+    created_at: str
+    updated_at: str
