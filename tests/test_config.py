@@ -32,6 +32,7 @@ database:
             self.assertEqual(config.ai.max_workers, 1)
             self.assertIsNone(config.identity)
             self.assertIsNone(config.ai.identity)
+            self.assertEqual(config.schedule_support.supporters, ())
 
     def test_loads_identity_and_normalizes_all_addresses(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -63,6 +64,54 @@ database:
                 ("main@example.com", "alias@example.com", "external@example.net"),
             )
             self.assertIs(config.ai.identity, config.identity)
+
+    def test_loads_schedule_supporters_from_from_style_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text(
+                """imap:
+  host: imap.example
+  username: user
+  password: pass
+  new_mail_lookback_days: 7
+schedule_support:
+  supporters:
+    - "山田 太郎 <yamada@example.com>"
+    - "sato@example.com"
+database:
+  path: workinbox.db
+""",
+                encoding="utf-8",
+            )
+            config = load_config(path)
+            supporters = config.schedule_support.supporters
+            self.assertEqual(len(supporters), 2)
+            self.assertEqual(supporters[0].label, "山田 太郎 <yamada@example.com>")
+            self.assertEqual(supporters[0].name, "山田 太郎")
+            self.assertEqual(supporters[0].address, "yamada@example.com")
+            self.assertEqual(supporters[1].label, "sato@example.com")
+            self.assertIsNone(supporters[1].name)
+            self.assertEqual(supporters[1].address, "sato@example.com")
+
+    def test_schedule_supporter_requires_email_address(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text(
+                """imap:
+  host: imap.example
+  username: user
+  password: pass
+  new_mail_lookback_days: 7
+schedule_support:
+  supporters:
+    - "山田 太郎"
+database:
+  path: workinbox.db
+""",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "schedule_support.supporters"):
+                load_config(path)
 
     def test_loads_ai_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
