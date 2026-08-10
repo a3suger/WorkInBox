@@ -22,6 +22,7 @@ from .application import (
 )
 from .config import AppConfig, load_config
 from .deadline_application import DeadlineExtractionResult, DeadlineExtractionService
+from .deadline_workflow import DeadlineWorkflowService
 from .work_tags import WORK_TAGS
 
 
@@ -36,12 +37,17 @@ def create_app(
     work_tag_service: WorkTagService | None = None,
     deadline_service: DeadlineService | None = None,
     deadline_extraction_service: DeadlineExtractionService | None = None,
+    deadline_workflow_service: DeadlineWorkflowService | None = None,
 ) -> FastAPI:
     sync_service = synchronization_service or SynchronizationService(config)
     tracking_service = query_service or TrackingQueryService(config)
     tag_service = work_tag_service or WorkTagService(config)
     deadline_data_service = deadline_service or DeadlineService(config)
     deadline_ai_service = deadline_extraction_service or DeadlineExtractionService(config)
+    deadline_flow_service = deadline_workflow_service or DeadlineWorkflowService(
+        deadline_data_service,
+        tag_service,
+    )
     sync_lock = Lock()
 
     app = FastAPI(title="WorkInBox")
@@ -190,17 +196,28 @@ def create_app(
     @app.post("/deadlines/{candidate_id}/register")
     def register_deadline_candidate(request: Request, candidate_id: int):
         try:
-            deadline_data_service.register_candidate(candidate_id)
+            _, completion = deadline_flow_service.register_candidate(candidate_id)
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
             return render_deadlines(request, action_failure=str(exc))
+        if completion.completed:
+            return render_deadlines(
+                request,
+                action_message="締切を正式登録し、このメールの締切判断を完了しました。",
+            )
         return render_deadlines(request, action_message="締切を正式登録しました。")
 
     @app.post("/deadlines/{candidate_id}/reject")
     def reject_deadline_candidate(request: Request, candidate_id: int):
         try:
-            deadline_data_service.reject_candidate(candidate_id)
+            _, completion = deadline_flow_service.reject_candidate(candidate_id)
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
             return render_deadlines(request, action_failure=str(exc))
+        if completion.completed:
+            if completion.registered_count > 0:
+                message = "締切候補を登録しないと判断し、このメールの締切判断を完了しました。"
+            else:
+                message = "すべての締切候補を登録しないと判断し、締切ありタグを外しました。"
+            return render_deadlines(request, action_message=message)
         return render_deadlines(request, action_message="締切候補を登録しないと判断しました。")
 
     @app.post("/deadlines/{candidate_id}/revise")
