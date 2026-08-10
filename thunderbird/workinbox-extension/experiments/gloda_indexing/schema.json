@@ -15,7 +15,9 @@
           "type": "object",
           "properties": {
             "enabled": { "type": "boolean" },
-            "priority": { "type": "integer" }
+            "priority": { "type": "integer" },
+            "neverPriority": { "type": "integer" },
+            "folderProperty": { "type": "string" }
           }
         }
       },
@@ -31,8 +33,15 @@
         "returns": {
           "type": "object",
           "properties": {
-            "enabled": { "type": "boolean" },
-            "priority": { "type": "integer" }
+            "requestedEnabled": { "type": "boolean" },
+            "beforeEnabled": { "type": "boolean" },
+            "beforePriority": { "type": "integer" },
+            "beforeFolderProperty": { "type": "string" },
+            "afterEnabled": { "type": "boolean" },
+            "afterPriority": { "type": "integer" },
+            "afterFolderProperty": { "type": "string" },
+            "neverPriority": { "type": "integer" },
+            "applied": { "type": "boolean" }
           }
         }
       }
