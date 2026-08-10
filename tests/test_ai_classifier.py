@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from workinbox.ai_classifier import AiClassification, OllamaClassifier
-from workinbox.config import AiConfig
+from workinbox.config import AiConfig, IdentityConfig
 from workinbox.models import EmailMessage
 
 
@@ -73,6 +73,48 @@ class OllamaClassifierTest(unittest.TestCase):
         self.assertIsInstance(request_body["format"], dict)
         self.assertIn("abcde", request_body["prompt"])
         self.assertNotIn("abcdef", request_body["prompt"])
+
+    def test_classify_adds_identity_context_and_detects_self_sender(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_urlopen(request, timeout):
+            captured["body"] = json.loads(request.data.decode("utf-8"))
+            response = {
+                "deadline": False,
+                "schedule": False,
+                "answer_required": False,
+                "review": True,
+                "pending": False,
+                "reason": "送信済みメールの確認",
+            }
+            return FakeResponse({"response": json.dumps(response)})
+
+        message = EmailMessage(
+            "<self@example>",
+            'Example User <Alias@Example.COM>',
+            "recipient@example.net",
+            "Follow up",
+            None,
+            "本文",
+        )
+        classifier = OllamaClassifier(
+            AiConfig(
+                identity=IdentityConfig(
+                    mailbox_address="main@example.com",
+                    self_addresses=("alias@example.com",),
+                    name="Example User",
+                )
+            )
+        )
+
+        with patch("workinbox.ai_classifier.urllib.request.urlopen", fake_urlopen):
+            classifier.classify(message)
+
+        prompt = captured["body"]["prompt"]
+        self.assertIn("利用者名（補助情報）: Example User", prompt)
+        self.assertIn("main@example.com, alias@example.com", prompt)
+        self.assertIn("差出人は利用者本人: true", prompt)
+        self.assertIn("宛先に利用者本人を含む: false", prompt)
 
     def test_tag_keys_enforce_allowed_combinations(self) -> None:
         self.assertEqual(
