@@ -77,7 +77,28 @@ v0.2 では TrackingBox の主要フローを一通り成立させる。
 - 利用者による再分類
 - IMAP タグへの反映
 
-### 9a. 締切登録支援【次に実装】
+### 8.5. Thunderbird Bridge【次に実装】
+
+WorkInBox Web UI と Thunderbird Extension の間に、Thunderbird 固有操作のための共通ブリッジを作る。
+
+最初の必須 PoC:
+
+- Extension からローカルの WorkInBox Web UI を Thunderbird の content tab で開く
+- WorkInBox Web UI から Message-ID を Extension へ渡す
+- Extension が Message-ID から Thunderbird 内の元メールを解決する
+- 元メールを通常の message display で開く
+- Gloda / Global Search / Conversation の状態に依存せず、元メールを開く経路を成立させる
+
+追加 PoC:
+
+- Conversation 表示は通常表示と分離して検証する
+- Archive 配下では Favorite フォルダだけを Gloda / Global Search の索引対象にするため、Favorite 状態と索引設定を手動同期する
+
+この Bridge は締切候補、正式締切、判定保留、スケジュール調整、返信待ち / 対応待ち等から共通利用する。
+
+詳細は `docs/thunderbird_bridge.md` を参照する。
+
+### 9a. 締切登録支援【未実装】
 
 対象:
 
@@ -99,6 +120,7 @@ v0.2 では TrackingBox の主要フローを一通り成立させる。
 - 全候補却下時は `締切あり` を削除
 - SQLite から read-only `.ics` / VTODO を生成
 - Thunderbird から ICS 購読
+- 候補・正式締切から Thunderbird Bridge で元メールを開く
 
 正式締切は SQLite が正本である。
 
@@ -138,6 +160,7 @@ AI は自動確定せず、利用者が最終決定する。
 
 - AI で初期分類できる
 - 判定保留を人間が解消できる
+- WorkInBox から Message-ID を使って Thunderbird の元メールを開ける
 - 締切を SQLite に正式登録できる
 - Thunderbird で締切を read-only ICS として確認できる
 - スケジュール調整の特殊処理を完了できる
