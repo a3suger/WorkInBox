@@ -78,6 +78,7 @@
       <th>受信日時</th>
       <th>追跡状態</th>
       <th>WorkInBox タグ</th>
+      <th>Thunderbird</th>
       <th>状態変更日時</th>
     </tr>
   </thead>
@@ -115,6 +116,13 @@
           </div>
         </details>
         {% endif %}
+      </td>
+      <td>
+        <button
+          type="button"
+          data-wib-open-message-id="{{ email.message_id }}"
+          title="Thunderbird で元メールを開く"
+        >Thunderbirdで開く</button>
       </td>
       <td>{{ email.status_changed_at or "-" }}</td>
     </tr>
