@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "WorkInBox Thunderbird Connector",
   "description": "Provides Thunderbird-side UI and bridge functions for WorkInBox.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "browser_specific_settings": {
     "gecko": {
       "id": "workinbox-connector@workinbox.local",
@@ -12,8 +12,10 @@
   "permissions": [
     "accountsRead",
     "messagesRead",
+    "messagesUpdate",
     "messagesTags",
     "messagesTagsList",
+    "compose",
     "storage",
     "downloads",
     "http://127.0.0.1/*",
