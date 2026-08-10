@@ -174,6 +174,7 @@ def create_app(
             name="schedules.html",
             context={
                 "items": items,
+                "supporters": config.schedule_support.supporters,
                 "self_cc": config.identity.mailbox_address if config.identity else "",
                 **common_view_flags(schedules=True),
                 "action_message": action_message,
