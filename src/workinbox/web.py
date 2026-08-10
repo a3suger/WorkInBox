@@ -13,12 +13,14 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .application import (
+    DeadlineService,
     SynchronizationService,
     SyncResult,
     TrackingQueryService,
     WorkTagService,
 )
 from .config import AppConfig, load_config
+from .deadline_application import DeadlineExtractionResult, DeadlineExtractionService
 from .work_tags import WORK_TAGS
 
 
@@ -31,10 +33,14 @@ def create_app(
     synchronization_service: SynchronizationService | None = None,
     query_service: TrackingQueryService | None = None,
     work_tag_service: WorkTagService | None = None,
+    deadline_service: DeadlineService | None = None,
+    deadline_extraction_service: DeadlineExtractionService | None = None,
 ) -> FastAPI:
     sync_service = synchronization_service or SynchronizationService(config)
     tracking_service = query_service or TrackingQueryService(config)
     tag_service = work_tag_service or WorkTagService(config)
+    deadline_data_service = deadline_service or DeadlineService(config)
+    deadline_ai_service = deadline_extraction_service or DeadlineExtractionService(config)
     sync_lock = Lock()
 
     app = FastAPI(title="WorkInBox")
@@ -62,6 +68,7 @@ def create_app(
                 "work_tags": WORK_TAGS,
                 "active_view": active,
                 "pending_view": False,
+                "deadlines_view": False,
                 "sync_result": sync_result,
                 "sync_failure": sync_failure,
                 "tag_message": tag_message,
@@ -82,8 +89,44 @@ def create_app(
                 "emails": tag_service.pending_emails(),
                 "active_view": False,
                 "pending_view": True,
+                "deadlines_view": False,
                 "message": message,
                 "failure": failure,
+            },
+        )
+
+    def render_deadlines(
+        request: Request,
+        *,
+        extraction_result: DeadlineExtractionResult | None = None,
+        extraction_failure: str | None = None,
+    ):
+        items: list[dict[str, object]] = []
+        for tagged in tag_service.read_for_emails(tracking_service.active_emails()):
+            if tagged.error is not None:
+                continue
+            keys = {tag.key for tag in tagged.tags}
+            if "wib-deadline" not in keys or "wib-deadline-done" in keys:
+                continue
+            message = deadline_data_service.database.email_message(tagged.email.message_id)
+            items.append(
+                {
+                    "email": tagged.email,
+                    "tags": tagged.tags,
+                    "body": message.body if message is not None else None,
+                    "candidates": deadline_data_service.candidates(tagged.email.message_id),
+                }
+            )
+        return _TEMPLATES.TemplateResponse(
+            request=request,
+            name="deadlines.html",
+            context={
+                "items": items,
+                "active_view": False,
+                "pending_view": False,
+                "deadlines_view": True,
+                "extraction_result": extraction_result,
+                "extraction_failure": extraction_failure,
             },
         )
 
@@ -125,6 +168,14 @@ def create_app(
     @app.get("/pending")
     def pending_emails(request: Request):
         return render_pending(request)
+
+    @app.get("/deadlines")
+    def deadline_candidates(request: Request):
+        try:
+            result = deadline_ai_service.extract_pending()
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            return render_deadlines(request, extraction_failure=str(exc))
+        return render_deadlines(request, extraction_result=result)
 
     @app.post("/pending/resolve")
     def resolve_pending(request: Request, message_id: str, resolution: str):
