@@ -85,7 +85,15 @@ class DeadlineExtractionService:
 
             try:
                 extracted = self.extractor.extract(message)
+                existing_keys = {
+                    (candidate.title, candidate.due_at, candidate.source_text)
+                    for candidate in self.database.deadline_candidates(tracked.message_id)
+                    if candidate.created_by == DeadlineCreatedBy.AI
+                }
                 for item in extracted:
+                    key = (item.title, item.due_at, item.source_text)
+                    if key in existing_keys:
+                        continue
                     self.database.add_deadline_candidate(
                         tracked.message_id,
                         item.title,
@@ -94,6 +102,7 @@ class DeadlineExtractionService:
                         created_by=DeadlineCreatedBy.AI,
                         needs_review=item.needs_review,
                     )
+                    existing_keys.add(key)
                     candidates_added += 1
                 self._mark_extracted(tracked.message_id, len(extracted))
                 extracted_messages += 1
