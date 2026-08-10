@@ -45,11 +45,59 @@ async function openMessageByHeaderMessageId(messageId) {
   };
 }
 
+function requestCopy(requestKind) {
+  if (requestKind === "schedule_entry") {
+    return {
+      subject: "スケジュール入力",
+      body: "スケジュール入力をお願いします。",
+    };
+  }
+  if (requestKind === "schedule_adjustment") {
+    return {
+      subject: "スケジュール調整",
+      body: "スケジュール調整をお願いします。",
+    };
+  }
+  throw new Error(`Unknown schedule request kind: ${requestKind}`);
+}
+
+function withOriginHeader(headers, originMessageId) {
+  const current = Array.isArray(headers) ? headers : [];
+  const withoutOrigin = current.filter(
+    (header) => String(header?.name || "").toLowerCase() !== WORKINBOX_ORIGIN_HEADER.toLowerCase(),
+  );
+  return [
+    ...withoutOrigin,
+    {
+      name: WORKINBOX_ORIGIN_HEADER,
+      value: originMessageId,
+    },
+  ];
+}
+
+function prependRequestBody(details, requestText) {
+  if (details.isPlainText || typeof details.body !== "string") {
+    return {
+      plainTextBody: `${requestText}\n\n${details.plainTextBody || ""}`,
+    };
+  }
+
+  const escaped = requestText
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+  return {
+    body: `<div>${escaped}</div><br>${details.body || ""}`,
+  };
+}
+
 async function beginSupportRequest(request) {
   const originMessageId = String(request.messageId || "").trim();
+  const method = String(request.method || "reply").trim();
+  const requestKind = String(request.requestKind || "schedule_adjustment").trim();
   const to = String(request.to || "").trim();
-  const subject = String(request.subject || "").trim();
-  const body = String(request.body || "");
+  const cc = String(request.cc || "").trim();
+  const keepReplySubject = request.keepReplySubject !== false;
 
   if (!originMessageId) {
     throw new Error("元メールの Message-ID がありません。");
@@ -57,22 +105,38 @@ async function beginSupportRequest(request) {
   if (!to) {
     throw new Error("支援者の宛先を入力してください。");
   }
-  if (!subject) {
-    throw new Error("依頼メールの件名を入力してください。");
+  if (!cc) {
+    throw new Error("Cc に自分のメールアドレスを入力してください。");
   }
 
-  await messenger.compose.beginNew(undefined, {
-    to: [to],
-    subject,
-    plainTextBody: body,
-    customHeaders: [
-      {
-        name: WORKINBOX_ORIGIN_HEADER,
-        value: originMessageId,
-      },
-    ],
-  });
+  const originMessage = await findMessageByHeaderMessageId(originMessageId);
+  if (!originMessage) {
+    throw new Error(`Message-ID ${originMessageId} の元メールを Thunderbird で見つけられませんでした。`);
+  }
 
+  const copy = requestCopy(requestKind);
+  let composeTab;
+  if (method === "reply") {
+    composeTab = await messenger.compose.beginReply(originMessage.id, "replyToSender");
+  } else if (method === "forward") {
+    composeTab = await messenger.compose.beginForward(originMessage.id, "forwardInline");
+  } else {
+    throw new Error(`Unknown schedule request method: ${method}`);
+  }
+
+  const details = await messenger.compose.getComposeDetails(composeTab.id);
+  const updates = {
+    to: [to],
+    cc: [cc],
+    customHeaders: withOriginHeader(details.customHeaders, originMessageId),
+    ...prependRequestBody(details, copy.body),
+  };
+
+  if (method === "forward" || !keepReplySubject) {
+    updates.subject = copy.subject;
+  }
+
+  await messenger.compose.setComposeDetails(composeTab.id, updates);
   return { ok: true };
 }
 
