@@ -1,6 +1,6 @@
 # Thunderbird Bridge 設計
 
-この文書は、WorkInBox Web UI と Thunderbird Extension を接続し、WorkInBox から元メールや Conversation 表示へ戻るための共通ブリッジを定義する。
+この文書は、WorkInBox Web UI と Thunderbird Extension を接続し、WorkInBox から元メールへ戻るための共通ブリッジを定義する。
 
 `docs/README.md` を設計文書の入口とし、この文書は Thunderbird 固有連携の詳細として位置づける。
 
@@ -40,7 +40,7 @@ FastAPI 自体は Thunderbird API を直接使用しない。
 - WorkInBox Web UI を Thunderbird 内のタブで開く。
 - WorkInBox タグ定義を Thunderbird に登録する。
 - Message-ID を受け取り Thunderbird 内で該当メールを検索する。
-- 該当メール、または可能であれば Conversation 表示を開く。
+- 該当メールを通常の message display で開く。
 - Archive フォルダの Favorite 状態を Global Search / Gloda の索引ポリシーへ反映する。
 
 Extension に締切判定、AI 分類、SQLite 更新等の業務ロジックを持たせない。
@@ -81,7 +81,7 @@ Thunderbird Extension Bridge
 Thunderbird messages API
      │
      ▼
-Message / Conversation view
+Message display
 ```
 
 FastAPI を Thunderbird Extension の内部へ移植しない。
@@ -139,10 +139,12 @@ Thunderbird messages API で headerMessageId を検索
     ↓
 該当 MessageHeader を取得
     ↓
-メール表示 / Conversation 表示
+通常の message display で単体表示
 ```
 
 WorkInBox は「この Message-ID を開く」という依頼だけを行い、Thunderbird 内での検索方法や表示方法は Extension に閉じ込める。
+
+この基本フローは実機 PoC で確認済みである。
 
 ---
 
@@ -152,7 +154,7 @@ FastAPI から配信された通常の Web ページは Thunderbird Extension AP
 
 そのため、Web UI と Extension background 間に薄いブリッジを置く。
 
-想定構成:
+実装構成:
 
 ```text
 FastAPI page
@@ -165,40 +167,29 @@ Extension content/bridge script
 Extension background
     │ Thunderbird API
     ▼
-Message / Conversation
+Message display
 ```
 
-具体的な通信方式は実装時に最小構成で検証する。
+WorkInBox ページから Message-ID を渡し、content script が Extension runtime messaging で background へ転送し、background が Thunderbird messages API を使って元メールを解決・表示する。
 
-候補:
-
-- WorkInBox ページへ Extension の content script を注入する。
-- Web ページ側から `window.postMessage` 等で Message-ID を渡す。
-- content script が Extension runtime messaging で background へ転送する。
-- background が Thunderbird messages API を呼ぶ。
-
-通信方式の詳細より、責務境界を維持することを優先する。
+責務境界を維持し、FastAPI 側へ Thunderbird 固有ロジックを持ち込まない。
 
 ---
 
-## 8. Conversation 表示
+## 8. Conversation / スレッド表示
 
-第一段階では Message-ID から正確に元メールを開けることを必須とする。
+第一段階の必須条件は Message-ID から正確に元メールを単体表示できることであり、これは実機で確認済みである。
 
-その後、Thunderbird 128 / 140 系で利用可能な方法を確認し、可能であれば同じ Message-ID を起点に Conversation 表示へ遷移する。
+その後、Thunderbird の 3 ペイン / スレッド表示へ直接遷移する試行を行ったが、実機で安定して動作しなかったため採用しなかった。
 
-Conversation 表示の実装方法は Thunderbird API / UI のバージョン依存性があるため、標準 messages API による Message-ID 解決と分離する。
+したがって v0.2 では次を確定方針とする。
 
-設計上は次の 2 段階とする。
+1. `Message-ID -> MessageHeader` の解決を共通基盤とする。
+2. `MessageHeader -> 通常の message display` を v0.2 の標準表示とする。
+3. Conversation / スレッド表示への直接遷移は v0.2 の必須成功条件にしない。
+4. 将来再検討する場合も、Message-ID 解決とは分離した追加アダプタとして扱う。
 
-1. `Message-ID -> MessageHeader` の解決
-2. `MessageHeader -> Message / Conversation UI` の表示
-
-1 は共通基盤、2 は Thunderbird バージョンごとのアダプタとして扱えるようにする。
-
-Global Search / Gloda の索引状態が不完全でも、Message-ID から元メールを特定して通常のメール表示へ遷移できることを優先する。
-
-Conversation 表示は Gloda の状態に依存し得る追加機能として扱い、`Open in Thunderbird` の必須成功条件にはしない。
+Global Search / Gloda の索引状態が不完全でも、Message-ID から元メールを特定して通常表示へ遷移できることを優先する。
 
 ---
 
@@ -232,7 +223,7 @@ v0.2 では WorkInBox 内部にメールスレッド / 案件 Context を導入�
 
 締切と起点メールの関連は Message-ID 単位とする。
 
-必要な周辺文脈は Thunderbird のメール表示 / Conversation 表示で確認する。
+必要な周辺文脈は Thunderbird のメール表示で確認する。
 
 この設計により、WorkInBox が独自のメールスレッド閲覧 UI を作る必要を減らせる。
 
@@ -264,7 +255,7 @@ FastAPI route に SQLite / IMAP の業務ロジックを直接埋め込まない
 
 大量の古い Archive フォルダをすべて Global Search の索引対象にすると、`global-messages-db.sqlite` の再構築や維持に長い時間を要する可能性がある。
 
-一方で、現在も頻繁に参照する Archive は Global Search / Conversation から利用できる方が便利である。
+一方で、現在も頻繁に参照する Archive は Global Search から利用できる方が便利である。
 
 そのため Archive 配下では、**Thunderbird の Favorite 状態を「現在も Global Search 対象にしたい Archive」を示す利用者入力として利用する**。
 
@@ -285,62 +276,32 @@ Archive 配下
 
 Favorite 状態の取得・変更など、標準 MailExtension API で実装可能な処理は標準 API を使用する。
 
-Gloda のフォルダ単位の indexing ON / OFF は標準 MailExtension API で直接操作できない場合があるため、その処理だけを最小の Experiment API に閉じ込める。
-
-概念構成:
-
-```text
-Thunderbird folders API
-    │
-    ├─ Archive 配下を列挙
-    └─ Favorite 状態を取得
-            │
-            ▼
-WorkInBox Extension
-            │
-            ▼
-Gloda Experiment adapter
-    ├─ Favorite = ON  → indexing ON
-    └─ Favorite = OFF → indexing OFF
-```
+Gloda のフォルダ単位の indexing ON / OFF は標準 MailExtension API で直接操作できないため、その処理だけを最小の Experiment API に閉じ込める。
 
 Experiment API に WorkInBox の業務ロジックを持たせない。
 
 Experiment 層は Thunderbird 内部の Gloda 設定を操作するための小さなアダプタに限定する。
 
-### 初期実装
+### 初期実装と実機確認結果
 
-初期段階では Favorite 状態の変更を常時監視して自動追随することを必須としない。
+v0.2 の初期実装では Favorite 状態変更への常時自動追随は行わず、利用者が明示的に実行する手動同期とする。
 
-Extension の設定画面等に、例えば次の操作を用意する。
+実機 PoC では次を確認済みである。
 
-```text
-Archive indexing policy
+- Archive 配下の Favorite 状態を列挙できる。
+- Favorite と現在の indexing 状態を比較し、変更予定をプレビューできる。
+- Favorite ON = indexing ON、Favorite OFF = indexing OFF のポリシーを手動同期できる。
 
-☑ Archive配下では Favorite フォルダだけ
-  Global Search の索引対象にする
+同期確認 UI は popup が閉じないインライン確認方式とし、直近の診断結果を保持して再表示できるようにした。
 
-[現在の Favorite 状態と索引設定を同期]
-```
-
-同期実行前に変更予定をプレビューできることが望ましい。
-
-例:
-
-```text
-Archive/2022  Favorite OFF → indexing OFF
-Archive/2023  Favorite ON  → indexing ON
-Archive/2024  Favorite ON  → indexing ON
-```
-
-将来、動作の安定性が確認できた場合は Favorite 状態変更への自動追随を検討する。
+将来、動作の安定性と必要性が確認できた場合は Favorite 状態変更への自動追随を検討する。
 
 ### Message-ID Bridge との役割分担
 
 Gloda 対象外の古い Archive であっても、WorkInBox の元メール参照を失わないことを重視する。
 
 ```text
-Global Search / Conversation
+Global Search
     = 普段検索する Favorite Archive を中心に利用
 
 Message-ID Bridge
@@ -351,20 +312,21 @@ Message-ID Bridge
 
 ---
 
-## 13. v0.2 での実装優先順位
+## 13. v0.2 PoC 結果
 
-締切登録支援全体を実装する前または並行して、次の小さな実証を行う価値がある。
+以下は実機で確認済みである。
 
 1. Extension から WorkInBox Web UI を Thunderbird タブで開く。
-2. WorkInBox のテスト画面に `Thunderbird で元メールを開く` を置く。
+2. WorkInBox 画面から `Thunderbird で元メールを開く` を実行する。
 3. Message-ID を Extension background へ渡す。
 4. Thunderbird 内で Message-ID を検索する。
-5. 該当メールを表示する。
-6. 可能であれば Conversation 表示へ拡張する。
-7. Archive 配下の Favorite 状態を列挙し、索引ポリシー候補をプレビューする。
-8. Favorite 状態と Gloda indexing を手動同期できる最小 PoC を確認する。
+5. 該当メールを通常の message display で単体表示する。
+6. Archive 配下の Favorite 状態を列挙し、索引ポリシー候補をプレビューする。
+7. Favorite 状態と Gloda indexing を手動同期する。
 
-このブリッジが成立すれば、締切以外の画面でも共通利用する。
+Conversation / スレッド表示への直接遷移は試行したが安定しなかったため、v0.2 では採用しない。
+
+このブリッジは締切以外の画面でも共通利用する。
 
 ---
 
