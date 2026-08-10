@@ -132,6 +132,28 @@
       AI抽出は完了していますが、締切候補は見つかりませんでした。
     </div>
     {% endif %}
+
+    <details class="deadline-add" style="margin-top: 16px;">
+      <summary>＋ 締切を追加</summary>
+      <form method="post" action="/deadlines/add" style="display: grid; gap: 8px; margin-top: 10px; max-width: 760px;">
+        <input type="hidden" name="message_id" value="{{ email.message_id }}">
+        <label>
+          タイトル
+          <input type="text" name="title" required placeholder="例: 共著者へ初稿送付" style="width: 100%; box-sizing: border-box; padding: 7px 8px;">
+        </label>
+        <label>
+          締切日時
+          <input type="text" name="due_at" placeholder="YYYY-MM-DD または ISO 8601" style="width: 100%; box-sizing: border-box; padding: 7px 8px;">
+        </label>
+        <label>
+          メモ
+          <textarea name="source_text" rows="3" placeholder="任意" style="width: 100%; box-sizing: border-box; padding: 7px 8px;"></textarea>
+        </label>
+        <div>
+          <button type="submit">候補を追加</button>
+        </div>
+      </form>
+    </details>
   </section>
   {% endfor %}
 </div>
