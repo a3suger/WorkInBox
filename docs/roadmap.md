@@ -77,22 +77,23 @@ v0.2 では TrackingBox の主要フローを一通り成立させる。
 - 利用者による再分類
 - IMAP タグへの反映
 
-### 8.5. Thunderbird Bridge【実装中・PoC確認待ち】
+### 8.5. Thunderbird Bridge【完了】
 
 WorkInBox Web UI と Thunderbird Extension の間に、Thunderbird 固有操作のための共通ブリッジを作る。
 
-最初の必須 PoC:
+実機 PoC で確認済み:
 
-- Extension からローカルの WorkInBox Web UI を Thunderbird の content tab で開く
-- WorkInBox Web UI から Message-ID を Extension へ渡す
-- Extension が Message-ID から Thunderbird 内の元メールを解決する
-- 元メールを通常の message display で開く
-- Gloda / Global Search / Conversation の状態に依存せず、元メールを開く経路を成立させる
+- Extension からローカルの WorkInBox Web UI を Thunderbird の content tab で開ける。
+- WorkInBox Web UI から Message-ID を Extension へ渡せる。
+- Extension が Message-ID から Thunderbird 内の元メールを解決できる。
+- 元メールを通常の message display で単体表示できる。
+- Gloda / Global Search / Conversation の状態に依存せず、元メールを開く経路が成立する。
+- Archive 配下の Favorite 状態を列挙し、Gloda indexing の変更予定をプレビューできる。
+- Favorite ON = indexing ON、Favorite OFF = indexing OFF のポリシーを手動同期できる。
 
-追加 PoC:
+Conversation / スレッド表示への直接遷移も試行したが、実機で安定して動作しなかったため元メール単体表示へ戻した。Conversation 表示は v0.2 の必須成功条件とせず、将来の追加機能として分離して扱う。
 
-- Conversation 表示は通常表示と分離して検証する
-- Archive 配下では Favorite フォルダだけを Gloda / Global Search の索引対象にするため、Favorite 状態と索引設定を手動同期する
+Archive Favorite の indexing 同期は、初期実装では利用者が明示的に実行する手動同期とする。Favorite 状態変更への自動追随は将来検討とする。
 
 この Bridge は締切候補、正式締切、判定保留、スケジュール調整、返信待ち / 対応待ち等から共通利用する。
 
