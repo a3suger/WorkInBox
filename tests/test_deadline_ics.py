@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -97,6 +98,30 @@ class DeadlineIcsTest(unittest.TestCase):
 
             content = DeadlineIcsService(service).render()
             self.assertIn("DUE:20260822T000000Z", content)
+
+    def test_legacy_registered_weekday_value_is_rendered(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            database.initialize()
+            self.seed_message(database, "<legacy@example>")
+            service = DeadlineService(self.make_config(path), database=database)
+
+            candidate = service.add_candidate(
+                "<legacy@example>",
+                "旧データ締切",
+                due_at="2026-09-29",
+            )
+            deadline = service.register_candidate(candidate.id)
+            with sqlite3.connect(path) as connection:
+                connection.execute(
+                    "UPDATE deadlines SET due_at = ? WHERE id = ?",
+                    ("2026-09-29 火曜日", deadline.id),
+                )
+
+            content = DeadlineIcsService(service).render()
+            self.assertIn("SUMMARY:旧データ締切", content)
+            self.assertIn("DUE;VALUE=DATE:20260929", content)
 
 
 if __name__ == "__main__":
