@@ -22,7 +22,7 @@
       flex-wrap: wrap;
     }
     header h1 { margin: 0; font-size: 1.35rem; }
-    nav { display: flex; gap: 8px; }
+    nav { display: flex; gap: 8px; flex-wrap: wrap; }
     nav a {
       color: white;
       text-decoration: none;
@@ -104,15 +104,15 @@
       font-weight: 600;
     }
     .tag-error { color: #991b1b; font-size: 0.85rem; }
-    .pending-list { display: grid; gap: 14px; }
-    .pending-card {
+    .pending-list, .deadline-list { display: grid; gap: 14px; }
+    .pending-card, .deadline-card {
       background: white;
       border: 1px solid #e5e7eb;
       border-radius: 10px;
       padding: 16px;
     }
-    .pending-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
-    .pending-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .pending-card h3, .deadline-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .pending-meta, .deadline-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
     .message-preview { margin: 10px 0 14px; }
     .message-preview summary { cursor: pointer; color: #475569; }
     .message-body {
@@ -128,15 +128,33 @@
     }
     .resolution-actions { display: flex; gap: 7px; flex-wrap: wrap; }
     .resolution-actions form { margin: 0; }
+    .candidate-list { display: grid; gap: 10px; margin-top: 14px; }
+    .candidate-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      background: #f8fafc;
+    }
+    .candidate-card h4 { margin: 0 0 6px; }
+    .review-badge {
+      display: inline-block;
+      background: #fff7ed;
+      color: #9a3412;
+      border: 1px solid #fed7aa;
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-size: 0.78rem;
+    }
   </style>
 </head>
 <body>
 <header>
   <h1>WorkInBox</h1>
   <nav>
-    <a href="/active" class="{% if active_view and not pending_view %}current{% endif %}">Active</a>
+    <a href="/active" class="{% if active_view and not pending_view and not deadlines_view %}current{% endif %}">Active</a>
     <a href="/pending" class="{% if pending_view %}current{% endif %}">判定保留</a>
-    <a href="/inactive" class="{% if not active_view and not pending_view %}current{% endif %}">Inactive</a>
+    <a href="/deadlines" class="{% if deadlines_view %}current{% endif %}">締切</a>
+    <a href="/inactive" class="{% if not active_view and not pending_view and not deadlines_view %}current{% endif %}">Inactive</a>
   </nav>
 </header>
 <main>
