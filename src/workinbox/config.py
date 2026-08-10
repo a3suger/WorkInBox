@@ -21,6 +21,7 @@ class ImapConfig:
 class IdentityConfig:
     mailbox_address: str
     self_addresses: tuple[str, ...] = ()
+    name: str | None = None
 
     @property
     def all_addresses(self) -> tuple[str, ...]:
@@ -48,6 +49,7 @@ class AiConfig:
     timeout_seconds: float = 120.0
     keep_alive: str = "30m"
     max_workers: int = 1
+    identity: IdentityConfig | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,9 +92,16 @@ def load_config(path: str | Path) -> AppConfig:
             raw_self_addresses = identity_raw.get("self_addresses", []) or []
             if not isinstance(raw_self_addresses, list):
                 raise ValueError("identity.self_addresses must be a list")
+            raw_name = identity_raw.get("name")
+            name = str(raw_name).strip() if raw_name is not None else None
             identity = IdentityConfig(
                 mailbox_address=mailbox_address,
-                self_addresses=tuple(str(value).strip() for value in raw_self_addresses if str(value).strip()),
+                self_addresses=tuple(
+                    str(value).strip()
+                    for value in raw_self_addresses
+                    if str(value).strip()
+                ),
+                name=name or None,
             )
 
         ai_raw = raw.get("ai", {}) or {}
@@ -112,6 +121,7 @@ def load_config(path: str | Path) -> AppConfig:
             timeout_seconds=timeout_seconds,
             keep_alive=str(ai_raw.get("keep_alive", "30m")),
             max_workers=max_workers,
+            identity=identity,
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"Invalid configuration: {exc}") from exc
