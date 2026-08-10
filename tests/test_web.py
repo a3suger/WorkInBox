@@ -115,7 +115,12 @@ class WebFoundationTest(unittest.TestCase):
             "schedules.html",
         )
         self.assertIn("data-wib-support-request-form", source)
-        self.assertIn("Thunderbirdで依頼メールを作成", source)
+        self.assertIn('name="method" value="reply"', source)
+        self.assertIn('name="method" value="forward"', source)
+        self.assertIn('value="schedule_adjustment"', source)
+        self.assertIn('value="schedule_entry"', source)
+        self.assertIn('name="cc" value="{{ self_cc }}"', source)
+        self.assertIn("元メールの件名をそのまま使う", source)
         self.assertIn("対応待ち", source)
         self.assertIn("依頼済み", source)
 
