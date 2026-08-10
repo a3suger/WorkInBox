@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from email.utils import parseaddr
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,18 @@ class IdentityConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ScheduleSupporter:
+    label: str
+    name: str | None
+    address: str
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduleSupportConfig:
+    supporters: tuple[ScheduleSupporter, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class DatabaseConfig:
     path: Path
 
@@ -58,6 +71,24 @@ class AppConfig:
     database: DatabaseConfig
     ai: AiConfig = field(default_factory=AiConfig)
     identity: IdentityConfig | None = None
+    schedule_support: ScheduleSupportConfig = field(default_factory=ScheduleSupportConfig)
+
+
+def _parse_schedule_supporter(value: object) -> ScheduleSupporter:
+    label = str(value).strip()
+    if not label:
+        raise ValueError("schedule_support.supporters entries must not be empty")
+    name, address = parseaddr(label)
+    address = address.strip()
+    if not address or "@" not in address:
+        raise ValueError(
+            "schedule_support.supporters entries must use 'Name <address@example.com>' or 'address@example.com' format"
+        )
+    return ScheduleSupporter(
+        label=label,
+        name=name.strip() or None,
+        address=address,
+    )
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -104,6 +135,16 @@ def load_config(path: str | Path) -> AppConfig:
                 name=name or None,
             )
 
+        schedule_support_raw = raw.get("schedule_support", {}) or {}
+        if not isinstance(schedule_support_raw, dict):
+            raise ValueError("schedule_support must be a mapping")
+        raw_supporters = schedule_support_raw.get("supporters", []) or []
+        if not isinstance(raw_supporters, list):
+            raise ValueError("schedule_support.supporters must be a list")
+        schedule_support = ScheduleSupportConfig(
+            supporters=tuple(_parse_schedule_supporter(value) for value in raw_supporters)
+        )
+
         ai_raw = raw.get("ai", {}) or {}
         body_max_chars = int(ai_raw.get("body_max_chars", 4000))
         timeout_seconds = float(ai_raw.get("timeout_seconds", 120.0))
@@ -133,4 +174,5 @@ def load_config(path: str | Path) -> AppConfig:
         database=DatabaseConfig(database_path),
         ai=ai,
         identity=identity,
+        schedule_support=schedule_support,
     )
