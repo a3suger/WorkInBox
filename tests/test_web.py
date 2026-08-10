@@ -119,8 +119,11 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn('name="method" value="forward"', source)
         self.assertIn('value="schedule_adjustment"', source)
         self.assertIn('value="schedule_entry"', source)
+        self.assertIn('<select name="to" required', source)
+        self.assertIn("{{ supporter.label }}", source)
         self.assertIn('name="cc" value="{{ self_cc }}"', source)
         self.assertIn("元メールの件名をそのまま使う", source)
+        self.assertIn("schedule_support.supporters", source)
         self.assertIn("対応待ち", source)
         self.assertIn("依頼済み", source)
 
