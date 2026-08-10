@@ -14,6 +14,11 @@ identity:
     - external@example.net
   name: Example User
 
+schedule_support:
+  supporters:
+    - "Supporter One <supporter1@example.jp>"
+    - "Supporter Two <supporter2@example.jp>"
+
 database:
   path: data/workinbox.db
 
