@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}締切 - WorkInBox{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2>締切登録支援</h2>
+    <div class="muted">{{ items | length }} 通のメール</div>
+  </div>
+</div>
+
+{% if extraction_result %}
+<div class="notice">
+  AI締切抽出: 対象 {{ extraction_result.eligible }} 通 / 抽出済み {{ extraction_result.extracted_messages }} 通 / 候補追加 {{ extraction_result.candidates_added }} 件
+</div>
+{% endif %}
+
+{% if extraction_failure %}
+<div class="notice error">
+  <strong>締切候補の抽出に失敗しました。</strong><br>
+  {{ extraction_failure }}
+</div>
+{% endif %}
+
+{% if extraction_result and extraction_result.errors %}
+<div class="notice error">
+  <strong>一部のメールで締切候補の抽出に失敗しました。</strong>
+  <ul>
+    {% for error in extraction_result.errors %}
+    <li>{{ error.message_id }}: {{ error.message }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if items %}
+<div class="deadline-list">
+  {% for item in items %}
+  {% set email = item.email %}
+  <section class="deadline-card">
+    <h3>{{ email.subject or "(件名なし)" }}</h3>
+    <div class="deadline-meta muted">
+      <span>差出人: {{ email.sender }}</span>
+      <span>受信日時: {{ email.received_at or "-" }}</span>
+    </div>
+
+    <div class="tag-list">
+      {% for tag in item.tags %}
+      <span class="tag-badge" style="--tag-color: {{ tag.color }}">{{ tag.label }}</span>
+      {% endfor %}
+    </div>
+
+    <div style="margin: 10px 0;">
+      <button
+        type="button"
+        data-wib-open-message-id="{{ email.message_id }}"
+        title="Thunderbird で元メールを開く"
+      >Thunderbirdで元メールを開く</button>
+    </div>
+
+    <details class="message-preview">
+      <summary>本文を確認</summary>
+      <div class="message-body">{{ item.body or "(本文なし)" }}</div>
+    </details>
+
+    {% if item.candidates %}
+    <div class="candidate-list">
+      {% for candidate in item.candidates %}
+      <div class="candidate-card">
+        <h4>{{ candidate.title }}</h4>
+        <div><strong>締切:</strong> {{ candidate.due_at or "日付未取得" }}</div>
+        <div><strong>状態:</strong> {{ candidate.status.value }}</div>
+        {% if candidate.needs_review %}
+        <div style="margin-top: 6px;"><span class="review-badge">要確認</span></div>
+        {% endif %}
+        {% if candidate.source_text %}
+        <div class="muted" style="margin-top: 8px;">根拠: {{ candidate.source_text }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="notice" style="margin-top: 14px; margin-bottom: 0;">
+      AI抽出は完了していますが、締切候補は見つかりませんでした。
+    </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">現在、締切登録支援の対象メールはありません。</div>
+{% endif %}
+{% endblock %}
