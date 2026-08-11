@@ -9,6 +9,7 @@ from typing import Protocol
 
 from .config import AppConfig
 from .models import EmailMessage, ImapFlagsSnapshot
+from .triage_store import TriageRelationStore
 
 
 _MESSAGE_ID_RE = re.compile(r"<[^<>\s]+>")
@@ -151,15 +152,23 @@ class TriageService:
     ordinary self-sent reply-waiting decisions remain outside this service.
     """
 
-    def __init__(self, config: AppConfig, imap_client: TriageImapClient) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        imap_client: TriageImapClient,
+        *,
+        relation_store: TriageRelationStore | None = None,
+    ) -> None:
         self.config = config
         self.imap_client = imap_client
+        self.relations = relation_store or TriageRelationStore(config.database.path)
 
     def run(self) -> TriageResult:
         identity = self.config.identity
         if identity is None:
             return TriageResult()
 
+        self.relations.initialize()
         try:
             unread = self.imap_client.fetch_unread()
         except (OSError, RuntimeError, ValueError) as exc:
@@ -187,6 +196,11 @@ class TriageService:
                     continue
                 self._set_keyword(item, _WAITING_ACTION, enabled=True)
                 self._set_flagged(item, enabled=True)
+                self.relations.record(
+                    item.email.message_id,
+                    origin_message_id,
+                    "schedule_support_request",
+                )
                 support_requests += 1
             except (OSError, RuntimeError, ValueError) as exc:
                 errors.append(self._error(item, exc))
@@ -201,10 +215,21 @@ class TriageService:
                 waiting_message = self._resolve_waiting_action(item)
                 if waiting_message is None:
                     continue
+                origin_message_id = (
+                    self.relations.origin_for(waiting_message.email.message_id)
+                    or waiting_message.headers.origin_message_id
+                )
                 self._set_keyword(waiting_message, _WAITING_ACTION, enabled=False)
                 self._set_flagged(waiting_message, enabled=False)
                 self._set_keyword(item, _SCHEDULE, enabled=True)
                 self._set_flagged(item, enabled=True)
+                if origin_message_id is not None:
+                    self.relations.record(
+                        item.email.message_id,
+                        origin_message_id,
+                        "schedule_support_reply",
+                        related_message_id=waiting_message.email.message_id,
+                    )
                 waiting_action_replies += 1
             except (OSError, RuntimeError, ValueError) as exc:
                 errors.append(self._error(item, exc))
