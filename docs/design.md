@@ -80,6 +80,8 @@ AI は分類や抽出を支援する。
 
 TriageBox はメールを既読にしない。
 
+TriageBox の具体的な判定順序、Message-ID 系ヘッダによる関係判定、AI 広告判定の実行条件は `docs/triagebox_decision_flow.md` を参照する。
+
 ---
 
 ## 主なタグ
@@ -174,6 +176,7 @@ WorkInBox は、メールから仕事を発見し、締切等の構造化情報�
 ## 関連文書
 
 - `docs/design_workflow.md`
+- `docs/triagebox_decision_flow.md`
 - `docs/deadline_support_discussion_2026-08-10.md`
 - `docs/design_notes_tags_and_external_intake.md`
 - `docs/roadmap.md`
