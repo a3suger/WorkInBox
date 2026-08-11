@@ -19,7 +19,7 @@ WorkInBox はメールや締切の整理を行うが、メール本文そのも�
 - 判定保留メールから元メールを開く
 - スケジュール調整対象メールを開く
 - 返信待ち / 対応待ちの会話を確認する
-- `回答必要` 等の WIB 一覧から、設定済み IMAP アカウントの INBOX に Quick Filter を適用した専用作業ビューへ移動する
+- `回答必要` 等の WIB 一覧から、WIB config が対象とする IMAP mailbox に Quick Filter を適用した専用作業ビューへ移動する
 
 この機構を機能ごとに個別実装せず、共通の Thunderbird Bridge として提供する。
 
@@ -33,7 +33,8 @@ WorkInBox はメールや締切の整理を行うが、メール本文そのも�
 - Application Service を呼ぶ。
 - SQLite / IMAP / AI 等の業務ロジックへアクセスする。
 - 元メールを開く際は Message-ID を Thunderbird 側へ渡す。
-- 作業ビューを開く際は適用したい WIB ビュー種別を Thunderbird 側へ渡す。
+- 作業ビューを開くための IMAP 対象情報を `config.yaml` から提供する。
+- `/api/thunderbird/imap-target` では `host` / `port` / `username` / `mailbox` のみを返し、IMAP password は返さない。
 
 FastAPI 自体は Thunderbird API を直接使用しない。
 
@@ -43,8 +44,8 @@ FastAPI 自体は Thunderbird API を直接使用しない。
 - WorkInBox タグ定義を Thunderbird に登録する。
 - Message-ID を受け取り Thunderbird 内で該当メールを検索する。
 - 該当メールを通常の message display で開く。
-- WIB 作業ビュー用の対象 IMAP アカウントをローカル設定として保持する。
-- WIB 専用メールタブを 1 枚だけ作成・再利用し、設定済みアカウントの INBOX に指定された Quick Filter を適用する。
+- WIB Web から対象 IMAP 情報を取得し、Thunderbird 内の対応アカウントを自動解決する。
+- WIB 専用メールタブを 1 枚だけ作成・再利用し、解決した mailbox に指定された Quick Filter を適用する。
 - 専用タブの表示名を現在の作業ビューに合わせて `WIB:回答必要` 等へ更新する。
 - Archive フォルダの Favorite 状態を Global Search / Gloda の索引ポリシーへ反映する。
 
@@ -76,7 +77,7 @@ Thunderbird
       ├─ IMAP
       └─ AI
 
-WorkInBox Web UI
+WorkInBox Web UI / API
      │
      ├─ Message-ID
      │      ▼
@@ -84,11 +85,13 @@ WorkInBox Web UI
      │      ▼
      │  Message display
      │
-     └─ Work view request
+     └─ IMAP target + work view request
             ▼
         Thunderbird Extension Bridge
             ▼
-        configured INBOX
+        Thunderbird IMAP account resolution
+            ▼
+        configured mailbox
             +
         dedicated WIB mail tab
             +
@@ -168,11 +171,11 @@ FastAPI から配信された通常の Web ページは Thunderbird Extension AP
 実装構成:
 
 ```text
-FastAPI page
+FastAPI page / API
     │
-    │ open-message / open-work-view request
+    │ open-message / IMAP target
     ▼
-Extension content/bridge script
+Extension content/bridge script or popup
     │ runtime messaging
     ▼
 Extension background
@@ -181,7 +184,7 @@ Extension background
 Message display / dedicated WIB mail tab + Quick Filter
 ```
 
-WorkInBox ページから Message-ID または作業ビュー種別を渡し、content script が Extension runtime messaging で background へ転送し、background が Thunderbird API を使って表示を切り替える。
+作業ビューを開く際は Extension が `/api/thunderbird/imap-target` から WIB config の IMAP 対象情報を取得し、background へビュー種別とともに渡す。
 
 責務境界を維持し、FastAPI 側へ Thunderbird 固有ロジックを持ち込まない。
 
@@ -252,9 +255,13 @@ FastAPI は UI サーバであると同時に、必要に応じて WorkInBox の
 /
 /pending
 /deadlines
-/calendar/deadlines.ics
-/api/...
+/deadlines.ics
+/api/thunderbird/imap-target
 ```
+
+`/api/thunderbird/imap-target` は Thunderbird Extension が WIB の対象 IMAP アカウントを自動解決するための機械向け API である。
+
+返却するのは `host` / `port` / `username` / `mailbox` のみとし、password は公開しない。
 
 ただし UI route、JSON API、ICS endpoint のいずれからも、業務ロジックは Application Service を利用する。
 
@@ -331,24 +338,43 @@ WIB の `回答必要`、`締切あり` 等の現在作業を確認するとき�
 
 ### 対象 IMAP アカウント
 
-利用者は Thunderbird Extension の popup で WIB 作業ビューの対象 IMAP アカウントを事前に選択する。
+WIB 作業ビューの対象 IMAP 情報は `config.yaml` の `imap` 設定を正本とする。
 
-選択した Thunderbird account id は Extension の `storage.local` に保存する。
+Extension の popup で対象アカウントを手動選択・保存しない。
 
-作業ビューは常に設定済みアカウントの INBOX を対象とする。直前に閲覧していたアカウントや Unified Inbox から暗黙に対象を決めない。
+作業ビューを開くたびに Extension は FastAPI の `/api/thunderbird/imap-target` から以下を取得する。
 
-設定が存在しない、設定済みアカウントが削除された、またはそのアカウントの INBOX を解決できない場合は、別アカウントへ自動フォールバックせず利用者へ再設定を求める。
+- `host`
+- `port`
+- `username`
+- `mailbox`
+
+password は取得しない。
+
+Extension は Thunderbird の IMAP アカウントを列挙し、各アカウントの incoming server 情報を `imapAccounts` Experiment で読み取って照合する。
+
+基本照合は `host + port + username` とする。username は Thunderbird と WIB config の表現差を吸収するため、完全一致に加えて、一方が `user@example.jp`、もう一方が `user` の場合はローカル部一致を候補として認める。
+
+一致候補が 0 件または複数件の場合は、別アカウントへ自動フォールバックせずエラーにする。
+
+アカウント解決後は WIB config の `mailbox` を対象フォルダとして使用する。通常は `INBOX` を想定する。
+
+これにより WIB config が対象メール環境の正本となり、Extension 側に同じ対象アカウント設定を二重保持しない。
 
 ### 基本フロー
 
 ```text
-WorkInBox / Extension UI
+Extension popup
     ↓
 作業ビューを選択
     ↓
-Extension Bridge へ work-view request
+GET /api/thunderbird/imap-target
     ↓
-設定済み IMAP アカウントの INBOX を解決
+WIB config の host / port / username / mailbox を取得
+    ↓
+Thunderbird IMAP account を自動照合
+    ↓
+config で指定された mailbox を解決
     ↓
 WIB 専用メールタブを取得
     ├─ 既存なら再利用
@@ -387,17 +413,21 @@ Quick Filter の具体的な Thunderbird API 引数は Extension 側のプリセ
 作業ビューの主要処理は標準 MailExtension API で実装する。
 
 - 対象アカウントの列挙・取得: `accounts`
-- 設定保存: `storage.local`
 - WIB 専用メールタブの作成・再利用: `mailTabs`
-- INBOX 表示: `mailTabs.update()`
+- mailbox 表示: `mailTabs.update()`
 - Quick Filter 適用: `mailTabs.setQuickFilter()`
 - タブの active 化: `tabs.update()`
 
-メールタブの任意タイトルを設定する公開 API は利用しないため、タイトル変更だけを最小の Experiment API `tabTitle` に閉じ込める。
+標準 API だけでは必要情報を扱えない箇所を小さな Experiment API に限定する。
+
+- `imapAccounts`: 指定した Thunderbird account id の incoming server から `type` / `hostname` / `username` / `port` を読み取る。
+- `tabTitle`: WIB 専用メールタブの表示タイトルを変更する。
+
+`imapAccounts` はアカウント選択ロジックを持たず、server情報を読むだけのアダプタとする。実際の照合判断は Extension background 側で行う。
 
 `tabTitle` は指定された Thunderbird タブの表示タイトルを更新するだけのアダプタとし、WIB のビュー判定や業務状態を持たない。
 
-Thunderbird 内部 API / UI 構造に依存するため、Thunderbird 更新時は `tabTitle` Experiment の互換性を個別に確認する。
+どちらも Thunderbird 内部 API / UI 構造に依存するため、Thunderbird 更新時は互換性を個別に確認する。
 
 ### スターとの役割分担
 
@@ -430,15 +460,16 @@ WIB の標準作業ビューについては、検索フォルダーを自動生�
 5. 該当メールを通常の message display で単体表示する。
 6. Archive 配下の Favorite 状態を列挙し、索引ポリシー候補をプレビューする。
 7. Favorite 状態と Gloda indexing を手動同期する。
-8. WIB 作業ビュー用の対象 IMAP アカウントを事前設定する。
-9. 通常のメールタブを変更せず、WIB 専用メールタブを作成して再利用する。
-10. 同じ専用タブ上で 6 種類の `WIB タグ AND スター付き` Quick Filter を切り替える。
-11. 作業ビュー切替に合わせてタブ名を `WIB:回答必要` 等へ更新する。
-12. WIB 専用タブを閉じた場合、次回利用時に専用タブを再作成する。
+8. FastAPI の `/api/thunderbird/imap-target` から WIB config の IMAP 対象情報を取得する。
+9. Thunderbird 内の対応 IMAP アカウントを利用者選択なしで自動解決する。
+10. 通常のメールタブを変更せず、WIB 専用メールタブを作成して再利用する。
+11. 同じ専用タブ上で 6 種類の `WIB タグ AND スター付き` Quick Filter を切り替える。
+12. 作業ビュー切替に合わせてタブ名を `WIB:回答必要` 等へ更新する。
+13. WIB 専用タブを閉じた場合、次回利用時に専用タブを再作成する。
 
 Conversation / スレッド表示への直接遷移は試行したが安定しなかったため、v0.2 では採用しない。
 
-Quick Filter 作業ビューは実装済みであり、上記の専用タブ方式・対象アカウント固定・6 ビュー切替・タブ名追随まで実機で確認済みである。
+Quick Filter 作業ビューは実装済みであり、WIB config からの対象アカウント自動解決・専用タブ方式・6 ビュー切替・タブ名追随まで実機で確認済みである。
 
 このブリッジは締切以外の画面でも共通利用する。
 
