@@ -2,7 +2,7 @@
 
 WorkInBox の Thunderbird 側 UI を担当する MailExtension の初期実装です。
 
-現段階では、タグ導入前バックアップ・12タグ登録・タグ定義の復元に加えて、WorkInBox Web UI との Message-ID Bridge と Archive indexing policy の PoC を扱います。
+現段階では、タグ導入前バックアップ・12タグ登録・タグ定義の復元に加えて、WorkInBox Web UI との Message-ID Bridge、Archive indexing policy、WIB Quick Filter 作業ビューの PoC を扱います。
 
 業務ロジックは持ちません。IMAP メール本文や WorkInBox の SQLite を正本として管理する機能もありません。
 
@@ -18,11 +18,20 @@ WorkInBox の Thunderbird 側 UI を担当する MailExtension の初期実装�
 - `messages.tags.delete()`
 - `messages.query({ headerMessageId })`
 - `messageDisplay.open()`
+- `accounts.list()` / `accounts.get()`
 - `folders.query()` / `folders.get()`
+- `mailTabs.create()` / `mailTabs.get()` / `mailTabs.update()`
+- `mailTabs.setQuickFilter()`
+- `tabs.update()`
 - `storage.local`
 - `downloads.download()`
 
-Archive の Gloda indexing ON / OFF だけは標準 MailExtension API にないため、最小の Experiment API `glodaIndexing` に閉じ込めています。
+標準 MailExtension API で直接扱えない処理だけを小さな Experiment API に閉じ込めています。
+
+- `glodaIndexing`: Archive の Gloda indexing ON / OFF
+- `tabTitle`: WIB 専用メールタブの表示タイトル変更
+
+Experiment 層に WorkInBox の業務ロジックを持たせません。
 
 ## 開発中の読み込み方法
 
@@ -39,6 +48,71 @@ manifest / Experiment API を変更した場合は、単なる popup の再表�
 Extension の `WorkInBox を開く` から `http://127.0.0.1:8000/` を Thunderbird タブで開きます。
 
 WorkInBox Web UI の `Thunderbirdで開く` は Message-ID を content script から background へ渡し、Thunderbird の `messages.query({ headerMessageId })` で該当メッセージを解決して通常の message display で開きます。
+
+## WIB Quick Filter 作業ビュー PoC
+
+WIB の現在作業を Thunderbird のメール一覧で処理するため、専用のメールタブを 1 枚だけ作成して再利用します。
+
+通常利用中の INBOX タブへ `mailTabs.setQuickFilter()` を適用すると、利用者が手動で設定していた Quick Filter 条件を上書きするため、WIB は通常タブを変更しません。
+
+### 対象アカウントの設定
+
+Thunderbird ツールバーの WorkInBox popup で、WIB 作業ビューに使う IMAP アカウントを選択し、`対象アカウントを保存` を押します。
+
+選択した account id は `storage.local` の `workinboxWorkViewAccountId` に保存します。
+
+作業ビューは常にこの設定済みアカウントの INBOX を使用します。
+
+- 直前に見ていたアカウントには追随しません。
+- Unified Inbox は使用しません。
+- 未設定時に別アカウントへ自動フォールバックしません。
+- 保存済みアカウントが見つからない場合は再設定を求めます。
+
+### 作業ビューの切り替え
+
+popup の `作業ビュー` から次の 6 種類を選択できます。
+
+| 表示名 | Quick Filter 条件 | タブ名 |
+| --- | --- | --- |
+| 回答必要 | `wib-answer` AND スター付き | `WIB:回答必要` |
+| 締切あり | `wib-deadline` AND スター付き | `WIB:締切あり` |
+| スケジュール調整 | `wib-schedule` AND スター付き | `WIB:スケジュール調整` |
+| 読む・検討 | `wib-review` AND スター付き | `WIB:読む・検討` |
+| 返信待ち | `wib-waiting-reply` AND スター付き | `WIB:返信待ち` |
+| 対応待ち | `wib-waiting-action` AND スター付き | `WIB:対応待ち` |
+
+`作業ビューを開く` を押すと、次の処理を行います。
+
+1. 保存済み IMAP アカウントの INBOX を解決する。
+2. WIB 専用メールタブが存在すれば再利用する。
+3. 専用タブが閉じられていれば新規作成する。
+4. `mailTabs.setQuickFilter()` で選択した WIB タグ AND スター付き条件を適用する。
+5. 専用タブを active にする。
+6. `tabTitle.setTitle()` で `WIB:<ビュー名>` に表示タイトルを変更する。
+
+ビューを切り替えても新しいタブは増えず、同じ WIB 専用タブの Quick Filter とタイトルだけが切り替わります。
+
+この方式は実機で、対象 IMAP アカウント固定、専用タブ再利用、6 ビュー切替、`WIB:○○` タブ名追随まで確認済みです。
+
+### Quick Filter とスター
+
+標準 Quick Filter API では WIB が必要とする Thunderbird の「返信済み」状態を直接条件に含めないため、WIB タグに加えてスターを現在注目対象の条件として使います。
+
+たとえば `wib-answer` が履歴として残っていても、同期側でスターが外れれば `回答必要` 作業ビューには表示されません。
+
+Quick Filter の条件定義は `background.js` の WIB プリセットに閉じ込め、FastAPI 側から Thunderbird API の具体的な引数を渡しません。
+
+### `tabTitle` Experiment
+
+メールタブの任意タイトル変更は標準 API だけでは行わず、`experiments/tab_title/` の最小 Experiment API を使用します。
+
+`tabTitle` の責務は、指定された Thunderbird タブのタイトルを変更することだけです。
+
+- 作業ビューの種類を判断しません。
+- IMAP タグを変更しません。
+- SQLite や FastAPI にアクセスしません。
+
+Thunderbird 内部のタブ UI 構造に依存するため、Thunderbird 更新時にはこの Experiment の互換性を確認してください。
 
 ## Archive indexing policy PoC
 
@@ -178,3 +252,4 @@ Thunderbird のタグ定義と、メールに保存された IMAP keyword は別
 - SQLite を直接操作しない。
 - Thunderbird からメールを自動送信しない。
 - Favorite 変更を常時監視して Gloda 設定へ自動追随しない。
+- 通常の INBOX タブの Quick Filter を WIB 作業ビュー用に上書きしない。
