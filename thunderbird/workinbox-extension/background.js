@@ -1,6 +1,7 @@
 const WORKINBOX_ORIGIN_HEADER = "X-WorkInBox-Origin-Message-ID";
 const REQUESTED_TAG = "wib-requested";
 const WAITING_ACTION_TAG = "wib-waiting-action";
+const WORK_VIEW_ACCOUNT_STORAGE_KEY = "workinboxWorkViewAccountId";
 
 const WORK_VIEW_TAGS = {
   answer: "wib-answer",
@@ -71,39 +72,29 @@ function findSpecialFolder(folder, specialUse) {
   return null;
 }
 
-async function resolveReferenceMailTab() {
-  let mailTabs = await messenger.mailTabs.query({ lastFocusedWindow: true });
-  if (mailTabs.length === 0) {
-    mailTabs = await messenger.mailTabs.query({});
+async function resolveConfiguredWorkViewInbox() {
+  const stored = await messenger.storage.local.get(WORK_VIEW_ACCOUNT_STORAGE_KEY);
+  const accountId = String(stored?.[WORK_VIEW_ACCOUNT_STORAGE_KEY] || "").trim();
+  if (!accountId) {
+    throw new Error("Quick Filter PoC の対象アカウントが未設定です。WorkInBox ポップアップで対象アカウントを設定してください。");
   }
-  return mailTabs.find((tab) => tab.active) || mailTabs[0] || null;
-}
 
-async function resolveInboxForWorkView(referenceTab) {
+  let account;
   try {
-    return await messenger.folders.getUnifiedFolder("inbox");
-  } catch (error) {
-    console.warn("[WorkInBox bridge] Unified Inbox is unavailable; falling back to an account INBOX", error);
+    account = await messenger.accounts.get(accountId, true);
+  } catch (_error) {
+    throw new Error("設定済みのThunderbirdアカウントが見つかりません。WorkInBox ポップアップで対象アカウントを設定し直してください。");
   }
 
-  const accountId = referenceTab?.displayedFolder?.accountId;
-  if (accountId) {
-    const account = await messenger.accounts.get(accountId, true);
-    const accountInbox = findSpecialFolder(account?.rootFolder, "inbox");
-    if (accountInbox) {
-      return accountInbox;
-    }
+  const inbox = findSpecialFolder(account?.rootFolder, "inbox");
+  if (!inbox) {
+    throw new Error(`設定済みアカウント「${account?.name || accountId}」の INBOX を見つけられませんでした。`);
   }
 
-  const accounts = await messenger.accounts.list(true);
-  for (const account of accounts) {
-    const accountInbox = findSpecialFolder(account?.rootFolder, "inbox");
-    if (accountInbox) {
-      return accountInbox;
-    }
-  }
-
-  throw new Error("Thunderbird の INBOX を見つけられませんでした。");
+  return {
+    account,
+    inbox,
+  };
 }
 
 async function getExistingWorkViewTab() {
@@ -141,8 +132,7 @@ async function openWorkView(viewName) {
     throw new Error(`Unknown WorkInBox work view: ${viewName}`);
   }
 
-  const referenceTab = await resolveReferenceMailTab();
-  const inbox = await resolveInboxForWorkView(referenceTab);
+  const { account, inbox } = await resolveConfiguredWorkViewInbox();
   const mailTab = await resolveDedicatedWorkViewTab(inbox);
 
   await messenger.mailTabs.setQuickFilter(mailTab.id, {
@@ -162,6 +152,7 @@ async function openWorkView(viewName) {
     ok: true,
     view: viewName,
     tagKey,
+    accountName: account.name || account.id,
     folderName: inbox.name || "INBOX",
     tabId: mailTab.id,
     dedicatedTab: true,
