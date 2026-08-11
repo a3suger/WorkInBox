@@ -30,6 +30,7 @@ WorkInBox の Thunderbird 側 UI を担当する MailExtension の初期実装�
 
 - `glodaIndexing`: Archive の Gloda indexing ON / OFF
 - `tabTitle`: WIB 専用メールタブの表示タイトル変更
+- `imapAccounts`: 指定した Thunderbird account id の incoming server 情報読み取り
 
 Experiment 層に WorkInBox の業務ロジックを持たせません。
 
@@ -55,18 +56,36 @@ WIB の現在作業を Thunderbird のメール一覧で処理するため、専
 
 通常利用中の INBOX タブへ `mailTabs.setQuickFilter()` を適用すると、利用者が手動で設定していた Quick Filter 条件を上書きするため、WIB は通常タブを変更しません。
 
-### 対象アカウントの設定
+### 対象アカウントの自動解決
 
-Thunderbird ツールバーの WorkInBox popup で、WIB 作業ビューに使う IMAP アカウントを選択し、`対象アカウントを保存` を押します。
+WIB 作業ビューの対象 IMAP account / mailbox は、WorkInBox 側の `config.yaml` の `imap` 設定を正本とします。
 
-選択した account id は `storage.local` の `workinboxWorkViewAccountId` に保存します。
+利用者が Thunderbird popup で対象アカウントを選択・保存する必要はありません。
 
-作業ビューは常にこの設定済みアカウントの INBOX を使用します。
+作業ビューを開くたびに Extension は WorkInBox Web の
 
-- 直前に見ていたアカウントには追随しません。
-- Unified Inbox は使用しません。
-- 未設定時に別アカウントへ自動フォールバックしません。
-- 保存済みアカウントが見つからない場合は再設定を求めます。
+```text
+/api/thunderbird/imap-target
+```
+
+から次の情報を取得します。
+
+- `host`
+- `port`
+- `username`
+- `mailbox`
+
+IMAP password はこの API から返しません。
+
+Extension は Thunderbird の IMAP アカウントを列挙し、`imapAccounts` Experiment で各 account の incoming server 情報を読み取って照合します。
+
+基本照合は `host + port + username` です。username は Thunderbird と WIB config の表現差を吸収するため、完全一致に加えて、一方が `user@example.jp`、もう一方が `user` の場合はローカル部一致を候補として認めます。
+
+一致候補が 0 件または複数件の場合は別アカウントへ自動フォールバックせずエラーにします。
+
+アカウント解決後は `config.yaml` の `imap.mailbox` を対象フォルダとして使用します。通常は `INBOX` を想定しています。
+
+これにより WIB config と Thunderbird Extension で対象アカウント設定を二重管理しません。
 
 ### 作業ビューの切り替え
 
@@ -83,16 +102,18 @@ popup の `作業ビュー` から次の 6 種類を選択できます。
 
 `作業ビューを開く` を押すと、次の処理を行います。
 
-1. 保存済み IMAP アカウントの INBOX を解決する。
-2. WIB 専用メールタブが存在すれば再利用する。
-3. 専用タブが閉じられていれば新規作成する。
-4. `mailTabs.setQuickFilter()` で選択した WIB タグ AND スター付き条件を適用する。
-5. 専用タブを active にする。
-6. `tabTitle.setTitle()` で `WIB:<ビュー名>` に表示タイトルを変更する。
+1. `/api/thunderbird/imap-target` から WIB config の IMAP 対象情報を取得する。
+2. Thunderbird 内の対応 IMAP アカウントを自動解決する。
+3. `config.yaml` で指定された mailbox を解決する。
+4. WIB 専用メールタブが存在すれば再利用する。
+5. 専用タブが閉じられていれば新規作成する。
+6. `mailTabs.setQuickFilter()` で選択した WIB タグ AND スター付き条件を適用する。
+7. 専用タブを active にする。
+8. `tabTitle.setTitle()` で `WIB:<ビュー名>` に表示タイトルを変更する。
 
 ビューを切り替えても新しいタブは増えず、同じ WIB 専用タブの Quick Filter とタイトルだけが切り替わります。
 
-この方式は実機で、対象 IMAP アカウント固定、専用タブ再利用、6 ビュー切替、`WIB:○○` タブ名追随まで確認済みです。
+この方式は実機で、WIB config からの対象アカウント自動解決、専用タブ再利用、6 ビュー切替、`WIB:○○` タブ名追随まで確認済みです。
 
 ### Quick Filter とスター
 
@@ -101,6 +122,19 @@ popup の `作業ビュー` から次の 6 種類を選択できます。
 たとえば `wib-answer` が履歴として残っていても、同期側でスターが外れれば `回答必要` 作業ビューには表示されません。
 
 Quick Filter の条件定義は `background.js` の WIB プリセットに閉じ込め、FastAPI 側から Thunderbird API の具体的な引数を渡しません。
+
+### `imapAccounts` Experiment
+
+Thunderbird の公開 `accounts` API だけでは、WIB config と照合するために必要な incoming server の `hostname` / `username` / `port` を直接利用しないため、`experiments/imap_accounts/` の最小 Experiment API を使用します。
+
+`imapAccounts` の責務は指定された Thunderbird account id の incoming server 情報を返すことだけです。
+
+- アカウントを自動選択しません。
+- Quick Filter を変更しません。
+- IMAP password を読みません。
+- SQLite や FastAPI にアクセスしません。
+
+照合判断は `background.js` 側で行います。
 
 ### `tabTitle` Experiment
 
@@ -112,7 +146,7 @@ Quick Filter の条件定義は `background.js` の WIB プリセットに閉じ
 - IMAP タグを変更しません。
 - SQLite や FastAPI にアクセスしません。
 
-Thunderbird 内部のタブ UI 構造に依存するため、Thunderbird 更新時にはこの Experiment の互換性を確認してください。
+`imapAccounts` と `tabTitle` は Thunderbird 内部 API / UI 構造に依存するため、Thunderbird 更新時には互換性を確認してください。
 
 ## Archive indexing policy PoC
 
@@ -253,3 +287,4 @@ Thunderbird のタグ定義と、メールに保存された IMAP keyword は別
 - Thunderbird からメールを自動送信しない。
 - Favorite 変更を常時監視して Gloda 設定へ自動追随しない。
 - 通常の INBOX タブの Quick Filter を WIB 作業ビュー用に上書きしない。
+- WIB 作業ビュー用の対象 IMAP アカウントを Extension 側で二重管理しない。
