@@ -1,0 +1,258 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from workinbox.ai_classifier import AiClassification
+from workinbox.application import SynchronizationService
+from workinbox.config import AppConfig, DatabaseConfig, IdentityConfig, ImapConfig
+from workinbox.database import EmailDatabase
+from workinbox.models import EmailMessage, ImapFlagsSnapshot
+from workinbox.triagebox import TriageHeaders, TriageMessage, TriageService
+
+
+class FakeClassifier:
+    def __init__(self) -> None:
+        self.messages: list[EmailMessage] = []
+
+    def classify(self, message: EmailMessage) -> AiClassification:
+        self.messages.append(message)
+        return AiClassification(False, False, False, True, False, "review")
+
+
+class FakeTriageImapClient:
+    def __init__(self, messages: list[TriageMessage]) -> None:
+        self.messages = {item.email.message_id: item for item in messages}
+        self.unread_ids = [item.email.message_id for item in messages]
+        self.keyword_updates: list[tuple[int, str, bool]] = []
+        self.flagged_updates: list[tuple[int, bool]] = []
+        self.received_references = []
+
+    def fetch_unread(self) -> list[TriageMessage]:
+        return [self.messages[message_id] for message_id in self.unread_ids]
+
+    def find_message_by_message_id(self, message_id: str) -> TriageMessage | None:
+        return self.messages.get(message_id)
+
+    def set_keyword(
+        self,
+        uid: int,
+        keyword: str,
+        *,
+        enabled: bool,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
+        item = self._by_uid(uid)
+        flags = list(item.flags)
+        if enabled and keyword not in flags:
+            flags.append(keyword)
+        if not enabled:
+            flags = [value for value in flags if value != keyword]
+        self.messages[item.email.message_id] = TriageMessage(
+            item.email, item.headers, tuple(flags)
+        )
+        self.keyword_updates.append((uid, keyword, enabled))
+        return ImapFlagsSnapshot("INBOX", expected_uidvalidity or 10, uid, tuple(flags))
+
+    def set_flagged(
+        self,
+        uid: int,
+        *,
+        enabled: bool,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
+        item = self._by_uid(uid)
+        flags = [value for value in item.flags if value != "\\Flagged"]
+        if enabled:
+            flags.append("\\Flagged")
+        self.messages[item.email.message_id] = TriageMessage(
+            item.email, item.headers, tuple(flags)
+        )
+        self.flagged_updates.append((uid, enabled))
+        return ImapFlagsSnapshot("INBOX", expected_uidvalidity or 10, uid, tuple(flags))
+
+    def synchronize(self, existing):
+        self.received_references = list(existing)
+        flagged = [
+            item.email
+            for item in self.messages.values()
+            if "\\Flagged" in item.flags
+        ]
+        return [], flagged
+
+    def inspect_flags(
+        self,
+        uid: int,
+        *,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
+        item = self._by_uid(uid)
+        return ImapFlagsSnapshot("INBOX", expected_uidvalidity or 10, uid, item.flags)
+
+    def set_keywords(
+        self,
+        uid: int,
+        keywords,
+        *,
+        enabled: bool,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
+        snapshot = None
+        for keyword in tuple(keywords):
+            snapshot = self.set_keyword(
+                uid,
+                keyword,
+                enabled=enabled,
+                expected_uidvalidity=expected_uidvalidity,
+            )
+        assert snapshot is not None
+        return snapshot
+
+    def _by_uid(self, uid: int) -> TriageMessage:
+        for item in self.messages.values():
+            if item.email.uid == uid:
+                return item
+        raise AssertionError(f"unknown UID {uid}")
+
+
+def triage_message(
+    message_id: str,
+    sender: str,
+    uid: int,
+    *,
+    flags: tuple[str, ...] = (),
+    origin: str | None = None,
+    in_reply_to: tuple[str, ...] = (),
+    references: tuple[str, ...] = (),
+) -> TriageMessage:
+    email = EmailMessage(
+        message_id,
+        sender,
+        "me@example.com",
+        None,
+        None,
+        None,
+        mailbox="INBOX",
+        uidvalidity=10,
+        uid=uid,
+    )
+    return TriageMessage(
+        email=email,
+        headers=TriageHeaders(
+            from_address=sender,
+            message_id=message_id,
+            in_reply_to=in_reply_to,
+            references=references,
+            origin_message_id=origin,
+        ),
+        flags=flags,
+    )
+
+
+class TriageBoxWorkflowTest(unittest.TestCase):
+    def make_config(self, path: Path) -> AppConfig:
+        identity = IdentityConfig(
+            mailbox_address="me@example.com",
+            self_addresses=("alias@example.com",),
+        )
+        return AppConfig(
+            ImapConfig("imap.example", 993, "user", "pass", "INBOX", 7),
+            DatabaseConfig(path),
+            identity=identity,
+        )
+
+    def test_support_request_copy_becomes_waiting_action_and_starred(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.make_config(Path(directory) / "workinbox.db")
+            origin = triage_message(
+                "<origin@example>",
+                "sender@example.com",
+                1,
+                flags=("\\Flagged", "wib-schedule", "wib-requested"),
+            )
+            request = triage_message(
+                "<request@example>",
+                "me@example.com",
+                2,
+                origin="<origin@example>",
+            )
+            imap = FakeTriageImapClient([origin, request])
+
+            result = TriageService(config, imap).run()
+
+            self.assertEqual(result.support_requests, 1)
+            self.assertIn("wib-waiting-action", imap.messages["<request@example>"].flags)
+            self.assertIn("\\Flagged", imap.messages["<request@example>"].flags)
+            self.assertNotIn("wib-waiting-action", imap.messages["<origin@example>"].flags)
+
+    def test_supporter_reply_moves_focus_from_request_to_reply(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.make_config(Path(directory) / "workinbox.db")
+            origin = triage_message(
+                "<origin@example>",
+                "sender@example.com",
+                1,
+                flags=("\\Flagged", "wib-schedule", "wib-requested"),
+            )
+            request = triage_message(
+                "<request@example>",
+                "me@example.com",
+                2,
+                origin="<origin@example>",
+            )
+            reply = triage_message(
+                "<reply@example>",
+                "supporter@example.com",
+                3,
+                in_reply_to=("<request@example>",),
+                references=("<origin@example>", "<request@example>"),
+            )
+            imap = FakeTriageImapClient([origin, request, reply])
+
+            result = TriageService(config, imap).run()
+
+            self.assertEqual(result.support_requests, 1)
+            self.assertEqual(result.waiting_action_replies, 1)
+            self.assertNotIn("wib-waiting-action", imap.messages["<request@example>"].flags)
+            self.assertNotIn("\\Flagged", imap.messages["<request@example>"].flags)
+            self.assertIn("wib-schedule", imap.messages["<reply@example>"].flags)
+            self.assertIn("\\Flagged", imap.messages["<reply@example>"].flags)
+
+    def test_normal_sync_runs_triage_before_flagged_discovery_and_ai(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            database = EmailDatabase(path)
+            database.initialize()
+            origin = triage_message(
+                "<origin@example>",
+                "sender@example.com",
+                1,
+                flags=("\\Flagged", "wib-schedule", "wib-requested"),
+            )
+            request = triage_message(
+                "<request@example>",
+                "me@example.com",
+                2,
+                origin="<origin@example>",
+            )
+            imap = FakeTriageImapClient([origin, request])
+            classifier = FakeClassifier()
+            service = SynchronizationService(
+                config,
+                database=database,
+                imap_client=imap,
+                classifier=classifier,
+            )
+
+            result = service.normal_sync()
+
+            self.assertEqual(result.triage_support_requests, 1)
+            self.assertEqual(result.added, 2)
+            self.assertEqual(classifier.messages, [])
+            self.assertIsNotNone(database.email_message("<request@example>"))
+
+
+if __name__ == "__main__":
+    unittest.main()
