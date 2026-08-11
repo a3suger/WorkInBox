@@ -108,22 +108,72 @@ function findFolderByMailboxPath(folder, mailbox) {
   return null;
 }
 
-async function resolveWorkViewMailbox(imapTarget) {
-  const host = String(imapTarget?.host || "").trim();
-  const username = String(imapTarget?.username || "").trim();
-  const port = Number(imapTarget?.port);
-  const mailboxName = String(imapTarget?.mailbox || "").trim();
+function normalizeHost(value) {
+  return String(value || "").trim().toLowerCase().replace(/\.$/, "");
+}
 
-  if (!host || !username || !Number.isInteger(port) || !mailboxName) {
+function normalizeUsername(value) {
+  return String(value || "").trim();
+}
+
+async function resolveImapAccount(imapTarget) {
+  const expectedHost = normalizeHost(imapTarget?.host);
+  const expectedUsername = normalizeUsername(imapTarget?.username);
+  const expectedPort = Number(imapTarget?.port);
+
+  if (!expectedHost || !expectedUsername || !Number.isInteger(expectedPort)) {
     throw new Error("WIB Web から渡された IMAP 対象設定が不正です。");
   }
 
-  const resolved = await messenger.imapAccounts.resolveAccount(host, username, port);
-  const account = await messenger.accounts.get(resolved.accountId, true);
-  if (!account || account.type !== "imap") {
-    throw new Error("WIB 設定に対応する Thunderbird IMAP アカウントを取得できませんでした。");
+  const accounts = await messenger.accounts.list();
+  const matches = [];
+
+  for (const account of accounts) {
+    if (account.type !== "imap") {
+      continue;
+    }
+
+    let serverInfo;
+    try {
+      serverInfo = await messenger.imapAccounts.getServerInfo(account.id);
+    } catch (error) {
+      console.warn("[WorkInBox bridge] failed to inspect Thunderbird IMAP account", account.id, error);
+      continue;
+    }
+
+    if (normalizeHost(serverInfo?.host) !== expectedHost) {
+      continue;
+    }
+    if (normalizeUsername(serverInfo?.username) !== expectedUsername) {
+      continue;
+    }
+    if (Number(serverInfo?.port) !== expectedPort) {
+      continue;
+    }
+    matches.push(account);
   }
 
+  if (matches.length === 0) {
+    throw new Error(
+      `Thunderbird に WIB 設定と一致する IMAP アカウントがありません: ${expectedUsername}@${expectedHost}:${expectedPort}`,
+    );
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      `Thunderbird に WIB 設定と一致する IMAP アカウントが複数あります: ${expectedUsername}@${expectedHost}:${expectedPort}`,
+    );
+  }
+
+  return messenger.accounts.get(matches[0].id, true);
+}
+
+async function resolveWorkViewMailbox(imapTarget) {
+  const mailboxName = String(imapTarget?.mailbox || "").trim();
+  if (!mailboxName) {
+    throw new Error("WIB Web から渡された mailbox 設定が空です。");
+  }
+
+  const account = await resolveImapAccount(imapTarget);
   let mailbox;
   if (mailboxName.toUpperCase() === "INBOX") {
     mailbox = findSpecialFolder(account.rootFolder, "inbox");
