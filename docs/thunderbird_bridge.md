@@ -1,6 +1,6 @@
 # Thunderbird Bridge 設計
 
-この文書は、WorkInBox Web UI と Thunderbird Extension を接続し、WorkInBox から元メールへ戻るための共通ブリッジを定義する。
+この文書は、WorkInBox Web UI と Thunderbird Extension を接続し、WorkInBox から元メールや Thunderbird の作業ビューへ戻るための共通ブリッジを定義する。
 
 `docs/README.md` を設計文書の入口とし、この文書は Thunderbird 固有連携の詳細として位置づける。
 
@@ -10,7 +10,7 @@
 
 WorkInBox はメールや締切の整理を行うが、メール本文そのものは Thunderbird で読む。
 
-そのため WorkInBox の各画面から、対応する元メールへすぐ戻れることを重視する。
+そのため WorkInBox の各画面から、対応する元メールや作業対象メール一覧へすぐ戻れることを重視する。
 
 主な利用場面:
 
@@ -19,8 +19,9 @@ WorkInBox はメールや締切の整理を行うが、メール本文そのも�
 - 判定保留メールから元メールを開く
 - スケジュール調整対象メールを開く
 - 返信待ち / 対応待ちの会話を確認する
+- `回答必要` 等の WIB 一覧から、Thunderbird の INBOX に Quick Filter を適用した作業ビューへ移動する
 
-この機構を機能ごとに個別実装せず、共通の `Open in Thunderbird` ブリッジとして提供する。
+この機構を機能ごとに個別実装せず、共通の Thunderbird Bridge として提供する。
 
 ---
 
@@ -32,6 +33,7 @@ WorkInBox はメールや締切の整理を行うが、メール本文そのも�
 - Application Service を呼ぶ。
 - SQLite / IMAP / AI 等の業務ロジックへアクセスする。
 - 元メールを開く際は Message-ID を Thunderbird 側へ渡す。
+- 作業ビューを開く際は適用したい WIB ビュー種別を Thunderbird 側へ渡す。
 
 FastAPI 自体は Thunderbird API を直接使用しない。
 
@@ -41,6 +43,7 @@ FastAPI 自体は Thunderbird API を直接使用しない。
 - WorkInBox タグ定義を Thunderbird に登録する。
 - Message-ID を受け取り Thunderbird 内で該当メールを検索する。
 - 該当メールを通常の message display で開く。
+- INBOX のメールタブをアクティブ化し、指定された WIB 作業ビューに対応する Quick Filter を適用する。
 - Archive フォルダの Favorite 状態を Global Search / Gloda の索引ポリシーへ反映する。
 
 Extension に締切判定、AI 分類、SQLite 更新等の業務ロジックを持たせない。
@@ -73,15 +76,17 @@ Thunderbird
 
 WorkInBox Web UI
      │
-     │ Message-ID
-     ▼
-Thunderbird Extension Bridge
+     ├─ Message-ID
+     │      ▼
+     │  Thunderbird Extension Bridge
+     │      ▼
+     │  Message display
      │
-     ▼
-Thunderbird messages API
-     │
-     ▼
-Message display
+     └─ Work view request
+            ▼
+        Thunderbird Extension Bridge
+            ▼
+        INBOX + Quick Filter
 ```
 
 FastAPI を Thunderbird Extension の内部へ移植しない。
@@ -159,7 +164,7 @@ FastAPI から配信された通常の Web ページは Thunderbird Extension AP
 ```text
 FastAPI page
     │
-    │ open-message request
+    │ open-message / open-work-view request
     ▼
 Extension content/bridge script
     │ runtime messaging
@@ -167,10 +172,10 @@ Extension content/bridge script
 Extension background
     │ Thunderbird API
     ▼
-Message display
+Message display / INBOX + Quick Filter
 ```
 
-WorkInBox ページから Message-ID を渡し、content script が Extension runtime messaging で background へ転送し、background が Thunderbird messages API を使って元メールを解決・表示する。
+WorkInBox ページから Message-ID または作業ビュー種別を渡し、content script が Extension runtime messaging で background へ転送し、background が Thunderbird API を使って表示を切り替える。
 
 責務境界を維持し、FastAPI 側へ Thunderbird 固有ロジックを持ち込まない。
 
@@ -312,7 +317,68 @@ Message-ID Bridge
 
 ---
 
-## 13. v0.2 PoC 結果
+## 13. Quick Filter 作業ビュー
+
+WorkInBox はメールを独自 UI に閉じ込めず、日常のメール処理は Thunderbird のメール一覧を活用する。
+
+そのため、WIB の一覧やダッシュボードにある `回答必要を見る` 等の操作から、Thunderbird の既存メールタブを INBOX 表示へ切り替え、Quick Filter を適用した作業ビューへ移動できるようにする。
+
+### 基本フロー
+
+```text
+WorkInBox Web UI
+    ↓
+[回答必要を見る]
+    ↓
+Extension Bridge へ work-view request
+    ↓
+Thunderbird のメールタブを取得
+    ↓
+INBOX を表示
+    ↓
+Quick Filter Bar を表示
+    ↓
+スター付き AND wib-answer を適用
+    ↓
+メールタブを active にする
+```
+
+既存の適切なメールタブを再利用することを基本とし、WIB 操作のたびに不要な新規メールタブを増やさない。
+
+### プリセット
+
+初期候補は次のとおりとする。
+
+- `回答必要` = `wib-answer` AND スター付き
+- `締切あり` = `wib-deadline` AND スター付き
+- `スケジュール調整` = `wib-schedule` AND スター付き
+- `読む・検討` = `wib-review` AND スター付き
+- `返信待ち` = `wib-waiting-reply` AND スター付き
+- `対応待ち` = `wib-waiting-action` AND スター付き
+
+Quick Filter の適用条件は Thunderbird Extension 側のプリセットとして定義し、FastAPI 側から Thunderbird API の具体的な引数を渡さない。
+
+### スターとの役割分担
+
+Quick Filter には Thunderbird の「返信済み」状態を直接条件にできないため、WIB の現在注目対象を示すスターを AND 条件に利用する。
+
+たとえば `回答必要` メールについて、利用者が Thunderbird で返信を完了した後、WIB の同期・TriageBox がそのメールを現在注目対象から外すべきと判断したらスターを外す。
+
+`wib-answer` タグが履歴として残っていても、スターが外れることで `回答必要 = wib-answer AND スター付き` の作業ビューから自然に除外される。
+
+この方式により、Thunderbird 標準の返信済みフラグを Quick Filter から直接検索できなくても、WIB の状態遷移と Thunderbird の作業ビューを一致させられる。
+
+### 検索フォルダーとの関係
+
+利用者が手動で作成した検索フォルダーは引き続き活用できる。
+
+一方、任意条件の検索フォルダーを Extension が自動生成するには標準 MailExtension API の範囲を超える可能性があるため、v0.2 の必須機能にはしない。
+
+まずは標準 API で実装できる Quick Filter 作業ビューを優先し、検索フォルダー自動生成が本当に必要になった場合に Experiment API 等を別途検討する。
+
+---
+
+## 14. v0.2 PoC 結果
 
 以下は実機で確認済みである。
 
@@ -326,11 +392,13 @@ Message-ID Bridge
 
 Conversation / スレッド表示への直接遷移は試行したが安定しなかったため、v0.2 では採用しない。
 
+Quick Filter 作業ビューは設計済みだが、現時点では未実装・未検証である。
+
 このブリッジは締切以外の画面でも共通利用する。
 
 ---
 
-## 14. 非目標
+## 15. 非目標
 
 Thunderbird Extension に以下を実装しない。
 
