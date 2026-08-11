@@ -17,6 +17,7 @@ from .models import (
     ImapFlagsSnapshot,
     ImapReference,
 )
+from .triagebox import TriageMessage, parse_triage_headers
 
 
 _FLAGGED_RE = re.compile(rb"(?:^|[ (])\\Flagged(?:[ )]|$)", re.IGNORECASE)
@@ -122,6 +123,27 @@ def _new_mail_since(today: date, lookback_days: int) -> date:
     return today - timedelta(days=lookback_days - 1)
 
 
+def _email_message(parsed: Message, mailbox: str, uidvalidity: int, uid: int) -> EmailMessage | None:
+    message_id = (parsed.get("Message-ID") or "").strip()
+    if not message_id:
+        return None
+    return EmailMessage(
+        message_id=message_id,
+        sender=_addresses(parsed, "From") or "",
+        recipients=_addresses(parsed, "To"),
+        subject=_decode_header(parsed.get("Subject")),
+        received_at=parsed.get("Date"),
+        body=_body(parsed),
+        mailbox=mailbox,
+        uidvalidity=uidvalidity,
+        uid=uid,
+    )
+
+
+def _raw_from_fetch(fetched: list[bytes | tuple[bytes, bytes] | None]) -> bytes | None:
+    return next((item[1] for item in fetched if isinstance(item, tuple)), None)
+
+
 class ImapClient:
     def __init__(self, config: ImapConfig) -> None:
         self.config = config
@@ -177,7 +199,36 @@ class ImapClient:
             _validate_keyword(keyword)
         operation = "+FLAGS.SILENT" if enabled else "-FLAGS.SILENT"
         keyword_list = " ".join(unique_keywords)
+        return self._store_flags(
+            uid,
+            operation,
+            f"({keyword_list})",
+            expected_uidvalidity=expected_uidvalidity,
+        )
 
+    def set_flagged(
+        self,
+        uid: int,
+        *,
+        enabled: bool,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
+        operation = "+FLAGS.SILENT" if enabled else "-FLAGS.SILENT"
+        return self._store_flags(
+            uid,
+            operation,
+            "(\\Flagged)",
+            expected_uidvalidity=expected_uidvalidity,
+        )
+
+    def _store_flags(
+        self,
+        uid: int,
+        operation: str,
+        flags: str,
+        *,
+        expected_uidvalidity: int | None,
+    ) -> ImapFlagsSnapshot:
         with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
             client.login(self.config.username, self.config.password)
             status, _ = client.select(self.config.mailbox, readonly=False)
@@ -187,23 +238,75 @@ class ImapClient:
             current_uidvalidity = _uidvalidity(client)
             if expected_uidvalidity is not None and current_uidvalidity != expected_uidvalidity:
                 raise RuntimeError("IMAP UIDVALIDITY changed; tag operation aborted")
-            status, _ = client.uid("store", str(uid), operation, f"({keyword_list})")
+            status, _ = client.uid("store", str(uid), operation, flags)
             if status != "OK":
-                action = "add" if enabled else "remove"
-                raise RuntimeError(
-                    f"Unable to {action} IMAP keywords {unique_keywords!r} for UID {uid}"
-                )
+                raise RuntimeError(f"Unable to update IMAP flags {flags!r} for UID {uid}")
 
             status, fetched = client.uid("fetch", str(uid), "(UID FLAGS)")
             if status != "OK":
-                raise RuntimeError(f"IMAP fetch failed for UID {uid} after keyword update")
-            flags = _parse_flags(fetched)
+                raise RuntimeError(f"IMAP fetch failed for UID {uid} after flag update")
             return ImapFlagsSnapshot(
                 mailbox=self.config.mailbox,
                 uidvalidity=current_uidvalidity,
                 uid=uid,
-                flags=flags,
+                flags=_parse_flags(fetched),
             )
+
+    def fetch_unread(self) -> list[TriageMessage]:
+        with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
+            client.login(self.config.username, self.config.password)
+            status, _ = client.select(self.config.mailbox, readonly=True)
+            if status != "OK":
+                raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
+            current_uidvalidity = _uidvalidity(client)
+            status, data = client.uid("search", None, "UNSEEN")
+            if status != "OK":
+                raise RuntimeError("IMAP UNSEEN search failed")
+            result: list[TriageMessage] = []
+            for uid_bytes in data[0].split() if data and data[0] else []:
+                item = self._fetch_triage_message(client, int(uid_bytes), current_uidvalidity)
+                if item is not None:
+                    result.append(item)
+            return result
+
+    def find_message_by_message_id(self, message_id: str) -> TriageMessage | None:
+        with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
+            client.login(self.config.username, self.config.password)
+            status, _ = client.select(self.config.mailbox, readonly=True)
+            if status != "OK":
+                raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
+            current_uidvalidity = _uidvalidity(client)
+            status, data = client.uid("search", None, "HEADER", "Message-ID", message_id)
+            if status != "OK":
+                raise RuntimeError(f"IMAP Message-ID search failed for {message_id}")
+            uid_values = data[0].split() if data and data[0] else []
+            for uid_bytes in reversed(uid_values):
+                item = self._fetch_triage_message(client, int(uid_bytes), current_uidvalidity)
+                if item is not None:
+                    return item
+            return None
+
+    def _fetch_triage_message(
+        self,
+        client: imaplib.IMAP4_SSL,
+        uid: int,
+        current_uidvalidity: int,
+    ) -> TriageMessage | None:
+        status, fetched = client.uid("fetch", str(uid), "(UID FLAGS BODY.PEEK[])")
+        if status != "OK":
+            return None
+        raw = _raw_from_fetch(fetched)
+        if not isinstance(raw, bytes):
+            return None
+        parsed = message_from_bytes(raw, policy=policy.default)
+        email = _email_message(parsed, self.config.mailbox, current_uidvalidity, uid)
+        if email is None:
+            return None
+        return TriageMessage(
+            email=email,
+            headers=parse_triage_headers(parsed),
+            flags=_parse_flags(fetched),
+        )
 
     def synchronize(
         self,
@@ -276,29 +379,13 @@ class ImapClient:
                     continue
                 if status != "OK":
                     continue
-                raw = next(
-                    (item[1] for item in fetched if isinstance(item, tuple)),
-                    None,
-                )
+                raw = _raw_from_fetch(fetched)
                 if not isinstance(raw, bytes):
                     continue
                 parsed = message_from_bytes(raw, policy=policy.default)
-                message_id = (parsed.get("Message-ID") or "").strip()
-                if not message_id:
-                    continue
-                messages.append(
-                    EmailMessage(
-                        message_id=message_id,
-                        sender=_addresses(parsed, "From") or "",
-                        recipients=_addresses(parsed, "To"),
-                        subject=_decode_header(parsed.get("Subject")),
-                        received_at=parsed.get("Date"),
-                        body=_body(parsed),
-                        mailbox=self.config.mailbox,
-                        uidvalidity=current_uidvalidity,
-                        uid=uid,
-                    )
-                )
+                message = _email_message(parsed, self.config.mailbox, current_uidvalidity, uid)
+                if message is not None:
+                    messages.append(message)
         return checks, messages
 
     def fetch_flagged(self) -> list[EmailMessage]:
