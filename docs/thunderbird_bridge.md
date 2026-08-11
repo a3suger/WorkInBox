@@ -19,7 +19,7 @@ WorkInBox はメールや締切の整理を行うが、メール本文そのも�
 - 判定保留メールから元メールを開く
 - スケジュール調整対象メールを開く
 - 返信待ち / 対応待ちの会話を確認する
-- `回答必要` 等の WIB 一覧から、Thunderbird の INBOX に Quick Filter を適用した作業ビューへ移動する
+- `回答必要` 等の WIB 一覧から、設定済み IMAP アカウントの INBOX に Quick Filter を適用した専用作業ビューへ移動する
 
 この機構を機能ごとに個別実装せず、共通の Thunderbird Bridge として提供する。
 
@@ -43,7 +43,9 @@ FastAPI 自体は Thunderbird API を直接使用しない。
 - WorkInBox タグ定義を Thunderbird に登録する。
 - Message-ID を受け取り Thunderbird 内で該当メールを検索する。
 - 該当メールを通常の message display で開く。
-- INBOX のメールタブをアクティブ化し、指定された WIB 作業ビューに対応する Quick Filter を適用する。
+- WIB 作業ビュー用の対象 IMAP アカウントをローカル設定として保持する。
+- WIB 専用メールタブを 1 枚だけ作成・再利用し、設定済みアカウントの INBOX に指定された Quick Filter を適用する。
+- 専用タブの表示名を現在の作業ビューに合わせて `WIB:回答必要` 等へ更新する。
 - Archive フォルダの Favorite 状態を Global Search / Gloda の索引ポリシーへ反映する。
 
 Extension に締切判定、AI 分類、SQLite 更新等の業務ロジックを持たせない。
@@ -86,7 +88,11 @@ WorkInBox Web UI
             ▼
         Thunderbird Extension Bridge
             ▼
-        INBOX + Quick Filter
+        configured INBOX
+            +
+        dedicated WIB mail tab
+            +
+        Quick Filter
 ```
 
 FastAPI を Thunderbird Extension の内部へ移植しない。
@@ -172,7 +178,7 @@ Extension content/bridge script
 Extension background
     │ Thunderbird API
     ▼
-Message display / INBOX + Quick Filter
+Message display / dedicated WIB mail tab + Quick Filter
 ```
 
 WorkInBox ページから Message-ID または作業ビュー種別を渡し、content script が Extension runtime messaging で background へ転送し、background が Thunderbird API を使って表示を切り替える。
@@ -321,42 +327,77 @@ Message-ID Bridge
 
 WorkInBox はメールを独自 UI に閉じ込めず、日常のメール処理は Thunderbird のメール一覧を活用する。
 
-そのため、WIB の一覧やダッシュボードにある `回答必要を見る` 等の操作から、Thunderbird の既存メールタブを INBOX 表示へ切り替え、Quick Filter を適用した作業ビューへ移動できるようにする。
+WIB の `回答必要`、`締切あり` 等の現在作業を確認するときは、通常利用中のメールタブへ Quick Filter を上書きしない。WIB 専用のメールタブを 1 枚だけ作成し、そのタブを作業ビュー間で再利用する。
+
+### 対象 IMAP アカウント
+
+利用者は Thunderbird Extension の popup で WIB 作業ビューの対象 IMAP アカウントを事前に選択する。
+
+選択した Thunderbird account id は Extension の `storage.local` に保存する。
+
+作業ビューは常に設定済みアカウントの INBOX を対象とする。直前に閲覧していたアカウントや Unified Inbox から暗黙に対象を決めない。
+
+設定が存在しない、設定済みアカウントが削除された、またはそのアカウントの INBOX を解決できない場合は、別アカウントへ自動フォールバックせず利用者へ再設定を求める。
 
 ### 基本フロー
 
 ```text
-WorkInBox Web UI
+WorkInBox / Extension UI
     ↓
-[回答必要を見る]
+作業ビューを選択
     ↓
 Extension Bridge へ work-view request
     ↓
-Thunderbird のメールタブを取得
+設定済み IMAP アカウントの INBOX を解決
     ↓
-INBOX を表示
+WIB 専用メールタブを取得
+    ├─ 既存なら再利用
+    └─ 閉じられていれば新規作成
     ↓
 Quick Filter Bar を表示
     ↓
-スター付き AND wib-answer を適用
+スター付き AND 対応 WIB タグを適用
     ↓
-メールタブを active にする
+専用タブを active にする
+    ↓
+タブ名を WIB:<作業ビュー名> に更新
 ```
 
-既存の適切なメールタブを再利用することを基本とし、WIB 操作のたびに不要な新規メールタブを増やさない。
+WIB 専用タブを閉じた場合は、次回の作業ビュー表示時に新しい専用メールタブを作成する。
 
-### プリセット
+通常の INBOX タブに利用者が設定している `未読`、`添付あり` 等の Quick Filter は変更しない。
 
-初期候補は次のとおりとする。
+### 作業ビュー
 
-- `回答必要` = `wib-answer` AND スター付き
-- `締切あり` = `wib-deadline` AND スター付き
-- `スケジュール調整` = `wib-schedule` AND スター付き
-- `読む・検討` = `wib-review` AND スター付き
-- `返信待ち` = `wib-waiting-reply` AND スター付き
-- `対応待ち` = `wib-waiting-action` AND スター付き
+v0.2 の初期実装で次の 6 種類を提供する。
 
-Quick Filter の適用条件は Thunderbird Extension 側のプリセットとして定義し、FastAPI 側から Thunderbird API の具体的な引数を渡さない。
+- `回答必要` = `wib-answer` AND スター付き → `WIB:回答必要`
+- `締切あり` = `wib-deadline` AND スター付き → `WIB:締切あり`
+- `スケジュール調整` = `wib-schedule` AND スター付き → `WIB:スケジュール調整`
+- `読む・検討` = `wib-review` AND スター付き → `WIB:読む・検討`
+- `返信待ち` = `wib-waiting-reply` AND スター付き → `WIB:返信待ち`
+- `対応待ち` = `wib-waiting-action` AND スター付き → `WIB:対応待ち`
+
+同じ WIB 専用タブの Quick Filter 条件とタブ名だけを切り替える。
+
+Quick Filter の具体的な Thunderbird API 引数は Extension 側のプリセットとして定義し、FastAPI 側から直接渡さない。
+
+### 標準 API と Experiment API
+
+作業ビューの主要処理は標準 MailExtension API で実装する。
+
+- 対象アカウントの列挙・取得: `accounts`
+- 設定保存: `storage.local`
+- WIB 専用メールタブの作成・再利用: `mailTabs`
+- INBOX 表示: `mailTabs.update()`
+- Quick Filter 適用: `mailTabs.setQuickFilter()`
+- タブの active 化: `tabs.update()`
+
+メールタブの任意タイトルを設定する公開 API は利用しないため、タイトル変更だけを最小の Experiment API `tabTitle` に閉じ込める。
+
+`tabTitle` は指定された Thunderbird タブの表示タイトルを更新するだけのアダプタとし、WIB のビュー判定や業務状態を持たない。
+
+Thunderbird 内部 API / UI 構造に依存するため、Thunderbird 更新時は `tabTitle` Experiment の互換性を個別に確認する。
 
 ### スターとの役割分担
 
@@ -372,9 +413,9 @@ Quick Filter には Thunderbird の「返信済み」状態を直接条件にで
 
 利用者が手動で作成した検索フォルダーは引き続き活用できる。
 
-一方、任意条件の検索フォルダーを Extension が自動生成するには標準 MailExtension API の範囲を超える可能性があるため、v0.2 の必須機能にはしない。
+WIB の標準作業ビューについては、検索フォルダーを自動生成せず、実機で成立した専用メールタブ + Quick Filter を v0.2 の基本方式とする。
 
-まずは標準 API で実装できる Quick Filter 作業ビューを優先し、検索フォルダー自動生成が本当に必要になった場合に Experiment API 等を別途検討する。
+任意条件の検索フォルダー自動生成が本当に必要になった場合にのみ、別の Experiment API 等を検討する。
 
 ---
 
@@ -389,10 +430,15 @@ Quick Filter には Thunderbird の「返信済み」状態を直接条件にで
 5. 該当メールを通常の message display で単体表示する。
 6. Archive 配下の Favorite 状態を列挙し、索引ポリシー候補をプレビューする。
 7. Favorite 状態と Gloda indexing を手動同期する。
+8. WIB 作業ビュー用の対象 IMAP アカウントを事前設定する。
+9. 通常のメールタブを変更せず、WIB 専用メールタブを作成して再利用する。
+10. 同じ専用タブ上で 6 種類の `WIB タグ AND スター付き` Quick Filter を切り替える。
+11. 作業ビュー切替に合わせてタブ名を `WIB:回答必要` 等へ更新する。
+12. WIB 専用タブを閉じた場合、次回利用時に専用タブを再作成する。
 
 Conversation / スレッド表示への直接遷移は試行したが安定しなかったため、v0.2 では採用しない。
 
-Quick Filter 作業ビューは設計済みだが、現時点では未実装・未検証である。
+Quick Filter 作業ビューは実装済みであり、上記の専用タブ方式・対象アカウント固定・6 ビュー切替・タブ名追随まで実機で確認済みである。
 
 このブリッジは締切以外の画面でも共通利用する。
 
