@@ -19,6 +19,7 @@ from .models import (
     TrackedEmail,
     TrackingStatus,
 )
+from .triage_store import TriageRelationStore
 from .triagebox import TriageResult, TriageService
 from .work_tags import WorkTagDefinition, definitions_for_flags, require_work_tag
 
@@ -517,17 +518,42 @@ class WorkTagService:
     def set_tag(self, message_id: str, key: str, *, enabled: bool) -> None:
         tag = require_work_tag(key)
         self.database.initialize()
-        reference = self.database.imap_reference(message_id)
-        if reference is None:
-            raise RuntimeError(f"IMAP identity is unavailable for {message_id}")
-        if reference.mailbox != self.config.imap.mailbox:
-            raise RuntimeError(
-                f"Mail is stored in {reference.mailbox!r}, not configured mailbox "
-                f"{self.config.imap.mailbox!r}"
+
+        target_message_ids = [message_id]
+        relation_store = TriageRelationStore(self.config.database.path)
+        relation_store.initialize()
+        if key == "wib-schedule-done" and enabled:
+            origin_message_id = relation_store.origin_for(message_id)
+            if origin_message_id is not None and origin_message_id != message_id:
+                target_message_ids.append(origin_message_id)
+
+        source_reference = None
+        for target_message_id in dict.fromkeys(target_message_ids):
+            reference = self.database.imap_reference(target_message_id)
+            if reference is None:
+                raise RuntimeError(f"IMAP identity is unavailable for {target_message_id}")
+            if reference.mailbox != self.config.imap.mailbox:
+                raise RuntimeError(
+                    f"Mail is stored in {reference.mailbox!r}, not configured mailbox "
+                    f"{self.config.imap.mailbox!r}"
+                )
+            self.imap_client.set_keyword(
+                reference.uid,
+                tag.key,
+                enabled=enabled,
+                expected_uidvalidity=reference.uidvalidity,
             )
-        self.imap_client.set_keyword(
-            reference.uid,
-            tag.key,
-            enabled=enabled,
-            expected_uidvalidity=reference.uidvalidity,
-        )
+            if target_message_id == message_id:
+                source_reference = reference
+
+        if (
+            key == "wib-schedule-done"
+            and enabled
+            and len(target_message_ids) > 1
+            and source_reference is not None
+        ):
+            self.imap_client.set_flagged(
+                source_reference.uid,
+                enabled=False,
+                expected_uidvalidity=source_reference.uidvalidity,
+            )
