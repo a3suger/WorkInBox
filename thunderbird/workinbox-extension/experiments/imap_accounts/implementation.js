@@ -1,9 +1,13 @@
 var imapAccounts = class extends ExtensionCommon.ExtensionAPI {
-  getAPI(context) {
+  getAPI(_context) {
+    const { MailServices } = ChromeUtils.importESModule(
+      "resource:///modules/MailServices.sys.mjs",
+    );
+
     return {
       imapAccounts: {
         async getServerInfo(accountId) {
-          const account = context.extension.accountManager.getAccount(accountId);
+          const account = MailServices.accounts.getAccount(accountId);
           if (!account) {
             throw new Error(`Thunderbird account not found: ${accountId}`);
           }
