@@ -2,6 +2,10 @@ const WORKINBOX_ORIGIN_HEADER = "X-WorkInBox-Origin-Message-ID";
 const REQUESTED_TAG = "wib-requested";
 const WAITING_ACTION_TAG = "wib-waiting-action";
 
+const WORK_VIEW_TAGS = {
+  answer: "wib-answer",
+};
+
 function messageIdCandidates(value) {
   const raw = String(value || "").trim();
   if (!raw) {
@@ -42,6 +46,98 @@ async function openMessageByHeaderMessageId(messageId) {
     ok: true,
     subject: message.subject || "",
     headerMessageId: message.headerMessageId || messageId,
+  };
+}
+
+function findSpecialFolder(folder, specialUse) {
+  if (!folder) {
+    return null;
+  }
+
+  const specialUses = Array.isArray(folder.specialUse) ? folder.specialUse : [];
+  if (specialUses.includes(specialUse) || folder.type === specialUse) {
+    return folder;
+  }
+
+  for (const child of folder.subFolders || []) {
+    const found = findSpecialFolder(child, specialUse);
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+async function resolveWorkViewMailTab() {
+  let mailTabs = await messenger.mailTabs.query({ lastFocusedWindow: true });
+  if (mailTabs.length === 0) {
+    mailTabs = await messenger.mailTabs.query({});
+  }
+  if (mailTabs.length === 0) {
+    return messenger.mailTabs.create();
+  }
+  return mailTabs.find((tab) => tab.active) || mailTabs[0];
+}
+
+async function resolveInboxForMailTab(mailTab) {
+  const accountId = mailTab?.displayedFolder?.accountId;
+  if (accountId) {
+    const account = await messenger.accounts.get(accountId, true);
+    const accountInbox = findSpecialFolder(account?.rootFolder, "inbox");
+    if (accountInbox) {
+      return accountInbox;
+    }
+  }
+
+  try {
+    return await messenger.folders.getUnifiedFolder("inbox");
+  } catch (error) {
+    console.warn("[WorkInBox bridge] Unified Inbox is unavailable", error);
+  }
+
+  const accounts = await messenger.accounts.list(true);
+  for (const account of accounts) {
+    const accountInbox = findSpecialFolder(account?.rootFolder, "inbox");
+    if (accountInbox) {
+      return accountInbox;
+    }
+  }
+
+  throw new Error("Thunderbird の INBOX を見つけられませんでした。");
+}
+
+async function openWorkView(viewName) {
+  const tagKey = WORK_VIEW_TAGS[viewName];
+  if (!tagKey) {
+    throw new Error(`Unknown WorkInBox work view: ${viewName}`);
+  }
+
+  const mailTab = await resolveWorkViewMailTab();
+  const inbox = await resolveInboxForMailTab(mailTab);
+
+  await messenger.mailTabs.update(mailTab.id, {
+    displayedFolder: inbox,
+  });
+
+  await messenger.mailTabs.setQuickFilter(mailTab.id, {
+    show: true,
+    flagged: true,
+    tags: {
+      mode: "all",
+      tags: {
+        [tagKey]: true,
+      },
+    },
+  });
+
+  await messenger.tabs.update(mailTab.id, { active: true });
+
+  return {
+    ok: true,
+    view: viewName,
+    tagKey,
+    folderName: inbox.name || "INBOX",
   };
 }
 
@@ -212,6 +308,8 @@ messenger.runtime.onMessage.addListener((request) => {
   let operation;
   if (request.type === "workinbox-open-message") {
     operation = openMessageByHeaderMessageId(request.messageId);
+  } else if (request.type === "workinbox-open-work-view") {
+    operation = openWorkView(request.view);
   } else if (request.type === "workinbox-compose-support-request") {
     operation = beginSupportRequest(request);
   } else {
