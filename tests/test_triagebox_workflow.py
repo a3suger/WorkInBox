@@ -216,8 +216,9 @@ class TriageBoxWorkflowTest(unittest.TestCase):
                 references=("<origin@example>", "<request@example>"),
             )
             imap = FakeTriageImapClient([origin, request, reply])
+            service = TriageService(config, imap)
 
-            result = TriageService(config, imap).run()
+            result = service.run()
 
             self.assertEqual(result.support_requests, 1)
             self.assertEqual(result.waiting_action_replies, 1)
@@ -228,6 +229,17 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             relations = TriageRelationStore(path)
             self.assertEqual(relations.origin_for("<request@example>"), "<origin@example>")
             self.assertEqual(relations.origin_for("<reply@example>"), "<origin@example>")
+            self.assertEqual(
+                relations.relation_kind_for("<request@example>"),
+                "schedule_support_request_replied",
+            )
+
+            repeated = service.run()
+
+            self.assertEqual(repeated.support_requests, 0)
+            self.assertEqual(repeated.waiting_action_replies, 0)
+            self.assertNotIn("wib-waiting-action", imap.messages["<request@example>"].flags)
+            self.assertNotIn("\\Flagged", imap.messages["<request@example>"].flags)
 
     def test_schedule_reply_completion_marks_origin_done_and_unstars_reply(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
