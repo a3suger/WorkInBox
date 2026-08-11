@@ -74,3 +74,15 @@ class TriageRelationStore:
                 (message_id,),
             ).fetchone()
         return str(row[0]) if row is not None else None
+
+    def relation_kind_for(self, message_id: str) -> str | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT relation_kind
+                FROM triage_relations
+                WHERE message_id = ?
+                """,
+                (message_id,),
+            ).fetchone()
+        return str(row[0]) if row is not None else None
