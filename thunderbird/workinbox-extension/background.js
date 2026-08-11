@@ -1,6 +1,5 @@
 const WORKINBOX_ORIGIN_HEADER = "X-WorkInBox-Origin-Message-ID";
 const REQUESTED_TAG = "wib-requested";
-const WAITING_ACTION_TAG = "wib-waiting-action";
 
 const WORK_VIEWS = {
   answer: { tagKey: "wib-answer", label: "回答必要" },
@@ -437,10 +436,9 @@ async function applySupportRequestSentState(sendInfo) {
     return;
   }
 
+  // The extension only records that the support request was sent. The INBOX
+  // copy becomes starred + waiting-action during the next normal TriageBox run.
   await addTag(originMessage, REQUESTED_TAG);
-  for (const sentMessage of sentMessages) {
-    await addTag(sentMessage, WAITING_ACTION_TAG, { flagged: true });
-  }
 }
 
 messenger.compose.onAfterSend.addListener((_tab, sendInfo) => {
