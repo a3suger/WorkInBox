@@ -522,7 +522,7 @@ class WorkTagService:
         target_message_ids = [message_id]
         relation_store = TriageRelationStore(self.config.database.path)
         relation_store.initialize()
-        if key == "wib-schedule-done" and enabled:
+        if key == "wib-schedule-done":
             origin_message_id = relation_store.origin_for(message_id)
             if origin_message_id is not None and origin_message_id != message_id:
                 target_message_ids.append(origin_message_id)
