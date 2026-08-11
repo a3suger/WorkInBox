@@ -91,6 +91,7 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/pending"])
         self.assertIn("GET", routes["/deadlines"])
         self.assertIn("GET", routes["/schedules"])
+        self.assertIn("GET", routes["/api/thunderbird/imap-target"])
         self.assertIn("GET", routes["/deadlines.ics"])
         self.assertIn("POST", routes["/deadlines/add"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/register"])
@@ -101,6 +102,27 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("POST", routes["/sync"])
         self.assertIn("POST", routes["/full-recheck"])
         self.assertIn("POST", routes["/tags/{key}/{operation}"])
+
+    def test_thunderbird_imap_target_excludes_password(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = create_app(self._config(Path(directory) / "workinbox.db"))
+            route = next(
+                route
+                for route in app.routes
+                if route.path == "/api/thunderbird/imap-target"
+            )
+            payload = route.endpoint()
+
+        self.assertEqual(
+            payload,
+            {
+                "host": "imap.example",
+                "port": 993,
+                "username": "user",
+                "mailbox": "INBOX",
+            },
+        )
+        self.assertNotIn("password", payload)
 
     def test_templates_are_loadable(self) -> None:
         self.assertIsNotNone(_TEMPLATES.get_template("base.html"))
