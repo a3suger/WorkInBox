@@ -1,7 +1,6 @@
 const WORKINBOX_ORIGIN_HEADER = "X-WorkInBox-Origin-Message-ID";
 const REQUESTED_TAG = "wib-requested";
 const WAITING_ACTION_TAG = "wib-waiting-action";
-const WORK_VIEW_ACCOUNT_STORAGE_KEY = "workinboxWorkViewAccountId";
 
 const WORK_VIEWS = {
   answer: { tagKey: "wib-answer", label: "回答必要" },
@@ -77,28 +76,70 @@ function findSpecialFolder(folder, specialUse) {
   return null;
 }
 
-async function resolveConfiguredWorkViewInbox() {
-  const stored = await messenger.storage.local.get(WORK_VIEW_ACCOUNT_STORAGE_KEY);
-  const accountId = String(stored?.[WORK_VIEW_ACCOUNT_STORAGE_KEY] || "").trim();
-  if (!accountId) {
-    throw new Error("Quick Filter PoC の対象アカウントが未設定です。WorkInBox ポップアップで対象アカウントを設定してください。");
+function normalizeMailboxPath(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+}
+
+function findFolderByMailboxPath(folder, mailbox) {
+  if (!folder) {
+    return null;
   }
 
-  let account;
-  try {
-    account = await messenger.accounts.get(accountId, true);
-  } catch (_error) {
-    throw new Error("設定済みのThunderbirdアカウントが見つかりません。WorkInBox ポップアップで対象アカウントを設定し直してください。");
+  const expected = normalizeMailboxPath(mailbox);
+  const folderPath = normalizeMailboxPath(folder.path);
+  if (folderPath === expected) {
+    return folder;
   }
 
-  const inbox = findSpecialFolder(account?.rootFolder, "inbox");
-  if (!inbox) {
-    throw new Error(`設定済みアカウント「${account?.name || accountId}」の INBOX を見つけられませんでした。`);
+  if (!expected.includes("/") && String(folder.name || "") === expected) {
+    return folder;
+  }
+
+  for (const child of folder.subFolders || []) {
+    const found = findFolderByMailboxPath(child, expected);
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+async function resolveWorkViewMailbox(imapTarget) {
+  const host = String(imapTarget?.host || "").trim();
+  const username = String(imapTarget?.username || "").trim();
+  const port = Number(imapTarget?.port);
+  const mailboxName = String(imapTarget?.mailbox || "").trim();
+
+  if (!host || !username || !Number.isInteger(port) || !mailboxName) {
+    throw new Error("WIB Web から渡された IMAP 対象設定が不正です。");
+  }
+
+  const resolved = await messenger.imapAccounts.resolveAccount(host, username, port);
+  const account = await messenger.accounts.get(resolved.accountId, true);
+  if (!account || account.type !== "imap") {
+    throw new Error("WIB 設定に対応する Thunderbird IMAP アカウントを取得できませんでした。");
+  }
+
+  let mailbox;
+  if (mailboxName.toUpperCase() === "INBOX") {
+    mailbox = findSpecialFolder(account.rootFolder, "inbox");
+  } else {
+    mailbox = findFolderByMailboxPath(account.rootFolder, mailboxName);
+  }
+
+  if (!mailbox) {
+    throw new Error(
+      `Thunderbird アカウント「${account.name || account.id}」で WIB 設定の mailbox「${mailboxName}」を見つけられませんでした。`,
+    );
   }
 
   return {
     account,
-    inbox,
+    mailbox,
   };
 }
 
@@ -115,30 +156,30 @@ async function getExistingWorkViewTab() {
   }
 }
 
-async function resolveDedicatedWorkViewTab(inbox) {
+async function resolveDedicatedWorkViewTab(mailbox) {
   const existing = await getExistingWorkViewTab();
   if (existing) {
     await messenger.mailTabs.update(existing.id, {
-      displayedFolder: inbox,
+      displayedFolder: mailbox,
     });
     return messenger.mailTabs.get(existing.id);
   }
 
   const created = await messenger.mailTabs.create({
-    displayedFolder: inbox,
+    displayedFolder: mailbox,
   });
   workViewTabId = created.id;
   return created;
 }
 
-async function openWorkView(viewName) {
+async function openWorkView(viewName, imapTarget) {
   const view = WORK_VIEWS[viewName];
   if (!view) {
     throw new Error(`Unknown WorkInBox work view: ${viewName}`);
   }
 
-  const { account, inbox } = await resolveConfiguredWorkViewInbox();
-  const mailTab = await resolveDedicatedWorkViewTab(inbox);
+  const { account, mailbox } = await resolveWorkViewMailbox(imapTarget);
+  const mailTab = await resolveDedicatedWorkViewTab(mailbox);
 
   await messenger.mailTabs.setQuickFilter(mailTab.id, {
     show: true,
@@ -165,7 +206,7 @@ async function openWorkView(viewName) {
     viewLabel: view.label,
     tagKey: view.tagKey,
     accountName: account.name || account.id,
-    folderName: inbox.name || "INBOX",
+    folderName: mailbox.name || imapTarget.mailbox,
     tabTitle: titleResult?.appliedTitle || requestedTabTitle,
     tabId: mailTab.id,
     dedicatedTab: true,
@@ -346,7 +387,7 @@ messenger.runtime.onMessage.addListener((request) => {
   if (request.type === "workinbox-open-message") {
     operation = openMessageByHeaderMessageId(request.messageId);
   } else if (request.type === "workinbox-open-work-view") {
-    operation = openWorkView(request.view);
+    operation = openWorkView(request.view, request.imapTarget);
   } else if (request.type === "workinbox-compose-support-request") {
     operation = beginSupportRequest(request);
   } else {
