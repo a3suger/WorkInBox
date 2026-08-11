@@ -62,6 +62,20 @@ AI 初期分類の判定順序、出力、再現率重視の考え方、`判定�
 
 AI 分類を変更する場合に参照する。
 
+### [triagebox_decision_flow.md](triagebox_decision_flow.md)
+
+TriageBox のヘッダ解析、自己送信判定、返信関係、`返信待ち` / `対応待ち` の追跡、AI 広告判定の実行条件をまとめた詳細設計。
+
+主な内容:
+
+- `From` が自分かを最初の分岐とする
+- WIB 作成支援メールは `X-WorkInBox-Origin-Message-ID` で起点メールへ関連付ける
+- 他者発メールは `In-Reply-To` / `References` から追跡中メールとの関係を解決する
+- AI 広告判定は `新規受信メール` と確定したメールだけに行う
+- TrackingBox / Thunderbird Extension と TriageBox の責務境界
+
+TriageBox、返信待ち、対応待ち、広告判定を変更する場合に参照する。
+
 ### [deadline_support_discussion_2026-08-10.md](deadline_support_discussion_2026-08-10.md)
 
 締切登録支援の詳細設計。
