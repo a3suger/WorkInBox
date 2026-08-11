@@ -9,6 +9,7 @@ from workinbox.application import SynchronizationService
 from workinbox.config import AppConfig, DatabaseConfig, IdentityConfig, ImapConfig
 from workinbox.database import EmailDatabase
 from workinbox.models import EmailMessage, ImapFlagsSnapshot
+from workinbox.triage_store import TriageRelationStore
 from workinbox.triagebox import TriageHeaders, TriageMessage, TriageService
 
 
@@ -164,7 +165,8 @@ class TriageBoxWorkflowTest(unittest.TestCase):
 
     def test_support_request_copy_becomes_waiting_action_and_starred(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            config = self.make_config(Path(directory) / "workinbox.db")
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
             origin = triage_message(
                 "<origin@example>",
                 "sender@example.com",
@@ -185,10 +187,15 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             self.assertIn("wib-waiting-action", imap.messages["<request@example>"].flags)
             self.assertIn("\\Flagged", imap.messages["<request@example>"].flags)
             self.assertNotIn("wib-waiting-action", imap.messages["<origin@example>"].flags)
+            self.assertEqual(
+                TriageRelationStore(path).origin_for("<request@example>"),
+                "<origin@example>",
+            )
 
     def test_supporter_reply_moves_focus_from_request_to_reply(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            config = self.make_config(Path(directory) / "workinbox.db")
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
             origin = triage_message(
                 "<origin@example>",
                 "sender@example.com",
@@ -218,6 +225,9 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             self.assertNotIn("\\Flagged", imap.messages["<request@example>"].flags)
             self.assertIn("wib-schedule", imap.messages["<reply@example>"].flags)
             self.assertIn("\\Flagged", imap.messages["<reply@example>"].flags)
+            relations = TriageRelationStore(path)
+            self.assertEqual(relations.origin_for("<request@example>"), "<origin@example>")
+            self.assertEqual(relations.origin_for("<reply@example>"), "<origin@example>")
 
     def test_normal_sync_runs_triage_before_flagged_discovery_and_ai(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
