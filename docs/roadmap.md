@@ -190,12 +190,18 @@ v0.2 の締切関連は Message-ID 単位とする。
 
 ## v0.3 以後 — 待機状態 / TriageBox
 
+TriageBox の判定順序と Message-ID 系ヘッダを使った関係判定の詳細は `docs/triagebox_decision_flow.md` を参照する。
+
 - `返信待ち`
 - `対応待ち`
 - 催促対象
 - 新着返信判定
 - 元メールから新しいメールへの着目点移動
 - 自分宛て備忘メールの入口判定
+- `From` 自己判定
+- `X-WorkInBox-Origin-Message-ID` による WIB 作成支援メールの識別
+- `In-Reply-To` / `References` による返信関係の解決
+- `新規受信メール` のみに対する AI 広告判定
 
 ---
 
