@@ -468,6 +468,8 @@ UID:wib-deadline-123@workinbox
 
 ## TriageBox
 
+詳細な判定順序と Message-ID 系ヘッダの扱いは `docs/triagebox_decision_flow.md` を参照する。
+
 ### 対象
 
 - INBOX 内の未読メール
@@ -476,11 +478,13 @@ UID:wib-deadline-123@workinbox
 
 TriageBox は未読メールを監視し、
 
-- 広告メールか
 - 自分が送信したメールか
 - 既存メールへの返信か
+- 新規受信メールか
 
-を判定する。
+をヘッダと既存状態から先に判定する。
+
+AI による広告メール判定は、この関係判定の結果として `新規受信メール` と確定したメールだけに行う。
 
 現時点では TrackingBox のスター付与は利用者が行う。
 
@@ -607,6 +611,7 @@ v0.2 では行わない:
 
 ## 関連文書
 
+- `docs/triagebox_decision_flow.md`
 - `docs/deadline_support_discussion_2026-08-10.md`
 - `docs/design_notes_tags_and_external_intake.md`
 - `docs/roadmap.md`
