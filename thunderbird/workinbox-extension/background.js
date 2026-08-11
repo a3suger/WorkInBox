@@ -79,20 +79,20 @@ async function resolveReferenceMailTab() {
   return mailTabs.find((tab) => tab.active) || mailTabs[0] || null;
 }
 
-async function resolveInboxForMailTab(mailTab) {
-  const accountId = mailTab?.displayedFolder?.accountId;
+async function resolveInboxForWorkView(referenceTab) {
+  try {
+    return await messenger.folders.getUnifiedFolder("inbox");
+  } catch (error) {
+    console.warn("[WorkInBox bridge] Unified Inbox is unavailable; falling back to an account INBOX", error);
+  }
+
+  const accountId = referenceTab?.displayedFolder?.accountId;
   if (accountId) {
     const account = await messenger.accounts.get(accountId, true);
     const accountInbox = findSpecialFolder(account?.rootFolder, "inbox");
     if (accountInbox) {
       return accountInbox;
     }
-  }
-
-  try {
-    return await messenger.folders.getUnifiedFolder("inbox");
-  } catch (error) {
-    console.warn("[WorkInBox bridge] Unified Inbox is unavailable", error);
   }
 
   const accounts = await messenger.accounts.list(true);
@@ -142,7 +142,7 @@ async function openWorkView(viewName) {
   }
 
   const referenceTab = await resolveReferenceMailTab();
-  const inbox = await resolveInboxForMailTab(referenceTab);
+  const inbox = await resolveInboxForWorkView(referenceTab);
   const mailTab = await resolveDedicatedWorkViewTab(inbox);
 
   await messenger.mailTabs.setQuickFilter(mailTab.id, {
