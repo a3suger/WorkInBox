@@ -146,6 +146,7 @@ async function resolveImapAccount(imapTarget) {
 
   const accounts = await messenger.accounts.list();
   const matches = [];
+  const observed = [];
 
   for (const account of accounts) {
     if (account.type !== "imap") {
@@ -157,8 +158,13 @@ async function resolveImapAccount(imapTarget) {
       serverInfo = await messenger.imapAccounts.getServerInfo(account.id);
     } catch (error) {
       console.warn("[WorkInBox bridge] failed to inspect Thunderbird IMAP account", account.id, error);
+      observed.push(`${account.name || account.id}: server情報取得失敗`);
       continue;
     }
+
+    observed.push(
+      `${account.name || account.id}: ${serverInfo?.username || "?"}@${serverInfo?.host || "?"}:${serverInfo?.port ?? "?"}`,
+    );
 
     if (normalizeHost(serverInfo?.host) !== expectedHost) {
       continue;
@@ -173,8 +179,9 @@ async function resolveImapAccount(imapTarget) {
   }
 
   if (matches.length === 0) {
+    const observedText = observed.length > 0 ? observed.join(" / ") : "IMAPアカウントなし";
     throw new Error(
-      `Thunderbird に WIB 設定と一致する IMAP アカウントがありません: ${expectedUsername}@${expectedHost}:${expectedPort}`,
+      `Thunderbird に WIB 設定と一致する IMAP アカウントがありません。WIB=${expectedUsername}@${expectedHost}:${expectedPort} / Thunderbird=${observedText}`,
     );
   }
   if (matches.length > 1) {
