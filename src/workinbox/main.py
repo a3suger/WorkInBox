@@ -26,6 +26,16 @@ def synchronize(
 
 
 def _log_result(result: SyncResult) -> None:
+    if result.mode == SyncMode.NORMAL:
+        logging.info("TriageBox scanned %d unread messages", result.triage_scanned)
+        logging.info(
+            "TriageBox marked %d support requests waiting for action",
+            result.triage_support_requests,
+        )
+        logging.info(
+            "TriageBox resolved %d waiting-action replies",
+            result.triage_waiting_action_replies,
+        )
     logging.info("Checked %d existing messages", result.checked)
     logging.info("Found %d flagged messages", result.flagged)
     logging.info("Added %d messages", result.added)
@@ -33,6 +43,8 @@ def _log_result(result: SyncResult) -> None:
     logging.info("Inactivated %d messages", result.inactivated)
     if result.mode == SyncMode.NORMAL:
         logging.info("AI-classified %d messages", result.ai_classified)
+    for error in result.triage_errors:
+        logging.warning("Unable to triage %s: %s", error.message_id, error.message)
     for error in result.errors:
         logging.warning("Unable to check %s: %s", error.message_id, error.message)
     for error in result.ai_errors:
