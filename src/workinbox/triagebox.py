@@ -16,6 +16,9 @@ _MESSAGE_ID_RE = re.compile(r"<[^<>\s]+>")
 _WAITING_ACTION = "wib-waiting-action"
 _SCHEDULE = "wib-schedule"
 _REQUESTED = "wib-requested"
+_SUPPORT_REQUEST = "schedule_support_request"
+_SUPPORT_REQUEST_REPLIED = "schedule_support_request_replied"
+_SUPPORT_REPLY = "schedule_support_reply"
 
 
 class TriageSenderKind(StrEnum):
@@ -180,12 +183,15 @@ class TriageService:
 
         # Pass 1: establish WIB-created self-sent support requests first. This
         # lets a reply that is already in the unread set resolve against the
-        # waiting request in the same TriageBox run.
+        # waiting request in the same TriageBox run. A request whose reply has
+        # already arrived is not reactivated even if the request remains unread.
         for item in unread:
             if sender_kind(item.email.sender, identity.all_addresses) != TriageSenderKind.SELF:
                 continue
             origin_message_id = item.headers.origin_message_id
             if origin_message_id is None:
+                continue
+            if self.relations.relation_kind_for(item.email.message_id) == _SUPPORT_REQUEST_REPLIED:
                 continue
             try:
                 origin = self.imap_client.find_message_by_message_id(origin_message_id)
@@ -199,7 +205,7 @@ class TriageService:
                 self.relations.record(
                     item.email.message_id,
                     origin_message_id,
-                    "schedule_support_request",
+                    _SUPPORT_REQUEST,
                 )
                 support_requests += 1
             except (OSError, RuntimeError, ValueError) as exc:
@@ -225,9 +231,15 @@ class TriageService:
                 self._set_flagged(item, enabled=True)
                 if origin_message_id is not None:
                     self.relations.record(
+                        waiting_message.email.message_id,
+                        origin_message_id,
+                        _SUPPORT_REQUEST_REPLIED,
+                        related_message_id=item.email.message_id,
+                    )
+                    self.relations.record(
                         item.email.message_id,
                         origin_message_id,
-                        "schedule_support_reply",
+                        _SUPPORT_REPLY,
                         related_message_id=waiting_message.email.message_id,
                     )
                 waiting_action_replies += 1
