@@ -20,7 +20,7 @@ var imapAccounts = class extends ExtensionCommon.ExtensionAPI {
           return {
             accountId,
             type: String(server.type || ""),
-            host: String(server.hostName || ""),
+            host: String(server.hostname || ""),
             username: String(server.username || ""),
             port: Number(server.port || 0),
           };
