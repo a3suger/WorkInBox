@@ -42,6 +42,22 @@ class EmailMessage:
 
 
 @dataclass(frozen=True, slots=True)
+class TriageMessage:
+    message_id: str
+    sender: str
+    recipients: str | None
+    subject: str | None
+    received_at: str | None
+    origin_message_id: str | None
+    in_reply_to: str | None
+    references: tuple[str, ...]
+    mailbox: str
+    uidvalidity: int
+    uid: int
+    flags: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ImapReference:
     message_id: str
     mailbox: str
