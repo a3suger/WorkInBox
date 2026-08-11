@@ -1,0 +1,27 @@
+[
+  {
+    "namespace": "imapAccounts",
+    "description": "Minimal WorkInBox adapter for resolving a Thunderbird IMAP account from server settings.",
+    "functions": [
+      {
+        "name": "resolveAccount",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "host", "type": "string" },
+          { "name": "username", "type": "string" },
+          { "name": "port", "type": "integer" }
+        ],
+        "returns": {
+          "type": "object",
+          "properties": {
+            "accountId": { "type": "string" },
+            "host": { "type": "string" },
+            "username": { "type": "string" },
+            "port": { "type": "integer" }
+          }
+        }
+      }
+    ]
+  }
+]
