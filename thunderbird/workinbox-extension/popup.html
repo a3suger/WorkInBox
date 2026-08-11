@@ -19,7 +19,12 @@
 
     <section>
       <h2>Quick Filter PoC</h2>
-      <p>Thunderbird の INBOX を開き、スター付き + `回答必要` タグの Quick Filter を適用します。</p>
+      <p>WIB専用タブで使うThunderbirdアカウントを選び、そのアカウントの INBOX にスター付き + `回答必要` タグの Quick Filter を適用します。</p>
+      <label for="work-view-account">対象アカウント</label>
+      <select id="work-view-account">
+        <option value="">読み込み中…</option>
+      </select>
+      <button id="save-work-view-account" type="button">対象アカウントを保存</button>
       <button id="open-answer-work-view" type="button">回答必要を見る</button>
     </section>
 
