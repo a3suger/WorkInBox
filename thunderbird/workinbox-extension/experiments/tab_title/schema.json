@@ -1,0 +1,25 @@
+[
+  {
+    "namespace": "tabTitle",
+    "description": "Minimal WorkInBox adapter for setting the title of a Thunderbird mail tab.",
+    "functions": [
+      {
+        "name": "setTitle",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "tabId", "type": "integer" },
+          { "name": "title", "type": "string" }
+        ],
+        "returns": {
+          "type": "object",
+          "properties": {
+            "requestedTitle": { "type": "string" },
+            "appliedTitle": { "type": "string" },
+            "applied": { "type": "boolean" }
+          }
+        }
+      }
+    ]
+  }
+]
