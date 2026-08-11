@@ -153,6 +153,12 @@ async function openWorkView(viewName) {
 
   await messenger.tabs.update(mailTab.id, { active: true });
 
+  const requestedTabTitle = `WIB:${view.label}`;
+  const titleResult = await messenger.tabTitle.setTitle(mailTab.id, requestedTabTitle);
+  if (!titleResult?.applied) {
+    console.warn("[WorkInBox bridge] tab title was not applied as requested", titleResult);
+  }
+
   return {
     ok: true,
     view: viewName,
@@ -160,6 +166,7 @@ async function openWorkView(viewName) {
     tagKey: view.tagKey,
     accountName: account.name || account.id,
     folderName: inbox.name || "INBOX",
+    tabTitle: titleResult?.appliedTitle || requestedTabTitle,
     tabId: mailTab.id,
     dedicatedTab: true,
   };
