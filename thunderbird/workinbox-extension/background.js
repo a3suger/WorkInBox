@@ -3,8 +3,13 @@ const REQUESTED_TAG = "wib-requested";
 const WAITING_ACTION_TAG = "wib-waiting-action";
 const WORK_VIEW_ACCOUNT_STORAGE_KEY = "workinboxWorkViewAccountId";
 
-const WORK_VIEW_TAGS = {
-  answer: "wib-answer",
+const WORK_VIEWS = {
+  answer: { tagKey: "wib-answer", label: "回答必要" },
+  deadline: { tagKey: "wib-deadline", label: "締切あり" },
+  schedule: { tagKey: "wib-schedule", label: "スケジュール調整" },
+  review: { tagKey: "wib-review", label: "読む・検討" },
+  waitingReply: { tagKey: "wib-waiting-reply", label: "返信待ち" },
+  waitingAction: { tagKey: "wib-waiting-action", label: "対応待ち" },
 };
 
 let workViewTabId = null;
@@ -127,8 +132,8 @@ async function resolveDedicatedWorkViewTab(inbox) {
 }
 
 async function openWorkView(viewName) {
-  const tagKey = WORK_VIEW_TAGS[viewName];
-  if (!tagKey) {
+  const view = WORK_VIEWS[viewName];
+  if (!view) {
     throw new Error(`Unknown WorkInBox work view: ${viewName}`);
   }
 
@@ -141,7 +146,7 @@ async function openWorkView(viewName) {
     tags: {
       mode: "all",
       tags: {
-        [tagKey]: true,
+        [view.tagKey]: true,
       },
     },
   });
@@ -151,7 +156,8 @@ async function openWorkView(viewName) {
   return {
     ok: true,
     view: viewName,
-    tagKey,
+    viewLabel: view.label,
+    tagKey: view.tagKey,
     accountName: account.name || account.id,
     folderName: inbox.name || "INBOX",
     tabId: mailTab.id,
