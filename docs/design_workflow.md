@@ -187,10 +187,34 @@ Thunderbird は以下を担当する。
 - アーカイブ
 - WorkInBox が提供する読み取り専用 `.ics` の購読
 - WorkInBox が登録した締切の閲覧
+- WIB 専用 Quick Filter 作業ビューで現在注目すべきメールを一覧処理する
 
 v0.2 では WorkInBox 由来の締切の追加・修正・削除は WorkInBox で行う。
 
 Thunderbird 側の VTODO 編集を WorkInBox へ戻す双方向同期は行わない。
+
+### WIB 専用 Quick Filter 作業ビュー
+
+v0.2 では、通常利用中の INBOX タブの Quick Filter 状態を壊さないため、WIB 専用のメールタブを 1 枚だけ使用する。
+
+利用者は Extension の設定で、WIB 作業ビューが対象とする IMAP アカウントを事前に選択する。作業ビューは常にそのアカウントの INBOX を対象とし、直前に閲覧していたアカウントや Unified Inbox を暗黙に使用しない。
+
+WIB 専用タブは作業ビュー間で再利用し、タブを閉じた場合だけ次回利用時に再作成する。
+
+作業ビューは次の 6 種類とする。
+
+- `回答必要` = `wib-answer` AND スター付き
+- `締切あり` = `wib-deadline` AND スター付き
+- `スケジュール調整` = `wib-schedule` AND スター付き
+- `読む・検討` = `wib-review` AND スター付き
+- `返信待ち` = `wib-waiting-reply` AND スター付き
+- `対応待ち` = `wib-waiting-action` AND スター付き
+
+ビューを切り替えると同じ専用タブの Quick Filter 条件を変更し、タブ名も `WIB:回答必要`、`WIB:締切あり` のように現在のビューへ追随させる。
+
+スターは「現在注目すべきメール」を示す。作業タグが履歴として残っていても、同期や TriageBox によりスターが外れれば、そのメールは `タグ AND スター付き` の作業ビューから自然に外れる。
+
+Thunderbird 固有の実装詳細は `docs/thunderbird_bridge.md` を参照する。
 
 ---
 
@@ -207,11 +231,14 @@ Thunderbird 側の VTODO 編集を WorkInBox へ戻す双方向同期は行わ�
 
 ### B. INBOX 内のスター付きメール
 
+日常の一覧処理では WIB 専用 Quick Filter 作業ビューを使い、対象メールを種類ごとに絞り込んで処理する。
+
 1. `判定保留` は TrackingBox の `判定保留` 一覧で利用者が再分類する。
 2. `締切あり` / `スケジュール調整` はそれぞれ必要な特殊処理を完了させる。
-3. `回答必要` は必要な回答作業を行う。
-4. `読む・検討` は内容を読んで必要な作業を行う。
-5. `返信待ち` かつ一定期間経過したメールは必要に応じて催促する。
+3. `回答必要` は `WIB:回答必要` ビュー等から必要な回答作業を行う。
+4. `読む・検討` は `WIB:読む・検討` ビュー等から内容を読んで必要な作業を行う。
+5. `返信待ち` かつ一定期間経過したメールは `WIB:返信待ち` ビュー等から必要に応じて催促する。
+6. `対応待ち` は `WIB:対応待ち` ビュー等から支援者の対応状況を確認する。
 
 ---
 
@@ -614,4 +641,5 @@ v0.2 では行わない:
 - `docs/triagebox_decision_flow.md`
 - `docs/deadline_support_discussion_2026-08-10.md`
 - `docs/design_notes_tags_and_external_intake.md`
+- `docs/thunderbird_bridge.md`
 - `docs/roadmap.md`
