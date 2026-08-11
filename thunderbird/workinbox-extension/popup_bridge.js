@@ -2,9 +2,10 @@ const WORKINBOX_URL = "http://127.0.0.1:8000/";
 const WORK_VIEW_ACCOUNT_STORAGE_KEY = "workinboxWorkViewAccountId";
 
 const openWorkInBoxButton = document.querySelector("#open-workinbox");
-const openAnswerWorkViewButton = document.querySelector("#open-answer-work-view");
 const workViewAccountSelect = document.querySelector("#work-view-account");
 const saveWorkViewAccountButton = document.querySelector("#save-work-view-account");
+const workViewKindSelect = document.querySelector("#work-view-kind");
+const openWorkViewButton = document.querySelector("#open-work-view");
 
 function setStatus(text) {
   const status = document.querySelector("#status");
@@ -81,26 +82,29 @@ saveWorkViewAccountButton.addEventListener("click", async () => {
   }
 });
 
-openAnswerWorkViewButton.addEventListener("click", async () => {
-  openAnswerWorkViewButton.disabled = true;
-  setStatus("回答必要の Quick Filter を適用しています…");
+openWorkViewButton.addEventListener("click", async () => {
+  const view = workViewKindSelect.value;
+  const viewLabel = workViewKindSelect.selectedOptions[0]?.textContent || view;
+
+  openWorkViewButton.disabled = true;
+  setStatus(`${viewLabel} の Quick Filter を適用しています…`);
 
   try {
     const response = await messenger.runtime.sendMessage({
       type: "workinbox-open-work-view",
-      view: "answer",
+      view,
     });
 
     if (!response?.ok) {
       throw new Error(response?.error || "Quick Filter を適用できませんでした。");
     }
 
-    setStatus(`${response.accountName || "設定アカウント"} / ${response.folderName || "INBOX"} で回答必要 + スター付きの表示に切り替えました。`);
+    setStatus(`${response.accountName || "設定アカウント"} / ${response.folderName || "INBOX"} で ${response.viewLabel || viewLabel} + スター付きの表示に切り替えました。`);
     window.close();
   } catch (error) {
     console.error("[WorkInBox bridge]", error);
     setStatus(`ERROR: ${error.message || error}`);
-    openAnswerWorkViewButton.disabled = false;
+    openWorkViewButton.disabled = false;
   }
 });
 
