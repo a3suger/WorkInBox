@@ -19,6 +19,7 @@ from .models import (
     TrackedEmail,
     TrackingStatus,
 )
+from .triagebox import TriageResult, TriageService
 from .work_tags import WorkTagDefinition, definitions_for_flags, require_work_tag
 
 
@@ -31,6 +32,7 @@ _INITIAL_CLASSIFICATION_KEYS = frozenset(
         "wib-pending",
     }
 )
+_TRIAGE_MANAGED_KEYS = frozenset({"wib-waiting-reply", "wib-waiting-action"})
 
 _PENDING_RESOLUTIONS: dict[str, tuple[str, ...]] = {
     "deadline": ("wib-deadline",),
@@ -63,6 +65,10 @@ class SyncResult:
     errors: tuple[SyncError, ...]
     ai_classified: int = 0
     ai_errors: tuple[SyncError, ...] = ()
+    triage_scanned: int = 0
+    triage_support_requests: int = 0
+    triage_waiting_action_replies: int = 0
+    triage_errors: tuple[SyncError, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,14 +101,21 @@ class SynchronizationService:
         database: EmailDatabase | None = None,
         imap_client: ImapClient | None = None,
         classifier: OllamaClassifier | None = None,
+        triage_service: TriageService | None = None,
     ) -> None:
         self.config = config
         self.database = database or EmailDatabase(config.database.path)
         self.imap_client = imap_client or ImapClient(config.imap)
         self.classifier = classifier or OllamaClassifier(config.ai)
+        self.triage_service = triage_service or TriageService(config, self.imap_client)
 
     def synchronize(self, mode: SyncMode = SyncMode.NORMAL) -> SyncResult:
         self.database.initialize()
+
+        triage_result = TriageResult()
+        if mode == SyncMode.NORMAL:
+            triage_result = self.triage_service.run()
+
         include_inactive = mode == SyncMode.FULL_RECHECK
         existing = self.database.imap_references(
             self.config.imap.mailbox,
@@ -153,6 +166,13 @@ class SynchronizationService:
             errors=tuple(errors),
             ai_classified=ai_classified,
             ai_errors=ai_errors,
+            triage_scanned=triage_result.scanned,
+            triage_support_requests=triage_result.support_requests,
+            triage_waiting_action_replies=triage_result.waiting_action_replies,
+            triage_errors=tuple(
+                SyncError(error.message_id, error.message)
+                for error in triage_result.errors
+            ),
         )
 
     def _eligible_unclassified(
@@ -178,7 +198,7 @@ class SynchronizationService:
                 )
                 errors.append(SyncError(tracked.message_id, str(exc)))
                 continue
-            if _INITIAL_CLASSIFICATION_KEYS.intersection(snapshot.flags):
+            if (_INITIAL_CLASSIFICATION_KEYS | _TRIAGE_MANAGED_KEYS).intersection(snapshot.flags):
                 continue
             eligible.append(tracked)
         return eligible, errors
