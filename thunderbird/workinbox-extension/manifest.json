@@ -52,6 +52,20 @@
         ],
         "script": "experiments/gloda_indexing/implementation.js"
       }
+    },
+    "tabTitle": {
+      "schema": "experiments/tab_title/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "paths": [
+          [
+            "tabTitle"
+          ]
+        ],
+        "script": "experiments/tab_title/implementation.js"
+      }
     }
   },
   "icons": {
