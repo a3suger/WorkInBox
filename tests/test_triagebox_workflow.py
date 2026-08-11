@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from workinbox.ai_classifier import AiClassification
-from workinbox.application import SynchronizationService
+from workinbox.application import SynchronizationService, WorkTagService
 from workinbox.config import AppConfig, DatabaseConfig, IdentityConfig, ImapConfig
 from workinbox.database import EmailDatabase
 from workinbox.models import EmailMessage, ImapFlagsSnapshot
@@ -228,6 +228,42 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             relations = TriageRelationStore(path)
             self.assertEqual(relations.origin_for("<request@example>"), "<origin@example>")
             self.assertEqual(relations.origin_for("<reply@example>"), "<origin@example>")
+
+    def test_schedule_reply_completion_marks_origin_done_and_unstars_reply(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            database = EmailDatabase(path)
+            database.initialize()
+            origin = triage_message(
+                "<origin@example>",
+                "sender@example.com",
+                1,
+                flags=("\\Flagged", "wib-schedule", "wib-requested"),
+            )
+            reply = triage_message(
+                "<reply@example>",
+                "supporter@example.com",
+                3,
+                flags=("\\Flagged", "wib-schedule"),
+            )
+            database.synchronize([origin.email, reply.email])
+            relations = TriageRelationStore(path)
+            relations.initialize()
+            relations.record(
+                "<reply@example>",
+                "<origin@example>",
+                "schedule_support_reply",
+                related_message_id="<request@example>",
+            )
+            imap = FakeTriageImapClient([origin, reply])
+            service = WorkTagService(config, database=database, imap_client=imap)
+
+            service.set_tag("<reply@example>", "wib-schedule-done", enabled=True)
+
+            self.assertIn("wib-schedule-done", imap.messages["<origin@example>"].flags)
+            self.assertIn("wib-schedule-done", imap.messages["<reply@example>"].flags)
+            self.assertNotIn("\\Flagged", imap.messages["<reply@example>"].flags)
 
     def test_normal_sync_runs_triage_before_flagged_discovery_and_ai(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
