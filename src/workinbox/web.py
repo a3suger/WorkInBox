@@ -238,6 +238,15 @@ def create_app(
     def schedule_adjustments(request: Request):
         return render_schedules(request)
 
+    @app.get("/api/thunderbird/imap-target")
+    def thunderbird_imap_target() -> dict[str, object]:
+        return {
+            "host": config.imap.host,
+            "port": config.imap.port,
+            "username": config.imap.username,
+            "mailbox": config.imap.mailbox,
+        }
+
     @app.get("/deadlines.ics", response_class=PlainTextResponse)
     def deadline_calendar() -> PlainTextResponse:
         try:
