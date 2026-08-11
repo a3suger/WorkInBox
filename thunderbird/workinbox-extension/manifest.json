@@ -66,6 +66,20 @@
         ],
         "script": "experiments/tab_title/implementation.js"
       }
+    },
+    "imapAccounts": {
+      "schema": "experiments/imap_accounts/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "paths": [
+          [
+            "imapAccounts"
+          ]
+        ],
+        "script": "experiments/imap_accounts/implementation.js"
+      }
     }
   },
   "icons": {
