@@ -113,7 +113,26 @@ function normalizeHost(value) {
 }
 
 function normalizeUsername(value) {
-  return String(value || "").trim();
+  return String(value || "").trim().toLowerCase();
+}
+
+function usernameLocalPart(value) {
+  const normalized = normalizeUsername(value);
+  const at = normalized.indexOf("@");
+  return at >= 0 ? normalized.slice(0, at) : normalized;
+}
+
+function usernamesEquivalent(left, right) {
+  const normalizedLeft = normalizeUsername(left);
+  const normalizedRight = normalizeUsername(right);
+  if (normalizedLeft === normalizedRight) {
+    return true;
+  }
+
+  return (
+    usernameLocalPart(normalizedLeft) === usernameLocalPart(normalizedRight)
+    && (normalizedLeft.includes("@") || normalizedRight.includes("@"))
+  );
 }
 
 async function resolveImapAccount(imapTarget) {
@@ -144,10 +163,10 @@ async function resolveImapAccount(imapTarget) {
     if (normalizeHost(serverInfo?.host) !== expectedHost) {
       continue;
     }
-    if (normalizeUsername(serverInfo?.username) !== expectedUsername) {
+    if (Number(serverInfo?.port) !== expectedPort) {
       continue;
     }
-    if (Number(serverInfo?.port) !== expectedPort) {
+    if (!usernamesEquivalent(serverInfo?.username, expectedUsername)) {
       continue;
     }
     matches.push(account);
@@ -159,8 +178,9 @@ async function resolveImapAccount(imapTarget) {
     );
   }
   if (matches.length > 1) {
+    const names = matches.map((account) => account.name || account.id).join(", ");
     throw new Error(
-      `Thunderbird に WIB 設定と一致する IMAP アカウントが複数あります: ${expectedUsername}@${expectedHost}:${expectedPort}`,
+      `Thunderbird に WIB 設定と一致する IMAP アカウントが複数あります: ${names}`,
     );
   }
 
