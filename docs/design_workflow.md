@@ -34,6 +34,7 @@ WorkInBox は分類、締切登録支援、スケジュール調整支援、待�
 - メール本文・メール日時・Message-ID 等のメール情報はメールサーバ上のメールを正本とする。
 - WorkInBox の内部状態と正式登録された締切データは SQLite を正本とする。
 - WorkInBox の IMAP 作業タグはメールサーバ上の IMAP keyword を正本とする。
+- WorkInBox が対象とする IMAP server / account / mailbox は `config.yaml` の `imap` 設定を正本とする。
 - 締切を Thunderbird に表示するための iCalendar (`.ics`) / `VTODO` は SQLite から生成する派生データとする。
 
 v0.2 では Thunderbird は WorkInBox が提供する `.ics` を読み取り専用で購読する。
@@ -197,7 +198,9 @@ Thunderbird 側の VTODO 編集を WorkInBox へ戻す双方向同期は行わ�
 
 v0.2 では、通常利用中の INBOX タブの Quick Filter 状態を壊さないため、WIB 専用のメールタブを 1 枚だけ使用する。
 
-利用者は Extension の設定で、WIB 作業ビューが対象とする IMAP アカウントを事前に選択する。作業ビューは常にそのアカウントの INBOX を対象とし、直前に閲覧していたアカウントや Unified Inbox を暗黙に使用しない。
+WIB 作業ビューが対象とする IMAP account / mailbox は `config.yaml` の `imap` 設定を正本とする。利用者が Thunderbird Extension 側で同じ対象アカウントを選択・保存する必要はない。
+
+作業ビューを開く際、Extension は WIB Web から `host` / `port` / `username` / `mailbox` を取得し、Thunderbird 内の対応する IMAP アカウントを自動解決する。解決できない場合や複数候補になる場合は、別アカウントへ自動フォールバックしない。
 
 WIB 専用タブは作業ビュー間で再利用し、タブを閉じた場合だけ次回利用時に再作成する。
 
