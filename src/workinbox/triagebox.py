@@ -300,7 +300,18 @@ class TriageService:
 
     def _resolve_waiting_action(self, item: TriageMessage) -> TriageMessage | None:
         for message_id in item.headers.referenced_message_ids:
-            logging.info("TriageBox reply resolution: checking referenced message_id=%s", message_id)
+            relation_kind = self.relations.relation_kind_for(message_id)
+            if relation_kind != _SUPPORT_REQUEST:
+                logging.info(
+                    "TriageBox reply resolution: skipping untracked reference message_id=%s relation_kind=%s",
+                    message_id,
+                    relation_kind or "<none>",
+                )
+                continue
+            logging.info(
+                "TriageBox reply resolution: resolving tracked support request message_id=%s",
+                message_id,
+            )
             referenced = self.imap_client.find_message_by_message_id(message_id)
             if referenced is not None and _WAITING_ACTION in referenced.flags:
                 return referenced
