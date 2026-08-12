@@ -74,7 +74,7 @@ class WebRuntimeTest(unittest.TestCase):
             self.assertEqual(running["poll_interval_ms"], 2000)
             self.assertIsInstance(running["current_time"], str)
 
-    def test_normal_sync_route_starts_process_and_returns_immediately(self) -> None:
+    def test_normal_sync_route_starts_process_and_marks_redirect_for_reload(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = FakeSyncProcessManager()
             app = create_app(
@@ -91,6 +91,7 @@ class WebRuntimeTest(unittest.TestCase):
 
             self.assertIsInstance(response, RedirectResponse)
             self.assertEqual(response.status_code, 303)
+            self.assertEqual(response.headers["location"], "/active?sync_started=1")
             self.assertEqual(manager.starts, [False])
 
     def test_full_recheck_route_starts_full_recheck_process(self) -> None:
@@ -109,7 +110,7 @@ class WebRuntimeTest(unittest.TestCase):
             response = route.endpoint()
 
             self.assertIsInstance(response, RedirectResponse)
-            self.assertEqual(response.status_code, 303)
+            self.assertEqual(response.headers["location"], "/active?sync_started=1")
             self.assertEqual(manager.starts, [True])
 
     def test_second_sync_request_does_not_start_another_process(self) -> None:
