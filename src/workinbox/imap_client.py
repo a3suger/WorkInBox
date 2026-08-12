@@ -24,6 +24,7 @@ from .triagebox import TriageFetchResult, TriageMessage, parse_triage_headers
 _FLAGGED_RE = re.compile(rb"(?:^|[ (])\\Flagged(?:[ )]|$)", re.IGNORECASE)
 _FLAGS_RE = re.compile(rb"FLAGS \(([^)]*)\)", re.IGNORECASE)
 _INTERNALDATE_RE = re.compile(rb'INTERNALDATE "([^"]+)"', re.IGNORECASE)
+_UIDNEXT_RE = re.compile(rb"UIDNEXT\s+(\d+)", re.IGNORECASE)
 _KEYWORD_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
@@ -92,14 +93,24 @@ def _uidvalidity(client: imaplib.IMAP4_SSL) -> int:
         raise RuntimeError("Invalid IMAP UIDVALIDITY response") from exc
 
 
-def _uidnext(client: imaplib.IMAP4_SSL) -> int:
+def _uidnext(client: imaplib.IMAP4_SSL, mailbox: str) -> int:
     status, data = client.response("UIDNEXT")
-    if status != "UIDNEXT" or not data or data[0] is None:
-        raise RuntimeError("IMAP UIDNEXT is unavailable")
-    try:
-        return int(data[0])
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError("Invalid IMAP UIDNEXT response") from exc
+    if status == "UIDNEXT" and data and data[0] is not None:
+        try:
+            return int(data[0])
+        except (TypeError, ValueError):
+            pass
+
+    status, data = client.status(mailbox, "(UIDNEXT)")
+    if status == "OK" and data:
+        for value in data:
+            if not isinstance(value, bytes):
+                continue
+            match = _UIDNEXT_RE.search(value)
+            if match is not None:
+                return int(match.group(1))
+
+    raise RuntimeError("IMAP UIDNEXT is unavailable")
 
 
 def _fetch_has_flagged(fetched: list[bytes | tuple[bytes, bytes] | None]) -> bool | None:
@@ -282,7 +293,7 @@ class ImapClient:
             if status != "OK":
                 raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
             current_uidvalidity = _uidvalidity(client)
-            uidnext = _uidnext(client)
+            uidnext = _uidnext(client, self.config.mailbox)
             highest_existing_uid = max(uidnext - 1, 0)
 
             if checkpoint is not None and checkpoint[0] == current_uidvalidity:
@@ -484,7 +495,7 @@ class ImapClient:
                 if not isinstance(raw, bytes):
                     continue
                 parsed = message_from_bytes(raw, policy=policy.default)
-                message = _email_message(parsed, self.config.mailbox, current_uidvalidity, uid)
+                message = _email_message(parsed, self.config.imap.mailbox if hasattr(self.config, 'imap') else self.config.mailbox, current_uidvalidity, uid)
                 if message is not None:
                     messages.append(message)
         return checks, messages
