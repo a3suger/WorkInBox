@@ -136,14 +136,15 @@ def sender_kind(from_header: str | None, self_addresses: tuple[str, ...]) -> Tri
 
 
 def parse_triage_headers(message: Message) -> TriageHeaders:
+    origin_message_id = normalize_message_id(
+        message.get("X-WorkInBox-Origin-Message-ID")
+    ) or normalize_message_id(message.get("X-Forwarded-Message-Id"))
     return TriageHeaders(
         from_address=normalize_address(message.get("From")),
         message_id=normalize_message_id(message.get("Message-ID")),
         in_reply_to=parse_message_id_list(message.get("In-Reply-To")),
         references=parse_message_id_list(message.get("References")),
-        origin_message_id=normalize_message_id(
-            message.get("X-WorkInBox-Origin-Message-ID")
-        ),
+        origin_message_id=origin_message_id,
     )
 
 
@@ -228,7 +229,7 @@ class TriageService:
     def _handle_self_support_request(self, item: TriageMessage) -> bool:
         origin_message_id = item.headers.origin_message_id
         if origin_message_id is None:
-            logging.info("TriageBox self mail: no WIB origin header; no transition")
+            logging.info("TriageBox self mail: no origin header; no transition")
             return False
         if self.relations.relation_kind_for(item.email.message_id) == _SUPPORT_REQUEST_REPLIED:
             logging.info("TriageBox self mail: support request already replied; no reactivation")
@@ -243,10 +244,11 @@ class TriageService:
             logging.info("TriageBox self mail: origin was not found")
             return False
         origin_flags = set(origin.flags)
-        if _SCHEDULE not in origin_flags or _REQUESTED not in origin_flags:
-            logging.info("TriageBox self mail: origin lacks required schedule/requested state")
+        if _SCHEDULE not in origin_flags:
+            logging.info("TriageBox self mail: origin lacks required schedule state")
             return False
 
+        self._set_keyword(origin, _REQUESTED, enabled=True)
         self._set_keyword(item, _WAITING_ACTION, enabled=True)
         self._set_flagged(item, enabled=True)
         self.relations.record(
@@ -255,7 +257,7 @@ class TriageService:
             _SUPPORT_REQUEST,
         )
         logging.info(
-            "TriageBox self mail: marked support request waiting-action and starred: %s",
+            "TriageBox self mail: marked origin requested and support request waiting-action/starred: %s",
             item.email.message_id,
         )
         return True
