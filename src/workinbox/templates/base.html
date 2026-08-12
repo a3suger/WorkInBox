@@ -77,6 +77,7 @@
       margin-bottom: 16px;
       font-weight: 600;
     }
+    .sync-status-detail { font-weight: 400; margin-top: 4px; }
     .error {
       background: #fef2f2;
       border-color: #fecaca;
@@ -170,7 +171,10 @@
 </header>
 <main>
   <div id="wib-sync-status" class="sync-status" hidden>
-    同期処理中です。画面はそのまま操作できます。<span id="wib-sync-pid"></span>
+    <div>同期処理中です。画面はそのまま操作できます。<span id="wib-sync-pid"></span></div>
+    <div class="sync-status-detail">
+      開始: <span id="wib-sync-started-at">-</span> / 現在: <span id="wib-sync-current-time">-</span>
+    </div>
   </div>
   {% block content %}{% endblock %}
 </main>
@@ -178,11 +182,27 @@
 (() => {
   const status = document.getElementById("wib-sync-status");
   const pid = document.getElementById("wib-sync-pid");
+  const startedAt = document.getElementById("wib-sync-started-at");
+  const currentTime = document.getElementById("wib-sync-current-time");
   let observedRunning = false;
+  let pollIntervalMs = 2000;
+  let timer = null;
+
+  const formatTime = (value) => {
+    if (!value) return "-";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString("ja-JP");
+  };
 
   const setSyncButtonsDisabled = (disabled) => {
     document.querySelectorAll('form[action="/sync"] button, form[action="/full-recheck"] button')
       .forEach((button) => { button.disabled = disabled; });
+  };
+
+  const scheduleNextPoll = () => {
+    if (timer !== null) window.clearTimeout(timer);
+    timer = window.setTimeout(refreshSyncStatus, pollIntervalMs);
   };
 
   const refreshSyncStatus = async () => {
@@ -190,27 +210,36 @@
       const response = await fetch("/api/sync-status", {cache: "no-store"});
       if (!response.ok) return;
       const data = await response.json();
+      if (Number.isFinite(data.poll_interval_ms) && data.poll_interval_ms >= 500) {
+        pollIntervalMs = data.poll_interval_ms;
+      }
       if (data.running) {
         observedRunning = true;
         status.hidden = false;
         pid.textContent = data.pid ? ` (PID ${data.pid})` : "";
+        startedAt.textContent = formatTime(data.started_at);
+        currentTime.textContent = formatTime(data.current_time);
         setSyncButtonsDisabled(true);
         return;
       }
 
       status.hidden = true;
       pid.textContent = "";
+      startedAt.textContent = "-";
+      currentTime.textContent = "-";
       setSyncButtonsDisabled(false);
       if (observedRunning) {
         window.location.reload();
+        return;
       }
     } catch (_) {
       // Status polling must never make the UI itself unusable.
+    } finally {
+      scheduleNextPoll();
     }
   };
 
   refreshSyncStatus();
-  window.setInterval(refreshSyncStatus, 2000);
 })();
 </script>
 </body>
