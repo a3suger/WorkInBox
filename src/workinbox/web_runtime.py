@@ -73,7 +73,7 @@ def create_app(
             )
         if not started:
             logging.warning("Synchronization request ignored because another sync is running")
-        return RedirectResponse(url="/active", status_code=303)
+        return RedirectResponse(url="/active?sync_started=1", status_code=303)
 
     @app.post("/sync", response_model=None)
     def normal_sync():
