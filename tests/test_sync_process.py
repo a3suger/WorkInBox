@@ -19,7 +19,7 @@ class SyncProcessManagerTest(unittest.TestCase):
 
         self.assertTrue(started)
         command = popen.call_args.args[0]
-        self.assertEqual(command[-3:], ["--config", "test-config.yaml"][-3:])
+        self.assertEqual(command[-2:], ["--config", "test-config.yaml"])
         self.assertIn("workinbox.main", command)
         self.assertTrue(manager.is_running)
         self.assertEqual(manager.pid, 1234)
