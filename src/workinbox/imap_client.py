@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import imaplib
+import logging
 import re
 from collections.abc import Iterable
 from datetime import date, timedelta
@@ -22,6 +23,7 @@ from .triagebox import TriageMessage, parse_triage_headers
 
 _FLAGGED_RE = re.compile(rb"(?:^|[ (])\\Flagged(?:[ )]|$)", re.IGNORECASE)
 _FLAGS_RE = re.compile(rb"FLAGS \(([^)]*)\)", re.IGNORECASE)
+_INTERNALDATE_RE = re.compile(rb'INTERNALDATE "([^"]+)"', re.IGNORECASE)
 _KEYWORD_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
@@ -112,6 +114,17 @@ def _parse_flags(fetched: list[bytes | tuple[bytes, bytes] | None]) -> tuple[str
         raw_flags = match.group(1).decode("utf-8", errors="replace").strip()
         return tuple(raw_flags.split()) if raw_flags else ()
     raise RuntimeError("IMAP FLAGS are unavailable for the requested UID")
+
+
+def _parse_internaldate(fetched: list[bytes | tuple[bytes, bytes] | None]) -> str | None:
+    for item in fetched:
+        metadata = item[0] if isinstance(item, tuple) else item
+        if not isinstance(metadata, bytes):
+            continue
+        match = _INTERNALDATE_RE.search(metadata)
+        if match is not None:
+            return match.group(1).decode("ascii", errors="replace")
+    return None
 
 
 def _validate_keyword(keyword: str) -> None:
@@ -259,15 +272,57 @@ class ImapClient:
             if status != "OK":
                 raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
             current_uidvalidity = _uidvalidity(client)
-            status, data = client.uid("search", None, "UNSEEN")
+            since = _new_mail_since(date.today(), self.config.new_mail_lookback_days)
+            since_text = since.strftime("%d-%b-%Y")
+            logging.info(
+                "TriageBox IMAP search: UNSEEN SINCE %s (lookback_days=%d)",
+                since_text,
+                self.config.new_mail_lookback_days,
+            )
+            status, data = client.uid("search", None, "UNSEEN", "SINCE", since_text)
             if status != "OK":
                 raise RuntimeError("IMAP UNSEEN search failed")
-            result: list[TriageMessage] = []
-            for uid_bytes in data[0].split() if data and data[0] else []:
-                item = self._fetch_triage_message(client, int(uid_bytes), current_uidvalidity)
+            uid_values = data[0].split() if data and data[0] else []
+            logging.info("TriageBox IMAP search returned %d candidate UIDs", len(uid_values))
+
+            ordered: list[tuple[str, int, TriageMessage]] = []
+            for index, uid_bytes in enumerate(uid_values, start=1):
+                uid = int(uid_bytes)
+                logging.info(
+                    "TriageBox IMAP fetch %d/%d: uid=%d",
+                    index,
+                    len(uid_values),
+                    uid,
+                )
+                item, internaldate = self._fetch_triage_message(
+                    client,
+                    uid,
+                    current_uidvalidity,
+                    include_internaldate=True,
+                )
                 if item is not None:
-                    result.append(item)
-            return result
+                    # INTERNALDATE is an IMAP server arrival timestamp. Its
+                    # wire representation sorts correctly after normalizing to
+                    # the parsed datetime tuple through Internaldate2tuple.
+                    metadata = f'INTERNALDATE "{internaldate}"'.encode() if internaldate else b""
+                    parsed_date = imaplib.Internaldate2tuple(metadata) if internaldate else None
+                    sort_key = (
+                        "%04d%02d%02d%02d%02d%02d"
+                        % parsed_date[:6]
+                        if parsed_date is not None
+                        else "99999999999999"
+                    )
+                    ordered.append((sort_key, uid, item))
+                    logging.info(
+                        "TriageBox IMAP candidate ready: uid=%d internaldate=%s message_id=%s",
+                        uid,
+                        internaldate or "<unavailable>",
+                        item.email.message_id,
+                    )
+
+            ordered.sort(key=lambda value: (value[0], value[1]))
+            logging.info("TriageBox IMAP candidates sorted oldest-first")
+            return [item for _, _, item in ordered]
 
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None:
         with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
@@ -281,7 +336,7 @@ class ImapClient:
                 raise RuntimeError(f"IMAP Message-ID search failed for {message_id}")
             uid_values = data[0].split() if data and data[0] else []
             for uid_bytes in reversed(uid_values):
-                item = self._fetch_triage_message(client, int(uid_bytes), current_uidvalidity)
+                item, _ = self._fetch_triage_message(client, int(uid_bytes), current_uidvalidity)
                 if item is not None:
                     return item
             return None
@@ -291,21 +346,27 @@ class ImapClient:
         client: imaplib.IMAP4_SSL,
         uid: int,
         current_uidvalidity: int,
-    ) -> TriageMessage | None:
-        status, fetched = client.uid("fetch", str(uid), "(UID FLAGS BODY.PEEK[])")
+        *,
+        include_internaldate: bool = False,
+    ) -> tuple[TriageMessage | None, str | None]:
+        query = "(UID FLAGS INTERNALDATE BODY.PEEK[])" if include_internaldate else "(UID FLAGS BODY.PEEK[])"
+        status, fetched = client.uid("fetch", str(uid), query)
         if status != "OK":
-            return None
+            return None, None
         raw = _raw_from_fetch(fetched)
         if not isinstance(raw, bytes):
-            return None
+            return None, None
         parsed = message_from_bytes(raw, policy=policy.default)
         email = _email_message(parsed, self.config.mailbox, current_uidvalidity, uid)
         if email is None:
-            return None
-        return TriageMessage(
-            email=email,
-            headers=parse_triage_headers(parsed),
-            flags=_parse_flags(fetched),
+            return None, None
+        return (
+            TriageMessage(
+                email=email,
+                headers=parse_triage_headers(parsed),
+                flags=_parse_flags(fetched),
+            ),
+            _parse_internaldate(fetched) if include_internaldate else None,
         )
 
     def synchronize(
