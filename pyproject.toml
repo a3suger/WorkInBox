@@ -16,7 +16,7 @@ dependencies = [
 
 [project.scripts]
 workinbox = "workinbox.main:cli"
-workinbox-web = "workinbox.web:cli"
+workinbox-web = "workinbox.web_runtime:cli"
 workinbox-imap-flags = "workinbox.imap_debug:cli"
 workinbox-imap-deadline-tag = "workinbox.imap_tag_debug:cli"
 
