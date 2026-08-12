@@ -59,12 +59,12 @@ def create_app(
             logging.warning("Synchronization request ignored because another sync is running")
         return RedirectResponse(url="/active", status_code=303)
 
-    @app.post("/sync")
-    def normal_sync() -> RedirectResponse | PlainTextResponse:
+    @app.post("/sync", response_model=None)
+    def normal_sync():
         return start_sync(full_recheck=False)
 
-    @app.post("/full-recheck")
-    def full_recheck() -> RedirectResponse | PlainTextResponse:
+    @app.post("/full-recheck", response_model=None)
+    def full_recheck():
         return start_sync(full_recheck=True)
 
     return app
