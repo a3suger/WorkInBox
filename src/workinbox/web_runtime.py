@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -34,6 +35,18 @@ def create_app(
 ) -> FastAPI:
     app = create_base_app(config)
     manager = sync_process_manager or SyncProcessManager(config_path)
+
+    original_lifespan = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        async with original_lifespan(application):
+            try:
+                yield
+            finally:
+                manager.stop()
+
+    app.router.lifespan_context = lifespan
 
     _remove_post_route(app, "/sync")
     _remove_post_route(app, "/full-recheck")
