@@ -18,7 +18,7 @@ from .models import (
     ImapFlagsSnapshot,
     ImapReference,
 )
-from .triagebox import TriageMessage, parse_triage_headers
+from .triagebox import TriageFetchResult, TriageMessage, parse_triage_headers
 
 
 _FLAGGED_RE = re.compile(rb"(?:^|[ (])\\Flagged(?:[ )]|$)", re.IGNORECASE)
@@ -90,6 +90,16 @@ def _uidvalidity(client: imaplib.IMAP4_SSL) -> int:
         return int(data[0])
     except (TypeError, ValueError) as exc:
         raise RuntimeError("Invalid IMAP UIDVALIDITY response") from exc
+
+
+def _uidnext(client: imaplib.IMAP4_SSL) -> int:
+    status, data = client.response("UIDNEXT")
+    if status != "UIDNEXT" or not data or data[0] is None:
+        raise RuntimeError("IMAP UIDNEXT is unavailable")
+    try:
+        return int(data[0])
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("Invalid IMAP UIDNEXT response") from exc
 
 
 def _fetch_has_flagged(fetched: list[bytes | tuple[bytes, bytes] | None]) -> bool | None:
@@ -265,21 +275,51 @@ class ImapClient:
                 flags=_parse_flags(fetched),
             )
 
-    def fetch_unread(self) -> list[TriageMessage]:
+    def fetch_unread(self, checkpoint: tuple[int, int] | None = None) -> TriageFetchResult:
         with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
             client.login(self.config.username, self.config.password)
             status, _ = client.select(self.config.mailbox, readonly=True)
             if status != "OK":
                 raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
             current_uidvalidity = _uidvalidity(client)
-            since = _new_mail_since(date.today(), self.config.new_mail_lookback_days)
-            since_text = since.strftime("%d-%b-%Y")
-            logging.info(
-                "TriageBox IMAP search: UNSEEN SINCE %s (lookback_days=%d)",
-                since_text,
-                self.config.new_mail_lookback_days,
-            )
-            status, data = client.uid("search", None, "UNSEEN", "SINCE", since_text)
+            uidnext = _uidnext(client)
+            highest_existing_uid = max(uidnext - 1, 0)
+
+            if checkpoint is not None and checkpoint[0] == current_uidvalidity:
+                last_uid = checkpoint[1]
+                if highest_existing_uid <= last_uid:
+                    logging.info(
+                        "TriageBox IMAP incremental search: no UIDs after checkpoint=%d",
+                        last_uid,
+                    )
+                    return TriageFetchResult((), current_uidvalidity, highest_existing_uid)
+                start_uid = last_uid + 1
+                logging.info(
+                    "TriageBox IMAP incremental search: UNSEEN UID %d:%d",
+                    start_uid,
+                    highest_existing_uid,
+                )
+                status, data = client.uid(
+                    "search", None, "UNSEEN", "UID", f"{start_uid}:{highest_existing_uid}"
+                )
+            else:
+                since = _new_mail_since(date.today(), self.config.new_mail_lookback_days)
+                since_text = since.strftime("%d-%b-%Y")
+                if checkpoint is None:
+                    logging.info(
+                        "TriageBox IMAP initial search: UNSEEN SINCE %s (lookback_days=%d)",
+                        since_text,
+                        self.config.new_mail_lookback_days,
+                    )
+                else:
+                    logging.warning(
+                        "TriageBox UIDVALIDITY changed from %d to %d; falling back to UNSEEN SINCE %s",
+                        checkpoint[0],
+                        current_uidvalidity,
+                        since_text,
+                    )
+                status, data = client.uid("search", None, "UNSEEN", "SINCE", since_text)
+
             if status != "OK":
                 raise RuntimeError("IMAP UNSEEN search failed")
             uid_values = data[0].split() if data and data[0] else []
@@ -301,14 +341,10 @@ class ImapClient:
                     include_internaldate=True,
                 )
                 if item is not None:
-                    # INTERNALDATE is an IMAP server arrival timestamp. Its
-                    # wire representation sorts correctly after normalizing to
-                    # the parsed datetime tuple through Internaldate2tuple.
                     metadata = f'INTERNALDATE "{internaldate}"'.encode() if internaldate else b""
                     parsed_date = imaplib.Internaldate2tuple(metadata) if internaldate else None
                     sort_key = (
-                        "%04d%02d%02d%02d%02d%02d"
-                        % parsed_date[:6]
+                        "%04d%02d%02d%02d%02d%02d" % parsed_date[:6]
                         if parsed_date is not None
                         else "99999999999999"
                     )
@@ -322,7 +358,11 @@ class ImapClient:
 
             ordered.sort(key=lambda value: (value[0], value[1]))
             logging.info("TriageBox IMAP candidates sorted oldest-first")
-            return [item for _, _, item in ordered]
+            return TriageFetchResult(
+                tuple(item for _, _, item in ordered),
+                current_uidvalidity,
+                highest_existing_uid,
+            )
 
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None:
         with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
