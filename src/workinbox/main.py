@@ -2,12 +2,26 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sqlite3
 import sys
 from pathlib import Path
 
 from .application import SyncMode, SyncResult, SynchronizationService
 from .config import load_config
+
+
+_LOG_LEVEL_ENV = "WORKINBOX_LOG_LEVEL"
+
+
+def _configured_log_level() -> int:
+    value = os.environ.get(_LOG_LEVEL_ENV, "WARNING").strip().upper()
+    level = getattr(logging, value, None)
+    if not isinstance(level, int):
+        raise ValueError(
+            f"Invalid {_LOG_LEVEL_ENV}={value!r}; use DEBUG, INFO, WARNING, ERROR, or CRITICAL"
+        )
+    return level
 
 
 def synchronize(
@@ -61,7 +75,12 @@ def cli() -> int:
         help="Recheck inactive messages as well as active messages",
     )
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    try:
+        log_level = _configured_log_level()
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s %(message)s")
 
     try:
         synchronize(args.config, full_recheck=args.full_recheck)
