@@ -105,7 +105,7 @@ def cli() -> None:
         create_app(config, config_path=args.config),
         host=args.host,
         port=args.port,
-        log_config=None,
+        log_level=logging.getLevelName(log_level).lower(),
     )
 
 
