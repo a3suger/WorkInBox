@@ -75,6 +75,28 @@ class SyncProcessManager:
                 ).start()
             return True
 
+    def stop(self, *, timeout_seconds: float = 5.0) -> None:
+        with self._lock:
+            process = self._process
+            if process is None or process.poll() is not None:
+                return
+            pid = process.pid
+            _LOGGER.info("Stopping synchronization process: pid=%d", pid)
+            process.terminate()
+
+        try:
+            process.wait(timeout=timeout_seconds)
+            _LOGGER.info("Synchronization process stopped: pid=%d", pid)
+        except subprocess.TimeoutExpired:
+            _LOGGER.warning(
+                "Synchronization process did not stop after %.1fs; killing pid=%d",
+                timeout_seconds,
+                pid,
+            )
+            process.kill()
+            process.wait()
+            _LOGGER.info("Synchronization process killed: pid=%d", pid)
+
     def _is_running_unlocked(self) -> bool:
         if self._process is None:
             return False
