@@ -10,7 +10,7 @@ from workinbox.config import AppConfig, DatabaseConfig, IdentityConfig, ImapConf
 from workinbox.database import EmailDatabase
 from workinbox.models import EmailMessage, ImapFlagsSnapshot
 from workinbox.triage_store import TriageRelationStore
-from workinbox.triagebox import TriageHeaders, TriageMessage, TriageService
+from workinbox.triagebox import TriageFetchResult, TriageHeaders, TriageMessage, TriageService
 
 
 class FakeClassifier:
@@ -29,9 +29,21 @@ class FakeTriageImapClient:
         self.keyword_updates: list[tuple[int, str, bool]] = []
         self.flagged_updates: list[tuple[int, bool]] = []
         self.received_references = []
+        self.fetch_checkpoints: list[tuple[int, int] | None] = []
 
-    def fetch_unread(self) -> list[TriageMessage]:
-        return [self.messages[message_id] for message_id in self.unread_ids]
+    def fetch_unread(self, checkpoint: tuple[int, int] | None = None) -> TriageFetchResult:
+        self.fetch_checkpoints.append(checkpoint)
+        last_uid = checkpoint[1] if checkpoint and checkpoint[0] == 10 else 0
+        selected = [
+            self.messages[message_id]
+            for message_id in self.unread_ids
+            if (self.messages[message_id].email.uid or 0) > last_uid
+        ]
+        highest = max(
+            ((item.email.uid or 0) for item in self.messages.values()),
+            default=0,
+        )
+        return TriageFetchResult(tuple(selected), 10, highest)
 
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None:
         return self.messages.get(message_id)
@@ -163,7 +175,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             identity=identity,
         )
 
-    def test_support_request_copy_becomes_waiting_action_and_starred(self) -> None:
+    def test_support_request_copy_marks_origin_requested_and_becomes_waiting_action(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
             config = self.make_config(path)
@@ -171,7 +183,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
                 "<origin@example>",
                 "sender@example.com",
                 1,
-                flags=("\\Flagged", "wib-schedule", "wib-requested"),
+                flags=("\\Flagged", "wib-schedule"),
             )
             request = triage_message(
                 "<request@example>",
@@ -184,13 +196,29 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             result = TriageService(config, imap).run()
 
             self.assertEqual(result.support_requests, 1)
+            self.assertIn("wib-requested", imap.messages["<origin@example>"].flags)
             self.assertIn("wib-waiting-action", imap.messages["<request@example>"].flags)
             self.assertIn("\\Flagged", imap.messages["<request@example>"].flags)
-            self.assertNotIn("wib-waiting-action", imap.messages["<origin@example>"].flags)
             self.assertEqual(
                 TriageRelationStore(path).origin_for("<request@example>"),
                 "<origin@example>",
             )
+            self.assertEqual(TriageRelationStore(path).checkpoint("INBOX"), (10, 2))
+
+    def test_second_run_only_fetches_after_saved_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            old_message = triage_message("<old@example>", "other@example.com", 5)
+            imap = FakeTriageImapClient([old_message])
+            service = TriageService(config, imap)
+
+            first = service.run()
+            second = service.run()
+
+            self.assertEqual(first.scanned, 1)
+            self.assertEqual(second.scanned, 0)
+            self.assertEqual(imap.fetch_checkpoints, [None, (10, 5)])
 
     def test_supporter_reply_moves_focus_from_request_to_reply(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -200,7 +228,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
                 "<origin@example>",
                 "sender@example.com",
                 1,
-                flags=("\\Flagged", "wib-schedule", "wib-requested"),
+                flags=("\\Flagged", "wib-schedule"),
             )
             request = triage_message(
                 "<request@example>",
@@ -238,8 +266,6 @@ class TriageBoxWorkflowTest(unittest.TestCase):
 
             self.assertEqual(repeated.support_requests, 0)
             self.assertEqual(repeated.waiting_action_replies, 0)
-            self.assertNotIn("wib-waiting-action", imap.messages["<request@example>"].flags)
-            self.assertNotIn("\\Flagged", imap.messages["<request@example>"].flags)
 
     def test_schedule_reply_completion_marks_origin_done_and_unstars_reply(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -287,7 +313,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
                 "<origin@example>",
                 "sender@example.com",
                 1,
-                flags=("\\Flagged", "wib-schedule", "wib-requested"),
+                flags=("\\Flagged", "wib-schedule"),
             )
             request = triage_message(
                 "<request@example>",
