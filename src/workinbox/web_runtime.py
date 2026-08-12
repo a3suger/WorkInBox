@@ -80,15 +80,19 @@ def cli() -> None:
     parser.add_argument("--port", type=int, default=8000, help="Web server port")
     args = parser.parse_args()
 
+    log_level = _configured_log_level()
     logging.basicConfig(
-        level=_configured_log_level(),
-        format="%(asctime)s %(levelname)s %(message)s",
+        level=log_level,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        force=True,
     )
+    logging.info("WorkInBox web logging configured: level=%s", logging.getLevelName(log_level))
     config = load_config(args.config)
     uvicorn.run(
         create_app(config, config_path=args.config),
         host=args.host,
         port=args.port,
+        log_config=None,
     )
 
 
