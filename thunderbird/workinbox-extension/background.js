@@ -11,6 +11,7 @@ const WORK_VIEWS = {
 };
 
 let workViewTabId = null;
+const pendingSupportRequests = new Map();
 
 function messageIdCandidates(value) {
   const raw = String(value || "").trim();
@@ -381,6 +382,12 @@ async function beginSupportRequest(request) {
   }
 
   await messenger.compose.setComposeDetails(composeTab.id, updates);
+  pendingSupportRequests.set(composeTab.id, originMessageId);
+  console.info(
+    "[WorkInBox bridge] support request compose tracked",
+    composeTab.id,
+    originMessageId,
+  );
   return { ok: true };
 }
 
@@ -408,41 +415,63 @@ async function addTag(message, tagKey, { flagged } = {}) {
   await messenger.messages.update(message.id, properties);
 }
 
-async function applySupportRequestSentState(sendInfo) {
+async function originMessageIdFromSentMessages(sendInfo) {
   const sentMessages = Array.isArray(sendInfo?.messages) ? sendInfo.messages : [];
-  if (sentMessages.length === 0) {
-    return;
-  }
-
-  let originMessageId = "";
   for (const sentMessage of sentMessages) {
     const full = await messenger.messages.getFull(sentMessage.id);
-    originMessageId = headerValue(full, WORKINBOX_ORIGIN_HEADER);
+    const originMessageId = headerValue(full, WORKINBOX_ORIGIN_HEADER);
     if (originMessageId) {
-      break;
+      return originMessageId;
     }
   }
-
-  if (!originMessageId) {
-    return;
-  }
-
-  const originMessage = await findMessageByHeaderMessageId(originMessageId);
-  if (!originMessage) {
-    console.error(
-      "[WorkInBox bridge] support request sent, but origin message was not found:",
-      originMessageId,
-    );
-    return;
-  }
-
-  // The extension only records that the support request was sent. The INBOX
-  // copy becomes starred + waiting-action during the next normal TriageBox run.
-  await addTag(originMessage, REQUESTED_TAG);
+  return "";
 }
 
-messenger.compose.onAfterSend.addListener((_tab, sendInfo) => {
-  void applySupportRequestSentState(sendInfo).catch((error) => {
+async function applySupportRequestSentState(tab, sendInfo) {
+  const tabId = tab?.id;
+  let originMessageId = tabId === undefined ? "" : pendingSupportRequests.get(tabId) || "";
+
+  try {
+    if (!originMessageId) {
+      originMessageId = await originMessageIdFromSentMessages(sendInfo);
+      if (originMessageId) {
+        console.info(
+          "[WorkInBox bridge] recovered support request origin from sent message",
+          originMessageId,
+        );
+      }
+    }
+
+    if (!originMessageId) {
+      console.warn("[WorkInBox bridge] support request sent without a recoverable origin Message-ID");
+      return;
+    }
+
+    const originMessage = await findMessageByHeaderMessageId(originMessageId);
+    if (!originMessage) {
+      console.error(
+        "[WorkInBox bridge] support request sent, but origin message was not found:",
+        originMessageId,
+      );
+      return;
+    }
+
+    // The extension only records that the support request was sent. The INBOX
+    // copy becomes starred + waiting-action during the next normal TriageBox run.
+    await addTag(originMessage, REQUESTED_TAG);
+    console.info(
+      "[WorkInBox bridge] marked support request origin as requested",
+      originMessageId,
+    );
+  } finally {
+    if (tabId !== undefined) {
+      pendingSupportRequests.delete(tabId);
+    }
+  }
+}
+
+messenger.compose.onAfterSend.addListener((tab, sendInfo) => {
+  void applySupportRequestSentState(tab, sendInfo).catch((error) => {
     console.error("[WorkInBox bridge] failed to apply support request state", error);
   });
 });
