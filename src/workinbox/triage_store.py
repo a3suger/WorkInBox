@@ -30,6 +30,16 @@ class TriageRelationStore:
                 ON triage_relations (origin_message_id, relation_kind)
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS triage_checkpoints (
+                    mailbox TEXT PRIMARY KEY,
+                    uidvalidity INTEGER NOT NULL,
+                    last_uid INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
 
     def record(
         self,
@@ -61,6 +71,35 @@ class TriageRelationStore:
                     now,
                     now,
                 ),
+            )
+
+    def checkpoint(self, mailbox: str) -> tuple[int, int] | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT uidvalidity, last_uid
+                FROM triage_checkpoints
+                WHERE mailbox = ?
+                """,
+                (mailbox,),
+            ).fetchone()
+        if row is None:
+            return None
+        return int(row[0]), int(row[1])
+
+    def save_checkpoint(self, mailbox: str, uidvalidity: int, last_uid: int) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                """
+                INSERT INTO triage_checkpoints (mailbox, uidvalidity, last_uid, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(mailbox) DO UPDATE SET
+                    uidvalidity = excluded.uidvalidity,
+                    last_uid = excluded.last_uid,
+                    updated_at = excluded.updated_at
+                """,
+                (mailbox, uidvalidity, last_uid, now),
             )
 
     def origin_for(self, message_id: str) -> str | None:
