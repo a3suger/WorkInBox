@@ -184,6 +184,8 @@
   const pid = document.getElementById("wib-sync-pid");
   const startedAt = document.getElementById("wib-sync-started-at");
   const currentTime = document.getElementById("wib-sync-current-time");
+  const pageUrl = new URL(window.location.href);
+  const syncStarted = pageUrl.searchParams.get("sync_started") === "1";
   let observedRunning = false;
   let pollIntervalMs = 2000;
   let timer = null;
@@ -203,6 +205,11 @@
   const scheduleNextPoll = () => {
     if (timer !== null) window.clearTimeout(timer);
     timer = window.setTimeout(refreshSyncStatus, pollIntervalMs);
+  };
+
+  const reloadWithoutSyncMarker = () => {
+    pageUrl.searchParams.delete("sync_started");
+    window.location.replace(`${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`);
   };
 
   const refreshSyncStatus = async () => {
@@ -228,8 +235,8 @@
       startedAt.textContent = "-";
       currentTime.textContent = "-";
       setSyncButtonsDisabled(false);
-      if (observedRunning) {
-        window.location.reload();
+      if (observedRunning || syncStarted) {
+        reloadWithoutSyncMarker();
         return;
       }
     } catch (_) {
