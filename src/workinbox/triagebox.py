@@ -115,7 +115,6 @@ def parse_message_id_list(value: str | None) -> tuple[str, ...]:
     if matches:
         return tuple(dict.fromkeys(match.strip() for match in matches))
 
-    # Be tolerant of non-conforming but common single bare Message-ID values.
     bare = value.strip()
     if not bare or any(character.isspace() for character in bare):
         return ()
@@ -149,12 +148,7 @@ def parse_triage_headers(message: Message) -> TriageHeaders:
 
 
 class TriageService:
-    """Apply the deterministic v0.2 TriageBox transitions.
-
-    This stage intentionally handles only relationships that can be decided
-    from headers plus existing IMAP state. AI advertisement classification and
-    ordinary self-sent reply-waiting decisions remain outside this service.
-    """
+    """Apply deterministic TriageBox transitions in mailbox arrival order."""
 
     def __init__(
         self,
@@ -185,122 +179,33 @@ class TriageService:
             logging.warning("TriageBox unread fetch failed: %s", exc)
             return TriageResult(errors=(TriageError("<mailbox>", str(exc)),))
 
-        logging.info("TriageBox will process %d unread candidate messages", len(unread))
+        logging.info(
+            "TriageBox will process %d unread candidate messages oldest-first",
+            len(unread),
+        )
         errors: list[TriageError] = []
         support_requests = 0
         waiting_action_replies = 0
 
-        # Pass 1: establish WIB-created self-sent support requests first. This
-        # lets a reply that is already in the unread set resolve against the
-        # waiting request in the same TriageBox run. A request whose reply has
-        # already arrived is not reactivated even if the request remains unread.
-        logging.info("TriageBox pass 1/2: checking self-sent support requests")
         for index, item in enumerate(unread, start=1):
             kind = sender_kind(item.email.sender, identity.all_addresses)
             logging.info(
-                "TriageBox pass 1 message %d/%d: uid=%s message_id=%s sender_kind=%s",
+                "TriageBox message %d/%d: uid=%s message_id=%s sender_kind=%s",
                 index,
                 len(unread),
                 item.email.uid,
                 item.email.message_id,
                 kind,
             )
-            if kind != TriageSenderKind.SELF:
-                continue
-            origin_message_id = item.headers.origin_message_id
-            if origin_message_id is None:
-                logging.info("TriageBox pass 1: no WIB origin header; no transition")
-                continue
-            if self.relations.relation_kind_for(item.email.message_id) == _SUPPORT_REQUEST_REPLIED:
-                logging.info("TriageBox pass 1: support request already has a reply; no reactivation")
-                continue
             try:
-                logging.info(
-                    "TriageBox pass 1: resolving origin message_id=%s",
-                    origin_message_id,
-                )
-                origin = self.imap_client.find_message_by_message_id(origin_message_id)
-                if origin is None:
-                    logging.info("TriageBox pass 1: origin was not found")
-                    continue
-                origin_flags = set(origin.flags)
-                if _SCHEDULE not in origin_flags or _REQUESTED not in origin_flags:
-                    logging.info(
-                        "TriageBox pass 1: origin lacks required schedule/requested state"
-                    )
-                    continue
-                self._set_keyword(item, _WAITING_ACTION, enabled=True)
-                self._set_flagged(item, enabled=True)
-                self.relations.record(
-                    item.email.message_id,
-                    origin_message_id,
-                    _SUPPORT_REQUEST,
-                )
-                support_requests += 1
-                logging.info(
-                    "TriageBox pass 1: marked support request waiting-action and starred: %s",
-                    item.email.message_id,
-                )
+                if kind == TriageSenderKind.SELF:
+                    if self._handle_self_support_request(item):
+                        support_requests += 1
+                elif self._handle_waiting_action_reply(item):
+                    waiting_action_replies += 1
             except (OSError, RuntimeError, ValueError) as exc:
                 logging.warning(
-                    "TriageBox pass 1 failed for %s: %s",
-                    item.email.message_id,
-                    exc,
-                )
-                errors.append(self._error(item, exc))
-
-        # Pass 2: resolve replies to tracked waiting-action messages. The old
-        # request stops being the focus; the new reply becomes the schedule
-        # work item so normal AI classification does not reinterpret it.
-        logging.info("TriageBox pass 2/2: checking replies to waiting-action messages")
-        for index, item in enumerate(unread, start=1):
-            kind = sender_kind(item.email.sender, identity.all_addresses)
-            logging.info(
-                "TriageBox pass 2 message %d/%d: uid=%s message_id=%s sender_kind=%s references=%d",
-                index,
-                len(unread),
-                item.email.uid,
-                item.email.message_id,
-                kind,
-                len(item.headers.referenced_message_ids),
-            )
-            if kind == TriageSenderKind.SELF:
-                continue
-            try:
-                waiting_message = self._resolve_waiting_action(item)
-                if waiting_message is None:
-                    logging.info("TriageBox pass 2: no waiting-action relation found")
-                    continue
-                origin_message_id = (
-                    self.relations.origin_for(waiting_message.email.message_id)
-                    or waiting_message.headers.origin_message_id
-                )
-                self._set_keyword(waiting_message, _WAITING_ACTION, enabled=False)
-                self._set_flagged(waiting_message, enabled=False)
-                self._set_keyword(item, _SCHEDULE, enabled=True)
-                self._set_flagged(item, enabled=True)
-                if origin_message_id is not None:
-                    self.relations.record(
-                        waiting_message.email.message_id,
-                        origin_message_id,
-                        _SUPPORT_REQUEST_REPLIED,
-                        related_message_id=item.email.message_id,
-                    )
-                    self.relations.record(
-                        item.email.message_id,
-                        origin_message_id,
-                        _SUPPORT_REPLY,
-                        related_message_id=waiting_message.email.message_id,
-                    )
-                waiting_action_replies += 1
-                logging.info(
-                    "TriageBox pass 2: moved focus from request %s to reply %s",
-                    waiting_message.email.message_id,
-                    item.email.message_id,
-                )
-            except (OSError, RuntimeError, ValueError) as exc:
-                logging.warning(
-                    "TriageBox pass 2 failed for %s: %s",
+                    "TriageBox failed for %s: %s",
                     item.email.message_id,
                     exc,
                 )
@@ -319,6 +224,79 @@ class TriageService:
             waiting_action_replies=waiting_action_replies,
             errors=tuple(errors),
         )
+
+    def _handle_self_support_request(self, item: TriageMessage) -> bool:
+        origin_message_id = item.headers.origin_message_id
+        if origin_message_id is None:
+            logging.info("TriageBox self mail: no WIB origin header; no transition")
+            return False
+        if self.relations.relation_kind_for(item.email.message_id) == _SUPPORT_REQUEST_REPLIED:
+            logging.info("TriageBox self mail: support request already replied; no reactivation")
+            return False
+
+        logging.info(
+            "TriageBox self mail: resolving origin message_id=%s",
+            origin_message_id,
+        )
+        origin = self.imap_client.find_message_by_message_id(origin_message_id)
+        if origin is None:
+            logging.info("TriageBox self mail: origin was not found")
+            return False
+        origin_flags = set(origin.flags)
+        if _SCHEDULE not in origin_flags or _REQUESTED not in origin_flags:
+            logging.info("TriageBox self mail: origin lacks required schedule/requested state")
+            return False
+
+        self._set_keyword(item, _WAITING_ACTION, enabled=True)
+        self._set_flagged(item, enabled=True)
+        self.relations.record(
+            item.email.message_id,
+            origin_message_id,
+            _SUPPORT_REQUEST,
+        )
+        logging.info(
+            "TriageBox self mail: marked support request waiting-action and starred: %s",
+            item.email.message_id,
+        )
+        return True
+
+    def _handle_waiting_action_reply(self, item: TriageMessage) -> bool:
+        logging.info(
+            "TriageBox incoming mail: checking %d reply references",
+            len(item.headers.referenced_message_ids),
+        )
+        waiting_message = self._resolve_waiting_action(item)
+        if waiting_message is None:
+            logging.info("TriageBox incoming mail: no waiting-action relation found")
+            return False
+
+        origin_message_id = (
+            self.relations.origin_for(waiting_message.email.message_id)
+            or waiting_message.headers.origin_message_id
+        )
+        self._set_keyword(waiting_message, _WAITING_ACTION, enabled=False)
+        self._set_flagged(waiting_message, enabled=False)
+        self._set_keyword(item, _SCHEDULE, enabled=True)
+        self._set_flagged(item, enabled=True)
+        if origin_message_id is not None:
+            self.relations.record(
+                waiting_message.email.message_id,
+                origin_message_id,
+                _SUPPORT_REQUEST_REPLIED,
+                related_message_id=item.email.message_id,
+            )
+            self.relations.record(
+                item.email.message_id,
+                origin_message_id,
+                _SUPPORT_REPLY,
+                related_message_id=waiting_message.email.message_id,
+            )
+        logging.info(
+            "TriageBox incoming mail: moved focus from request %s to reply %s",
+            waiting_message.email.message_id,
+            item.email.message_id,
+        )
+        return True
 
     def _resolve_waiting_action(self, item: TriageMessage) -> TriageMessage | None:
         for message_id in item.headers.referenced_message_ids:
