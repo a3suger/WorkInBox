@@ -213,6 +213,7 @@
   };
 
   const refreshSyncStatus = async () => {
+    let keepPolling = syncStarted || observedRunning;
     try {
       const response = await fetch("/api/sync-status", {cache: "no-store"});
       if (!response.ok) return;
@@ -222,6 +223,7 @@
       }
       if (data.running) {
         observedRunning = true;
+        keepPolling = true;
         status.hidden = false;
         pid.textContent = data.pid ? ` (PID ${data.pid})` : "";
         startedAt.textContent = formatTime(data.started_at);
@@ -230,6 +232,7 @@
         return;
       }
 
+      keepPolling = false;
       status.hidden = true;
       pid.textContent = "";
       startedAt.textContent = "-";
@@ -240,9 +243,12 @@
         return;
       }
     } catch (_) {
-      // Status polling must never make the UI itself unusable.
+      // If a known sync is running, retry transient status failures. An idle
+      // page does not poll forever just to discover externally started syncs.
     } finally {
-      scheduleNextPoll();
+      if (keepPolling) {
+        scheduleNextPoll();
+      }
     }
   };
 
