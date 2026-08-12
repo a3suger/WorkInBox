@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import uvicorn
@@ -34,16 +35,18 @@ def create_app(
     app = create_base_app(config)
     manager = sync_process_manager or SyncProcessManager(config_path)
 
-    # Replace the synchronous routes installed by the base application. Other
-    # UI routes remain unchanged.
     _remove_post_route(app, "/sync")
     _remove_post_route(app, "/full-recheck")
 
     @app.get("/api/sync-status")
     def sync_status() -> dict[str, object]:
+        started_at = manager.started_at
         return {
             "running": manager.is_running,
             "pid": manager.pid,
+            "started_at": started_at.isoformat(timespec="seconds") if started_at else None,
+            "current_time": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "poll_interval_ms": 2000,
         }
 
     def start_sync(*, full_recheck: bool) -> RedirectResponse | PlainTextResponse:
