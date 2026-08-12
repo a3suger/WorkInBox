@@ -37,13 +37,6 @@ class TriageHeaders:
 
     @property
     def referenced_message_ids(self) -> tuple[str, ...]:
-        """Return relation candidates in deterministic resolution order.
-
-        In-Reply-To is checked first because it normally identifies the direct
-        parent. References is then checked newest-first so the closest known
-        ancestor is preferred. Duplicate Message-IDs are removed while
-        preserving that priority.
-        """
         ordered = [*self.in_reply_to, *reversed(self.references)]
         return tuple(dict.fromkeys(ordered))
 
@@ -53,6 +46,13 @@ class TriageMessage:
     email: EmailMessage
     headers: TriageHeaders
     flags: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TriageFetchResult:
+    messages: tuple[TriageMessage, ...]
+    uidvalidity: int
+    highest_existing_uid: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +70,10 @@ class TriageResult:
 
 
 class TriageImapClient(Protocol):
-    def fetch_unread(self) -> list[TriageMessage]: ...
+    def fetch_unread(
+        self,
+        checkpoint: tuple[int, int] | None = None,
+    ) -> TriageFetchResult: ...
 
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None: ...
 
@@ -174,12 +177,22 @@ class TriageService:
             self.config.imap.new_mail_lookback_days,
         )
         self.relations.initialize()
+        checkpoint = self.relations.checkpoint(self.config.imap.mailbox)
+        if checkpoint is None:
+            logging.info("TriageBox checkpoint: none")
+        else:
+            logging.info(
+                "TriageBox checkpoint: uidvalidity=%d last_uid=%d",
+                checkpoint[0],
+                checkpoint[1],
+            )
         try:
-            unread = self.imap_client.fetch_unread()
+            fetched = self.imap_client.fetch_unread(checkpoint)
         except (OSError, RuntimeError, ValueError) as exc:
             logging.warning("TriageBox unread fetch failed: %s", exc)
             return TriageResult(errors=(TriageError("<mailbox>", str(exc)),))
 
+        unread = fetched.messages
         logging.info(
             "TriageBox will process %d unread candidate messages oldest-first",
             len(unread),
@@ -211,6 +224,23 @@ class TriageService:
                     exc,
                 )
                 errors.append(self._error(item, exc))
+
+        if errors:
+            logging.warning(
+                "TriageBox checkpoint not advanced because %d message error(s) occurred",
+                len(errors),
+            )
+        else:
+            self.relations.save_checkpoint(
+                self.config.imap.mailbox,
+                fetched.uidvalidity,
+                fetched.highest_existing_uid,
+            )
+            logging.info(
+                "TriageBox checkpoint advanced: uidvalidity=%d last_uid=%d",
+                fetched.uidvalidity,
+                fetched.highest_existing_uid,
+            )
 
         logging.info(
             "TriageBox finished: scanned=%d support_requests=%d waiting_action_replies=%d errors=%d",
