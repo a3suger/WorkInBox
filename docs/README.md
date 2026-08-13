@@ -18,7 +18,7 @@
 文書間に矛盾がある場合は、次の優先順位で扱う。
 
 1. `design_workflow.md` の確定済みワークフロー
-2. 現在バージョンの設計 (`design_v0_2.md` など)
+2. 現在の全体設計
 3. 機能別の詳細設計・議論メモ
 4. 古いバージョンの設計・検証記録
 
@@ -36,9 +36,17 @@ WorkInBox の目的、責務境界、正本の考え方などを短くまとめ�
 
 ### [design_workflow.md](design_workflow.md)
 
-TrackingBox / TriageBox、タグ体系、特殊処理、締切登録支援、スケジュール調整支援などの**正式な業務ワークフロー**。
+TrackingBox / TriageBox、タグ体系、締切登録支援、スケジュール調整支援、返信待ち、`見る・検討`、WIB 保存情報、元メール参照、ダッシュボードなどの**正式な業務ワークフロー**。
 
 業務ロジックを変更する場合は必ず参照する。
+
+現在の重要な整理:
+
+- `見る・検討` は、元メールへの返信は不要だが内容を読み、後から残す価値があるかを判断する通常フロー。
+- active な `見る・検討` の出口は原則 `WIB に保存` または `一括処理` の 2 つ。
+- WIB に保存した場合、元メールはスターを外してアーカイブできるが、`見る・検討` タグを参照用に残してよい。
+- Archive フォルダを選択して `見る・検討` の Quick Filter を適用すれば、保存済み元メールを Thunderbird 側からも再発見できる。
+- WIB 保存情報は元メールへの Message-ID 参照、AI要約、利用者メモ等を保持し、後から検索、締切連携、元メール閲覧、返信、新規派生メール作成へつなげる。
 
 ### [roadmap.md](roadmap.md)
 
@@ -48,9 +56,9 @@ TrackingBox / TriageBox、タグ体系、特殊処理、締切登録支援、ス
 
 ### [design_v0_2.md](design_v0_2.md)
 
-v0.2 の技術的な境界、追跡状態、FastAPI、IMAP、SQLite、締切登録支援などの設計。
+v0.2 時点の技術的な境界、追跡状態、FastAPI、IMAP、SQLite、締切登録支援などの設計記録。
 
-v0.2 実装を変更する場合に参照する。
+現在の業務ワークフローと矛盾する場合は `design_workflow.md` を優先する。
 
 ---
 
@@ -89,7 +97,6 @@ TriageBox、返信待ち、対応待ち、広告判定を変更する場合に�
 - SQLite を締切データの正本とする方針
 - read-only ICS / VTODO
 - Message-ID による元メール関連付け
-- Context は v0.2 以後
 
 ### [thunderbird_bridge.md](thunderbird_bridge.md)
 
@@ -100,12 +107,20 @@ WorkInBox Web UI と Thunderbird Extension の共通ブリッジ設計。
 - FastAPI は WorkInBox 本体/UI/APIとして独立して動かす
 - Extension は Thunderbird 固有 API だけを担当する
 - Message-ID から Thunderbird 内のメールを検索する
-- WorkInBox の画面から元メール / Conversation を開く
-- 締切・判定保留・返信待ち等で同じ仕組みを再利用する
+- WorkInBox の画面から元メールを開く
+- 締切・判定保留・返信待ち・WIB 保存情報等で同じ仕組みを再利用する
+
+WIB 保存情報の元メールは Archive 等へ移動している可能性があるため、正式設計では Message-ID を正本の識別子とし、保存フォルダを検索ヒントとして扱う。
 
 ### [design_notes_tags_and_external_intake.md](design_notes_tags_and_external_intake.md)
 
 Thunderbird タグ、Extension、自分宛て備忘メール、ICS、将来の外部形式等に関する補足設計。
+
+### [workinbox_components_and_waiting_review_2026-08-13.md](workinbox_components_and_waiting_review_2026-08-13.md)
+
+3 構成要素、Thunderbird との責務分担、`判定保留`、`返信待ち` の判定・再評価・定期レビューをまとめた設計ノート。
+
+正式ワークフローと矛盾する場合は `design_workflow.md` を優先する。
 
 ### [thunderbird_tag_backup_restore.md](thunderbird_tag_backup_restore.md)
 
@@ -131,22 +146,22 @@ Thunderbird / IMAP タグ相互運用の検証記録。
 
 - メール本体: メールサーバ
 - WorkInBox 作業タグ: IMAP keyword
-- WorkInBox 内部状態: SQLite
+- WorkInBox 内部状態・relation・保存情報: SQLite
 - 正式締切: SQLite
 - Thunderbird 向け締切: SQLite から生成する read-only `.ics` / VTODO
 
 ### Thunderbird との境界
 
-- Thunderbird: メールの閲覧・送信・返信・アーカイブ、WIB締切の閲覧
+- Thunderbird: メールの閲覧・本文作成・送信・返信・転送・アーカイブ
 - FastAPI / Application Service: WorkInBox の業務ロジック
-- Thunderbird Extension: タグ定義、WIB画面の起動、Message-ID から元メール / Conversation を開く等の Thunderbird 固有操作
+- Thunderbird Extension: Thunderbird 固有操作、Message-ID からのメール表示、WIB relation 用ヘッダー付与
 
-### v0.2 では行わないもの
+### 元メール参照
 
-- CalDAV
-- Thunderbird から SQLite への締切逆同期
-- Context 単位の関連締切一覧
-- 独自の汎用 TODO / プロジェクト管理
+- active な作業メールは INBOX 前提で高速検索する。
+- WIB 保存情報の元メールは Archive 等へ移動している可能性がある。
+- 保存情報では Message-ID を正式な識別子とし、account と folder hint を補助情報として持つ。
+- folder hint で見つからない場合は Archive 等の候補、最後に対象アカウント全体へ検索範囲を広げる。
 
 ---
 
@@ -154,7 +169,7 @@ Thunderbird / IMAP タグ相互運用の検証記録。
 
 新しい設計文書を追加した場合は、この `docs/README.md` に必ずリンクと用途を追加する。
 
-既存仕様を変更した場合は、関連する正式設計 (`design_workflow.md` / `design_v0_2.md`) と詳細文書の整合も確認する。
+既存仕様を変更した場合は、関連する正式設計 (`design_workflow.md`) と詳細文書の整合も確認する。
 
 開発依頼・レビュー依頼では、原則として次のように指示できる状態を維持する。
 
