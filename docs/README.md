@@ -28,6 +28,16 @@
 
 ## 中核ドキュメント
 
+### [development_working_agreement.md](development_working_agreement.md)
+
+WorkInBox の仕様検討と実装を速く進めるための開発上の共通ルール。
+
+- 仕様を `今決める / 実装時に決める / 将来でよい` の 3 段階に分ける
+- 小さな設計判断はまず Decision として短く記録する
+- 仕様完成度 70% を目安に最小実装へ進み、Thunderbird + WIB の実機確認で修正する
+
+設計相談・実装計画を始める際は、この進め方を前提とする。
+
 ### [design.md](design.md)
 
 WorkInBox の目的、責務境界、正本の考え方などを短くまとめた全体設計。
