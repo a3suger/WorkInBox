@@ -87,12 +87,45 @@ def preprocess_body(body: str | None, max_chars: int) -> str:
     return text[:max_chars]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class AiClassification:
     deadline: bool
     schedule: bool
     normal_workflow: NormalWorkflow
     reason: str
+
+    def __init__(
+        self,
+        deadline: bool,
+        schedule: bool,
+        answer_required: bool = False,
+        review: bool = False,
+        pending: bool = False,
+        reason: str = "",
+        *,
+        watch: bool = False,
+        nothing_to_do: bool = False,
+        normal_workflow: NormalWorkflow | str | None = None,
+    ) -> None:
+        if normal_workflow is None:
+            if answer_required:
+                resolved = NormalWorkflow.ANSWER
+            elif review:
+                resolved = NormalWorkflow.REVIEW
+            elif watch:
+                resolved = NormalWorkflow.WATCH
+            elif pending:
+                resolved = NormalWorkflow.PENDING
+            elif nothing_to_do:
+                resolved = NormalWorkflow.NONE
+            else:
+                resolved = NormalWorkflow.NONE
+        else:
+            resolved = NormalWorkflow(normal_workflow)
+        object.__setattr__(self, "deadline", deadline)
+        object.__setattr__(self, "schedule", schedule)
+        object.__setattr__(self, "normal_workflow", resolved)
+        object.__setattr__(self, "reason", reason)
 
     def tag_keys(self) -> tuple[str, ...]:
         keys: list[str] = []
