@@ -15,6 +15,8 @@ from .triage_store import TriageRelationStore
 
 _MESSAGE_ID_RE = re.compile(r"<[^<>\s]+>")
 _WAITING_ACTION = "wib-waiting-action"
+_ACTION_READY = "wib-action-ready"
+_BULK = "wib-bulk"
 _SCHEDULE = "wib-schedule"
 _REQUESTED = "wib-requested"
 _SUPPORT_REQUEST = "schedule_support_request"
@@ -306,9 +308,10 @@ class TriageService:
             self.relations.origin_for(waiting_message.email.message_id)
             or waiting_message.headers.origin_message_id
         )
-        self._set_keyword(waiting_message, _WAITING_ACTION, enabled=False)
+        # 対応待ちは、支援者への依頼を行った履歴として M2 に残す。
+        self._set_keyword(waiting_message, _BULK, enabled=True)
         self._set_flagged(waiting_message, enabled=False)
-        self._set_keyword(item, _SCHEDULE, enabled=True)
+        self._set_keyword(item, _ACTION_READY, enabled=True)
         self._set_flagged(item, enabled=True)
         if origin_message_id is not None:
             self.relations.record(
@@ -324,7 +327,7 @@ class TriageService:
                 related_message_id=waiting_message.email.message_id,
             )
         logging.info(
-            "TriageBox incoming mail: moved focus from request %s to reply %s",
+            "TriageBox incoming mail: archived support request attention and marked reply action-ready: request=%s reply=%s",
             waiting_message.email.message_id,
             item.email.message_id,
         )
