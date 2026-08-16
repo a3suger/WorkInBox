@@ -30,10 +30,14 @@ _INITIAL_CLASSIFICATION_KEYS = frozenset(
         "wib-schedule",
         "wib-answer",
         "wib-review",
+        "wib-watch",
         "wib-pending",
+        "wib-bulk",
     }
 )
-_TRIAGE_MANAGED_KEYS = frozenset({"wib-waiting-reply", "wib-waiting-action"})
+_TRIAGE_MANAGED_KEYS = frozenset(
+    {"wib-waiting-reply", "wib-waiting-action", "wib-action-ready"}
+)
 
 _PENDING_RESOLUTIONS: dict[str, tuple[str, ...]] = {
     "deadline": ("wib-deadline",),
@@ -218,6 +222,31 @@ class SynchronizationService:
                 enabled=True,
                 expected_uidvalidity=tracked.uidvalidity,
             )
+            if classification.should_unstar():
+                try:
+                    self.imap_client.set_flagged(
+                        tracked.uid,
+                        enabled=False,
+                        expected_uidvalidity=tracked.uidvalidity,
+                    )
+                except (OSError, RuntimeError, ValueError):
+                    try:
+                        self.imap_client.set_keywords(
+                            tracked.uid,
+                            tag_keys,
+                            enabled=False,
+                            expected_uidvalidity=tracked.uidvalidity,
+                        )
+                    except (OSError, RuntimeError, ValueError):
+                        logging.exception(
+                            "Failed to roll back AI bulk tag for %s",
+                            tracked.message_id,
+                        )
+                    raise
+                self.database.update_tracking_status(
+                    tracked.message_id,
+                    TrackingStatus.INACTIVE_UNSTARRED,
+                )
         except (OSError, RuntimeError, ValueError) as exc:
             elapsed = perf_counter() - started
             logging.warning(
@@ -230,10 +259,11 @@ class SynchronizationService:
 
         elapsed = perf_counter() - started
         logging.info(
-            "AI classified %s in %.2fs -> %s",
+            "AI classified %s in %.2fs -> %s%s",
             tracked.message_id,
             elapsed,
             ",".join(tag_keys),
+            " + unstarred" if classification.should_unstar() else "",
         )
         return _AiClassificationOutcome(tracked.message_id, True)
 
