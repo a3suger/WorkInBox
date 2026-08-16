@@ -14,7 +14,7 @@ from workinbox.work_tags import WORK_TAGS, definitions_for_flags, require_work_t
 class FakeTagImapClient:
     def __init__(self) -> None:
         self.flags_by_uid: dict[int, tuple[str, ...]] = {
-            1: ("\\Seen", "\\Flagged", "wib-important", "wib-deadline", "$label1")
+            1: ("\\Seen", "\\Flagged", "wib-watch", "wib-deadline", "$label1")
         }
         self.write_calls: list[tuple[int, str, bool, int | None]] = []
 
@@ -71,16 +71,28 @@ class WorkTagServiceTest(unittest.TestCase):
             ]
         )
 
-    def test_canonical_tag_set_contains_twelve_keys(self) -> None:
-        self.assertEqual(len(WORK_TAGS), 12)
-        self.assertEqual(WORK_TAGS[0].key, "wib-important")
-        self.assertEqual(WORK_TAGS[-1].key, "wib-batch")
+    def test_canonical_tag_set_matches_current_design(self) -> None:
+        self.assertEqual(len(WORK_TAGS), 13)
+        keys = {tag.key for tag in WORK_TAGS}
+        self.assertIn("wib-watch", keys)
+        self.assertIn("wib-action-ready", keys)
+        self.assertIn("wib-bulk", keys)
+        self.assertNotIn("wib-important", keys)
+        self.assertNotIn("wib-batch", keys)
 
     def test_definitions_for_flags_ignores_non_workinbox_flags(self) -> None:
         tags = definitions_for_flags(
             ("\\Seen", "$label1", "wib-deadline", "wib-answer", "OtherTag")
         )
         self.assertEqual([tag.key for tag in tags], ["wib-deadline", "wib-answer"])
+
+    def test_legacy_batch_flag_is_read_as_bulk_without_rewriting_mail(self) -> None:
+        tags = definitions_for_flags(("wib-batch",))
+        self.assertEqual([tag.key for tag in tags], ["wib-bulk"])
+
+    def test_legacy_important_is_not_reinterpreted_as_watch(self) -> None:
+        tags = definitions_for_flags(("wib-important",))
+        self.assertEqual(tags, ())
 
     def test_read_for_emails_returns_live_imap_tags(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -98,7 +110,7 @@ class WorkTagServiceTest(unittest.TestCase):
             self.assertIsNone(views[0].error)
             self.assertEqual(
                 [tag.key for tag in views[0].tags],
-                ["wib-important", "wib-deadline"],
+                ["wib-watch", "wib-deadline"],
             )
 
     def test_set_tag_writes_only_requested_keyword_with_saved_uidvalidity(self) -> None:
@@ -131,7 +143,11 @@ class WorkTagServiceTest(unittest.TestCase):
             self.assertEqual(imap.write_calls, [])
 
     def test_require_work_tag_returns_canonical_definition(self) -> None:
-        self.assertEqual(require_work_tag("wib-review").label, "読む・検討")
+        self.assertEqual(require_work_tag("wib-answer").label, "返信必要")
+        self.assertEqual(require_work_tag("wib-review").label, "見る・検討")
+        self.assertEqual(require_work_tag("wib-watch").label, "注目")
+        self.assertEqual(require_work_tag("wib-action-ready").label, "対応あり")
+        self.assertEqual(require_work_tag("wib-bulk").label, "一括処理")
 
 
 if __name__ == "__main__":
