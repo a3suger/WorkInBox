@@ -54,21 +54,19 @@
         <div class="message-body">{{ item.body or "(本文なし)" }}</div>
       </details>
 
+      <p class="muted">通常ワークフローを次の4つから確定します。</p>
       <div class="resolution-actions">
-        <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=deadline">
-          <button type="submit">締切あり</button>
-        </form>
-        <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=schedule">
-          <button type="submit">スケジュール調整</button>
-        </form>
-        <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=deadline_schedule">
-          <button type="submit">締切＋スケジュール</button>
-        </form>
         <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=answer">
-          <button type="submit">回答必要</button>
+          <button type="submit">返信必要</button>
         </form>
         <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=review">
-          <button type="submit">読む・検討</button>
+          <button type="submit">見る・検討</button>
+        </form>
+        <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=watch">
+          <button type="submit">注目</button>
+        </form>
+        <form method="post" action="/pending/resolve?message_id={{ email.message_id | urlencode }}&amp;resolution=none">
+          <button type="submit">何もしなくてよい</button>
         </form>
       </div>
     {% endif %}
