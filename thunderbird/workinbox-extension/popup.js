@@ -1,5 +1,7 @@
 const SNAPSHOT_KEY = "preWorkInBoxTagSnapshot";
 const SNAPSHOT_SCHEMA = "workinbox-thunderbird-tags/v1";
+const THUNDERBIRD_DEFAULT_IMPORTANT_KEY = "$label1";
+const THUNDERBIRD_DEFAULT_IMPORTANT_ORDINAL = "zz-workinbox-important";
 
 // Thunderbird sorts tags by ordinal (falling back to the tag key).
 // Numeric shortcuts are reserved for tags that the user may intentionally
@@ -187,6 +189,22 @@ async function ensureWibTag(definition) {
   }
 }
 
+async function moveDefaultImportantBehindWibTags() {
+  const tags = await messenger.messages.tags.list();
+  const important = tags.find((tag) => tag.key === THUNDERBIRD_DEFAULT_IMPORTANT_KEY);
+  if (!important) {
+    return false;
+  }
+  if ((important.ordinal || "") === THUNDERBIRD_DEFAULT_IMPORTANT_ORDINAL) {
+    return false;
+  }
+
+  await messenger.messages.tags.update(THUNDERBIRD_DEFAULT_IMPORTANT_KEY, {
+    ordinal: THUNDERBIRD_DEFAULT_IMPORTANT_ORDINAL,
+  });
+  return true;
+}
+
 async function provisionTags() {
   if (!(await getStoredSnapshot())) {
     throw new Error("WIBタグ登録の前にタグスナップショットを保存してください。");
@@ -195,6 +213,11 @@ async function provisionTags() {
   for (const definition of WIB_TAGS) {
     await ensureWibTag(definition);
   }
+
+  // Thunderbird's built-in $label1 (`重要` in Japanese) normally owns the
+  // first tag shortcut. Keep the tag itself, but move its sort ordinal behind
+  // WIB tags so 1-6 are reserved for the intended WIB workflow choices.
+  await moveDefaultImportantBehindWibTags();
 
   // Remove only obsolete Thunderbird tag definitions. Existing IMAP keywords
   // on messages are deliberately left untouched so historical data is not
