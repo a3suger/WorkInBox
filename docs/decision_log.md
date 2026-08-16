@@ -89,3 +89,16 @@
 未確定: ダッシュボードの最終レイアウト、表示順、優先順位表現は実装時に決める。
 
 統合先: `docs/design.md` の「利用者フロー」「ダッシュボード」。
+
+### Decision 008: 現行タグの IMAP keyword を確定する
+
+- `注目` の IMAP keyword は `wib-watch` とする。
+- `対応あり` の IMAP keyword は `wib-action-ready` とする。
+- `一括処理` は正式設計どおり `wib-bulk` を使用する。
+- 旧 `wib-important` は `注目` へ自動変換しない。旧 `重要` と `注目` は意味が異なるためである。
+- 旧 `wib-batch` は新規書き込みには使用しないが、既存メールを壊さないため WorkInBox 本体では `wib-bulk` として読み取る互換性を残す。
+- Thunderbird Extension の現行タグ登録は13タグとし、旧 `wib-important` / `wib-batch` のローカルタグ定義を整理しても、メール上の既存 IMAP keyword は破壊的に削除しない。
+
+未確定: 旧 keyword をメール全体から物理移行する処理は、必要性が確認できるまで行わない。
+
+統合先: `docs/design.md` の「タグ体系」。現時点では実装時決定としていた keyword をこの Decision で確定する。
