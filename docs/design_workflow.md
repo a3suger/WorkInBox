@@ -46,7 +46,13 @@ WorkInBox は独立した TODO / プロジェクト管理ツールや独自メ�
 
 ### `X-WorkInBox-Origin-Message-ID`
 
-`X-WorkInBox-Origin-Message-ID` は、専用ワークフローで起点メール M1 から通常 Reply ではない新規メール M2 を作成するときに、M2 がどの M1 から派生したかを示すための WorkInBox 拡張ヘッダーである。
+この節では、次の記号を用いる。
+
+- M1 = 専用ワークフローの起点メール
+- M2 = M1 から WIB を起点として作成した新規メール
+- M3 = M2 に対する返信
+
+`X-WorkInBox-Origin-Message-ID` は、専用ワークフローで M1 から通常 Reply ではない M2 を作成するときに、M2 がどの M1 から派生したかを示すための WorkInBox 拡張ヘッダーである。
 
 受信済みメールへ後から拡張ヘッダーを追加することは前提にしない。M2 送信後は M1 と M2 の Message-ID の relation を SQLite に永続化し、その後の M3 以降は標準の `In-Reply-To` / `References` と SQLite relation で追跡する。
 
@@ -282,7 +288,7 @@ AI の対象条件そのものは TrackingBox の節で定義する。
 
 - `依頼済み`
 
-支援者へ依頼した履歴を表す。完了状態ではなく、通常は解除しない。
+`依頼済み` は専用ワークフローの起点メールに付け、そのワークフローから支援者への依頼を行った履歴を表す。完了状態ではなく、通常は解除しない。
 
 ### 整理タグ
 
@@ -294,7 +300,7 @@ AI の対象条件そのものは TrackingBox の節で定義する。
 
 ## 通常ワークフローの終了
 
-`返信必要` / `見る・検討` / `注目` の通常ワークフローは、利用者が終了を判断した時点で次のどちらかへ進む。
+`返信必要` / `見る・検討` / `注目` の通常ワークフローは、着眼点のメールを利用者が閲覧して、終了を判断した時点で次のどちらかへ進む。
 
 ### 1. 通常終了
 
@@ -655,6 +661,7 @@ sequenceDiagram
 
     Note over M1: ★ + スケジュール調整
     M1->>M2: WIBから支援者へ新規メール作成
+    Note over M1: 依頼済み
     Note over M2: X-WorkInBox-Origin-Message-ID = M1
     Note over M2: ★ + 対応待ち
     M2->>M3: 支援者から返信
@@ -667,7 +674,9 @@ sequenceDiagram
 
 支援者依頼メール M2 には `X-WorkInBox-Origin-Message-ID` で M1 の Message-ID を入れる。
 
-自分宛て/Cc の M2 を TriageBox が同期で確認した時点で、M1 に `依頼済み`、M2 に `対応待ち + ★` を付け、M1 と M2 の relation を SQLite に保存する。送信直後に起点メール M1 を先行変更しない。
+WIB から支援者への新規メール M2 の作成が成立した時点で、起点メール M1 に `依頼済み` を付ける。
+
+自分宛て/Cc の M2 を TriageBox が同期で確認した時点で、M2 に `対応待ち + ★` を付け、M1 と M2 の relation を SQLite に保存する。
 
 支援者返信 M3 は `In-Reply-To` / `References` から M2 を特定し、SQLite relation から M1 の専用ワークフローに到達する。M3 自体に `X-WorkInBox-Origin-Message-ID` がなくてもよい。
 
