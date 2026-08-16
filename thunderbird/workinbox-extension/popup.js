@@ -2,24 +2,27 @@ const SNAPSHOT_KEY = "preWorkInBoxTagSnapshot";
 const SNAPSHOT_SCHEMA = "workinbox-thunderbird-tags/v1";
 
 // Thunderbird sorts tags by ordinal (falling back to the tag key).
-// The six primary human-classification tags use ordinals beginning with "!"
-// so they sort before normal/default tag keys and become numeric shortcuts 1-6.
+// Keep the existing numeric shortcut positions for the five surviving primary
+// tags, and reuse the old !01 slot for the new `注目` workflow tag.
 const WIB_TAGS = Object.freeze([
-  { key: "wib-important", tag: "重要", color: "#7B1FA2", ordinal: "!01" },
+  { key: "wib-watch", tag: "注目", color: "#7B1FA2", ordinal: "!01" },
   { key: "wib-deadline", tag: "締切あり", color: "#D32F2F", ordinal: "!02" },
   { key: "wib-schedule", tag: "スケジュール調整", color: "#F57C00", ordinal: "!03" },
-  { key: "wib-answer", tag: "回答必要", color: "#1976D2", ordinal: "!04" },
-  { key: "wib-review", tag: "読む・検討", color: "#039BE5", ordinal: "!05" },
+  { key: "wib-answer", tag: "返信必要", color: "#1976D2", ordinal: "!04" },
+  { key: "wib-review", tag: "見る・検討", color: "#039BE5", ordinal: "!05" },
   { key: "wib-pending", tag: "判定保留", color: "#757575", ordinal: "!06" },
   { key: "wib-deadline-done", tag: "締切登録済み", color: "#8E2424" },
   { key: "wib-schedule-done", tag: "スケジュール対応済み", color: "#A65300" },
   { key: "wib-waiting-reply", tag: "返信待ち", color: "#388E3C" },
   { key: "wib-waiting-action", tag: "対応待ち", color: "#7CB342" },
+  { key: "wib-action-ready", tag: "対応あり", color: "#558B2F" },
   { key: "wib-requested", tag: "依頼済み", color: "#795548" },
-  { key: "wib-batch", tag: "一括処理", color: "#424242" },
+  { key: "wib-bulk", tag: "一括処理", color: "#424242" },
 ]);
 
 const WIB_KEYS = new Set(WIB_TAGS.map((item) => item.key));
+const LEGACY_WIB_KEYS = new Set(["wib-important", "wib-batch"]);
+const MANAGED_WIB_KEYS = new Set([...WIB_KEYS, ...LEGACY_WIB_KEYS]);
 
 const statusElement = document.querySelector("#status");
 const currentTagsElement = document.querySelector("#current-tags");
@@ -93,9 +96,9 @@ async function refresh() {
     setStatus(
       `導入前スナップショット保存済み。WIBタグ ${registeredWibCount}/${WIB_TAGS.length} 個を確認しました。`,
     );
-  } else if (registeredWibCount > 0) {
+  } else if (tags.some((tag) => MANAGED_WIB_KEYS.has(tag.key))) {
     setStatus(
-      `導入前スナップショットは未保存です。現在 WIB 系タグが ${registeredWibCount} 個あります。スナップショットには現在の状態がそのまま保存されます。`,
+      "導入前スナップショットは未保存です。現在 WIB 系タグがあります。スナップショットには現在の状態がそのまま保存されます。",
     );
   } else {
     setStatus("導入前スナップショットはまだ保存されていません。");
@@ -108,7 +111,7 @@ async function createSnapshot() {
   }
 
   const tags = await messenger.messages.tags.list();
-  const existingWibTags = tags.filter((tag) => WIB_KEYS.has(tag.key));
+  const existingWibTags = tags.filter((tag) => MANAGED_WIB_KEYS.has(tag.key));
 
   if (existingWibTags.length > 0) {
     const names = existingWibTags.map((tag) => `${tag.key} (${tag.tag})`).join("\n");
@@ -200,7 +203,19 @@ async function provisionTags() {
     await ensureWibTag(definition);
   }
 
-  setStatus("12個のWIBタグを登録し、主要6タグを数字キー 1〜6 の順に配置しました。");
+  // Remove only obsolete Thunderbird tag definitions. Existing IMAP keywords
+  // on messages are deliberately left untouched so historical data is not
+  // destructively rewritten during this migration.
+  const currentTags = await messenger.messages.tags.list();
+  for (const tag of currentTags) {
+    if (LEGACY_WIB_KEYS.has(tag.key)) {
+      await messenger.messages.tags.delete(tag.key);
+    }
+  }
+
+  setStatus(
+    `${WIB_TAGS.length}個のWIBタグを登録し、主要6タグを数字キー 1〜6 の順に配置しました。`,
+  );
   await refresh();
 }
 
@@ -234,7 +249,7 @@ async function restoreSnapshot(snapshot, sourceLabel) {
 
   let current = await messenger.messages.tags.list();
   for (const tag of current) {
-    if (WIB_KEYS.has(tag.key)) {
+    if (MANAGED_WIB_KEYS.has(tag.key)) {
       await messenger.messages.tags.delete(tag.key);
     }
   }
