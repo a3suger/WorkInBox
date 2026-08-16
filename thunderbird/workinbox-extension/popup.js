@@ -94,11 +94,11 @@ async function refresh() {
   const registeredWibCount = tags.filter((tag) => WIB_KEYS.has(tag.key)).length;
   if (snapshot) {
     setStatus(
-      `導入前スナップショット保存済み。WIBタグ ${registeredWibCount}/${WIB_TAGS.length} 個を確認しました。`,
+      `タグスナップショット保存済み。WIBタグ ${registeredWibCount}/${WIB_TAGS.length} 個を確認しました。`,
     );
   } else if (tags.some((tag) => MANAGED_WIB_KEYS.has(tag.key))) {
     setStatus(
-      "導入前スナップショットは未保存です。現在 WIB 系タグがあります。スナップショットには現在の状態がそのまま保存されます。",
+      "タグスナップショットは未保存です。既存 WIB 環境のため、現在のタグ状態を移行前スナップショットとして保存してから新しい WIB タグへ移行します。",
     );
   } else {
     setStatus("導入前スナップショットはまだ保存されていません。");
@@ -107,25 +107,11 @@ async function refresh() {
 
 async function createSnapshot() {
   if (await getStoredSnapshot()) {
-    throw new Error("導入前スナップショットは既に保存されています。自動上書きはしません。");
+    throw new Error("タグスナップショットは既に保存されています。自動上書きはしません。");
   }
 
   const tags = await messenger.messages.tags.list();
   const existingWibTags = tags.filter((tag) => MANAGED_WIB_KEYS.has(tag.key));
-
-  if (existingWibTags.length > 0) {
-    const names = existingWibTags.map((tag) => `${tag.key} (${tag.tag})`).join("\n");
-    const proceed = window.confirm(
-      "現在すでに WIB 系タグがあります。\n\n" +
-        names +
-        "\n\nこれらも『導入前の状態』として保存します。" +
-        "テスト用タグを導入前状態に含めたくない場合はキャンセルし、先にそのタグ定義を削除してください。\n\n保存を続けますか？",
-    );
-    if (!proceed) {
-      return;
-    }
-  }
-
   const snapshot = {
     schema: SNAPSHOT_SCHEMA,
     createdAt: new Date().toISOString(),
@@ -134,14 +120,20 @@ async function createSnapshot() {
   };
 
   await messenger.storage.local.set({ [SNAPSHOT_KEY]: snapshot });
-  setStatus(`導入前スナップショットを保存しました（タグ ${snapshot.tags.length} 個）。`);
+  if (existingWibTags.length > 0) {
+    setStatus(
+      `現在のタグ状態を移行前スナップショットとして保存しました（WIB系 ${existingWibTags.length} 個 / 全 ${snapshot.tags.length} 個）。`,
+    );
+  } else {
+    setStatus(`導入前スナップショットを保存しました（タグ ${snapshot.tags.length} 個）。`);
+  }
   await refresh();
 }
 
 async function exportSnapshot() {
   const snapshot = await getStoredSnapshot();
   if (!snapshot) {
-    throw new Error("書き出せる導入前スナップショットがありません。");
+    throw new Error("書き出せるタグスナップショットがありません。");
   }
 
   const json = JSON.stringify(snapshot, null, 2) + "\n";
@@ -154,7 +146,7 @@ async function exportSnapshot() {
       filename: "thunderbird-tags-before-workinbox.json",
       saveAs: true,
     });
-    setStatus("導入前スナップショットのJSON書き出しを開始しました。");
+    setStatus("タグスナップショットのJSON書き出しを開始しました。");
   } finally {
     window.setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
@@ -196,7 +188,7 @@ async function ensureWibTag(definition) {
 
 async function provisionTags() {
   if (!(await getStoredSnapshot())) {
-    throw new Error("WIBタグ登録の前に導入前スナップショットを保存してください。");
+    throw new Error("WIBタグ登録の前にタグスナップショットを保存してください。");
   }
 
   for (const definition of WIB_TAGS) {
@@ -268,7 +260,7 @@ async function restoreSnapshot(snapshot, sourceLabel) {
 async function restoreStoredSnapshot() {
   const snapshot = await getStoredSnapshot();
   if (!snapshot) {
-    throw new Error("保存済みの導入前スナップショットがありません。");
+    throw new Error("保存済みのタグスナップショットがありません。");
   }
   await restoreSnapshot(snapshot, "保存済みスナップショット");
 }
@@ -285,7 +277,6 @@ async function restoreFromFile(file) {
   } catch (_error) {
     throw new Error("選択したファイルは有効なJSONではありません。");
   }
-
   await restoreSnapshot(snapshot, file.name);
 }
 
