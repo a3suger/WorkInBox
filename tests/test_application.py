@@ -188,7 +188,7 @@ class SynchronizationServiceTest(unittest.TestCase):
                 [(3, ("wib-deadline", "wib-schedule"), True, 10)],
             )
 
-    def test_pending_view_and_resolution_use_imap_tags(self) -> None:
+    def test_pending_view_and_resolution_use_normal_workflow_tags(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
             database = EmailDatabase(path)
@@ -235,15 +235,14 @@ class SynchronizationServiceTest(unittest.TestCase):
             self.assertEqual([item.email.message_id for item in pending], ["<pending@example>"])
             self.assertEqual(pending[0].body, "添付を確認して回答してください。")
 
-            service.resolve_pending("<pending@example>", "deadline_schedule")
+            service.resolve_pending("<pending@example>", "answer")
 
-            self.assertIn("wib-deadline", imap.flags_by_uid[4])
-            self.assertIn("wib-schedule", imap.flags_by_uid[4])
+            self.assertIn("wib-answer", imap.flags_by_uid[4])
             self.assertNotIn("wib-pending", imap.flags_by_uid[4])
             self.assertEqual(
                 imap.keyword_updates,
                 [
-                    (4, ("wib-deadline", "wib-schedule"), True, 10),
+                    (4, ("wib-answer",), True, 10),
                     (4, ("wib-pending",), False, 10),
                 ],
             )
