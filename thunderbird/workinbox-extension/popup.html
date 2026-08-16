@@ -22,12 +22,14 @@
       <p>WIB Web の IMAP 設定から対象 Thunderbird アカウントを自動解決し、その mailbox にスター付き + WIBタグの Quick Filter を適用します。</p>
       <label for="work-view-kind">作業ビュー</label>
       <select id="work-view-kind">
-        <option value="answer">回答必要</option>
+        <option value="answer">返信必要</option>
         <option value="deadline">締切あり</option>
         <option value="schedule">スケジュール調整</option>
-        <option value="review">読む・検討</option>
+        <option value="review">見る・検討</option>
+        <option value="watch">注目</option>
         <option value="waitingReply">返信待ち</option>
         <option value="waitingAction">対応待ち</option>
+        <option value="actionReady">対応あり</option>
       </select>
       <button id="open-work-view" type="button">選択したビューを見る</button>
     </section>
@@ -50,8 +52,8 @@
 
     <section>
       <h2>2. WIBタグ登録</h2>
-      <p>導入前スナップショットを保存した後に、12個のWIBタグを登録します。</p>
-      <button id="provision-tags" type="button">12個のWIBタグを登録</button>
+      <p>導入前スナップショットを保存した後に、13個のWIBタグを登録します。</p>
+      <button id="provision-tags" type="button">13個のWIBタグを登録</button>
     </section>
 
     <section>
