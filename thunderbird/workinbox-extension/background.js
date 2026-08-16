@@ -2,12 +2,14 @@ const WORKINBOX_ORIGIN_HEADER = "X-WorkInBox-Origin-Message-ID";
 const REQUESTED_TAG = "wib-requested";
 
 const WORK_VIEWS = {
-  answer: { tagKey: "wib-answer", label: "回答必要" },
+  answer: { tagKey: "wib-answer", label: "返信必要" },
   deadline: { tagKey: "wib-deadline", label: "締切あり" },
   schedule: { tagKey: "wib-schedule", label: "スケジュール調整" },
-  review: { tagKey: "wib-review", label: "読む・検討" },
+  review: { tagKey: "wib-review", label: "見る・検討" },
+  watch: { tagKey: "wib-watch", label: "注目" },
   waitingReply: { tagKey: "wib-waiting-reply", label: "返信待ち" },
   waitingAction: { tagKey: "wib-waiting-action", label: "対応待ち" },
+  actionReady: { tagKey: "wib-action-ready", label: "対応あり" },
 };
 
 let workViewTabId = null;
