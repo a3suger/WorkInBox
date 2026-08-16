@@ -12,6 +12,7 @@ WorkInBox は Thunderbird に WorkInBox 用タグ定義を追加する。
 - WorkInBox タグ導入後に何が変わるか
 - WorkInBox 利用停止時に元のタグ定義へ戻す方法
 - Thunderbird のタグ定義と、メール上の IMAP keyword の違い
+- 旧 WorkInBox タグ定義の扱い
 - より強い保険として Thunderbird プロファイル全体を退避する方法
 
 この仕組みは、WorkInBox が既存 Thunderbird 環境を一方的に置き換えず、利用者が元へ戻れるようにするためのものである。
@@ -58,7 +59,7 @@ Thunderbird のタグ定義を削除しても、各メールに付いている I
 
 ## 3. WorkInBox 導入前に保存するもの
 
-12個の WorkInBox タグを Thunderbird へ登録する前に、現在のタグ定義を保存する。
+13個の WorkInBox タグを Thunderbird へ登録する前に、現在のタグ定義を保存する。
 
 最低限、次を保存する。
 
@@ -161,26 +162,27 @@ WorkInBox Extension は、既存タグを全削除して置き換える方式を
 
 既存 Thunderbird タグを保持したまま、WorkInBox 用の `wib-*` タグ定義を追加する。
 
-WorkInBox が管理するタグの例:
+現行 `docs/design.md` に対応するタグ定義は次のとおり。
 
 ```text
-wib-important
-wib-deadline
-wib-schedule
-wib-answer
-wib-review
-wib-pending
-wib-deadline-done
-wib-schedule-done
-wib-waiting-reply
-wib-waiting-action
-wib-requested
-wib-batch
+wib-watch             注目
+wib-deadline          締切あり
+wib-schedule          スケジュール調整
+wib-answer            返信必要
+wib-review            見る・検討
+wib-pending           判定保留
+wib-deadline-done     締切登録済み
+wib-schedule-done     スケジュール対応済み
+wib-waiting-reply     返信待ち
+wib-waiting-action    対応待ち
+wib-action-ready      対応あり
+wib-requested         依頼済み
+wib-bulk              一括処理
 ```
 
 WorkInBox は利用者独自のタグを勝手に削除・改名・上書きしない。
 
-既存の `重要` タグを `wib-important` へ移行するかどうかは別途決める。
+`重要` は WorkInBox の現行タグ体系では使用しない。
 
 ---
 
@@ -248,28 +250,20 @@ wib-*
 
 ---
 
-## 10. `重要` タグの移行には特に注意する
+## 10. 旧 WorkInBox keyword の扱い
 
-既存運用で使っている `重要` は、WorkInBox 導入前から存在するタグである。
+旧実装では次の keyword を使用していた。
 
-したがって、これを単純に削除して `wib-important` へ置き換えると、利用停止時の復元が複雑になる。
+```text
+wib-important
+wib-batch
+```
 
-`重要` の正式移行を行う前に、少なくとも次を記録する。
+現行設計では `重要` を使用しないため、`wib-important` を `注目` へ自動変換しない。両者は意味が異なる。
 
-- 現在の key
-- 表示名
-- 色
-- 並び順
-- 既存メールにどの程度使われているか
+`wib-batch` は `一括処理` の旧 keyword であり、新規書き込みは `wib-bulk` を使用する。既存メール上の `wib-batch` は移行時に破壊的に削除しない。WorkInBox 本体は既存 `wib-batch` を `一括処理` として読み取れるよう互換性を持たせる。
 
-その上で、
-
-- 既存 key を WorkInBox でも使う
-- `wib-important` へ移行する
-
-のどちらかを別途決める。
-
-この判断をするまでは、既存の `重要` タグを自動的に変更しない。
+Extension のタグ登録では旧 `wib-important` / `wib-batch` の Thunderbird タグ定義を整理して現行13タグを登録するが、メール上の IMAP keyword 自体は削除しない。
 
 ---
 
@@ -290,9 +284,9 @@ WorkInBox Extension が同じ `wib-*` 定義を各 PC へ登録しても、元�
 
 ---
 
-## 12. 実装前チェックリスト
+## 12. 実装チェックリスト
 
-12タグを本格導入する前に、次を確認する。
+13タグを本格導入する際は、次を確認する。
 
 - [ ] 現在の Thunderbird タグ一覧を取得できる
 - [ ] key / 表示名 / 色 / 並び順情報を保存できる
@@ -301,6 +295,7 @@ WorkInBox Extension が同じ `wib-*` 定義を各 PC へ登録しても、元�
 - [ ] Thunderbird プロファイル全体のバックアップ方法を利用者が確認できる
 - [ ] WorkInBox タグだけを追加できる
 - [ ] 既存タグを勝手に変更しない
+- [ ] 旧 WorkInBox タグ定義を整理してもメール上の旧 keyword を破壊的に削除しない
 - [ ] 復元時に WorkInBox タグ定義だけを削除できる
 - [ ] バックアップから既存タグ定義を復元できる
 - [ ] 必要ならメール上の `wib-*` keyword だけを削除できる
@@ -313,4 +308,4 @@ WorkInBox の Thunderbird 連携では、次を原則とする。
 
 > WorkInBox を導入する前の Thunderbird 環境を記録し、WorkInBox の利用をやめても元へ戻せるようにする。
 
-そのため、12タグの本格登録を始める前に、まず Thunderbird タグ定義のバックアップ機能を用意する。
+そのため、13タグの本格登録を行う前に、まず Thunderbird タグ定義のバックアップを確保する。
