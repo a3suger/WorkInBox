@@ -2,22 +2,23 @@ const SNAPSHOT_KEY = "preWorkInBoxTagSnapshot";
 const SNAPSHOT_SCHEMA = "workinbox-thunderbird-tags/v1";
 
 // Thunderbird sorts tags by ordinal (falling back to the tag key).
-// Keep the existing numeric shortcut positions for the five surviving primary
-// tags, and reuse the old !01 slot for the new `注目` workflow tag.
+// Numeric shortcuts are reserved for tags that the user may intentionally
+// apply as workflow/organization choices in Thunderbird:
+// 1-2 dedicated workflow, 3-5 normal workflow, 6 organizing.
 const WIB_TAGS = Object.freeze([
-  { key: "wib-watch", tag: "注目", color: "#7B1FA2", ordinal: "!01" },
-  { key: "wib-deadline", tag: "締切あり", color: "#D32F2F", ordinal: "!02" },
-  { key: "wib-schedule", tag: "スケジュール調整", color: "#F57C00", ordinal: "!03" },
-  { key: "wib-answer", tag: "返信必要", color: "#1976D2", ordinal: "!04" },
-  { key: "wib-review", tag: "見る・検討", color: "#039BE5", ordinal: "!05" },
-  { key: "wib-pending", tag: "判定保留", color: "#757575", ordinal: "!06" },
+  { key: "wib-deadline", tag: "締切あり", color: "#D32F2F", ordinal: "!01" },
+  { key: "wib-schedule", tag: "スケジュール調整", color: "#F57C00", ordinal: "!02" },
+  { key: "wib-answer", tag: "返信必要", color: "#1976D2", ordinal: "!03" },
+  { key: "wib-review", tag: "見る・検討", color: "#039BE5", ordinal: "!04" },
+  { key: "wib-watch", tag: "注目", color: "#7B1FA2", ordinal: "!05" },
+  { key: "wib-bulk", tag: "一括処理", color: "#424242", ordinal: "!06" },
+  { key: "wib-pending", tag: "判定保留", color: "#757575" },
   { key: "wib-deadline-done", tag: "締切登録済み", color: "#8E2424" },
   { key: "wib-schedule-done", tag: "スケジュール対応済み", color: "#A65300" },
   { key: "wib-waiting-reply", tag: "返信待ち", color: "#388E3C" },
   { key: "wib-waiting-action", tag: "対応待ち", color: "#7CB342" },
   { key: "wib-action-ready", tag: "対応あり", color: "#558B2F" },
   { key: "wib-requested", tag: "依頼済み", color: "#795548" },
-  { key: "wib-bulk", tag: "一括処理", color: "#424242" },
 ]);
 
 const WIB_KEYS = new Set(WIB_TAGS.map((item) => item.key));
@@ -177,8 +178,8 @@ async function ensureWibTag(definition) {
   if (existing.color !== definition.color.toUpperCase()) {
     properties.color = definition.color;
   }
-  if (definition.ordinal && existing.ordinal !== definition.ordinal) {
-    properties.ordinal = definition.ordinal;
+  if ((definition.ordinal || "") !== (existing.ordinal || "")) {
+    properties.ordinal = definition.ordinal || "";
   }
 
   if (Object.keys(properties).length > 0) {
@@ -206,7 +207,7 @@ async function provisionTags() {
   }
 
   setStatus(
-    `${WIB_TAGS.length}個のWIBタグを登録し、主要6タグを数字キー 1〜6 の順に配置しました。`,
+    `${WIB_TAGS.length}個のWIBタグを登録し、専用/通常ワークフローと一括処理を数字キー 1〜6 に配置しました。`,
   );
   await refresh();
 }
