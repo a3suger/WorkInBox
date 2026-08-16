@@ -4,7 +4,12 @@ import json
 import unittest
 from unittest.mock import patch
 
-from workinbox.ai_classifier import AiClassification, OllamaClassifier
+from workinbox.ai_classifier import (
+    AiClassification,
+    NormalWorkflow,
+    OllamaClassifier,
+    preprocess_body,
+)
 from workinbox.config import AiConfig, IdentityConfig
 from workinbox.models import EmailMessage
 
@@ -24,7 +29,7 @@ class FakeResponse:
 
 
 class OllamaClassifierTest(unittest.TestCase):
-    def test_classify_uses_structured_json_truncates_body_and_keeps_model_alive(self) -> None:
+    def test_classify_uses_structured_json_preprocesses_body_and_keeps_model_alive(self) -> None:
         captured: dict[str, object] = {}
 
         def fake_urlopen(request, timeout):
@@ -34,10 +39,8 @@ class OllamaClassifierTest(unittest.TestCase):
             response = {
                 "deadline": True,
                 "schedule": False,
-                "answer_required": False,
-                "review": False,
-                "pending": False,
-                "reason": "期限がある",
+                "normal_workflow": "answer",
+                "reason": "期限があり返信も必要",
             }
             return FakeResponse({"response": json.dumps(response)})
 
@@ -47,7 +50,7 @@ class OllamaClassifierTest(unittest.TestCase):
             "me@example.com",
             "Subject",
             None,
-            "abcdefghij",
+            "abcdef\n> quoted old text\n-----Original Message-----\nold body",
         )
         classifier = OllamaClassifier(
             AiConfig(
@@ -63,7 +66,7 @@ class OllamaClassifierTest(unittest.TestCase):
         with patch("workinbox.ai_classifier.urllib.request.urlopen", fake_urlopen):
             result = classifier.classify(message)
 
-        self.assertEqual(result.tag_keys(), ("wib-deadline",))
+        self.assertEqual(result.tag_keys(), ("wib-deadline", "wib-answer"))
         self.assertEqual(captured["url"], "http://127.0.0.1:11434/api/generate")
         self.assertEqual(captured["timeout"], 30)
         request_body = captured["body"]
@@ -73,6 +76,8 @@ class OllamaClassifierTest(unittest.TestCase):
         self.assertIsInstance(request_body["format"], dict)
         self.assertIn("abcde", request_body["prompt"])
         self.assertNotIn("abcdef", request_body["prompt"])
+        self.assertNotIn("quoted old text", request_body["prompt"])
+        self.assertNotIn("old body", request_body["prompt"])
 
     def test_classify_adds_identity_context_and_detects_self_sender(self) -> None:
         captured: dict[str, object] = {}
@@ -82,9 +87,7 @@ class OllamaClassifierTest(unittest.TestCase):
             response = {
                 "deadline": False,
                 "schedule": False,
-                "answer_required": False,
-                "review": True,
-                "pending": False,
+                "normal_workflow": "review",
                 "reason": "送信済みメールの確認",
             }
             return FakeResponse({"response": json.dumps(response)})
@@ -116,27 +119,59 @@ class OllamaClassifierTest(unittest.TestCase):
         self.assertIn("差出人は利用者本人: true", prompt)
         self.assertIn("宛先に利用者本人を含む: false", prompt)
 
-    def test_tag_keys_enforce_allowed_combinations(self) -> None:
-        self.assertEqual(
-            AiClassification(True, True, True, True, True, "x").tag_keys(),
-            ("wib-deadline", "wib-schedule"),
+    def test_dedicated_and_normal_workflow_can_coexist(self) -> None:
+        result = AiClassification(
+            True,
+            True,
+            reason="期限付き日程調整で返信も必要",
+            normal_workflow=NormalWorkflow.ANSWER,
         )
         self.assertEqual(
-            AiClassification(False, False, True, True, True, "x").tag_keys(),
-            ("wib-answer",),
+            result.tag_keys(),
+            ("wib-deadline", "wib-schedule", "wib-answer"),
         )
+        self.assertFalse(result.should_unstar())
+
+    def test_normal_workflow_supports_review_and_watch(self) -> None:
         self.assertEqual(
-            AiClassification(False, False, False, True, True, "x").tag_keys(),
+            AiClassification(False, False, normal_workflow="review").tag_keys(),
             ("wib-review",),
         )
         self.assertEqual(
-            AiClassification(False, False, False, False, True, "x").tag_keys(),
-            ("wib-pending",),
+            AiClassification(False, False, normal_workflow="watch").tag_keys(),
+            ("wib-watch",),
         )
 
-    def test_no_true_value_falls_back_to_review(self) -> None:
-        result = AiClassification(False, False, False, False, False, "x")
-        self.assertEqual(result.tag_keys(), ("wib-review",))
+    def test_pending_is_only_emitted_without_dedicated_workflow(self) -> None:
+        self.assertEqual(
+            AiClassification(False, False, normal_workflow="pending").tag_keys(),
+            ("wib-pending",),
+        )
+        self.assertEqual(
+            AiClassification(True, False, normal_workflow="pending").tag_keys(),
+            ("wib-deadline",),
+        )
+
+    def test_nothing_to_do_becomes_bulk_and_requests_unstar(self) -> None:
+        result = AiClassification(False, False, normal_workflow="none")
+        self.assertEqual(result.tag_keys(), ("wib-bulk",))
+        self.assertTrue(result.should_unstar())
+
+        dedicated = AiClassification(True, False, normal_workflow="none")
+        self.assertEqual(dedicated.tag_keys(), ("wib-deadline",))
+        self.assertFalse(dedicated.should_unstar())
+
+    def test_preprocess_body_removes_quotes_reply_tail_and_signature_before_limit(self) -> None:
+        body = (
+            "今回の本文です。\n"
+            "> 前回の引用1\n"
+            "> 前回の引用2\n"
+            "続きです。\n"
+            "-- \n"
+            "署名\n"
+        )
+        self.assertEqual(preprocess_body(body, 100), "今回の本文です。\n続きです。")
+        self.assertEqual(preprocess_body("123456789", 4), "1234")
 
 
 if __name__ == "__main__":
