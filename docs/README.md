@@ -10,18 +10,16 @@
 
 1. [開発のお約束](development_working_agreement.md)
 2. [正式設計](design.md)
-3. 必要に応じて [設計概要](design_overview.md) で全体像を確認する
-4. 作業対象に対応する詳細設計
-5. 必要に応じて [Decision Log](decision_log.md) で判断の経緯を確認する
-6. [ロードマップ](roadmap.md) で実装順序を確認する
+3. 作業対象に対応する詳細設計
+4. 必要に応じて [Decision Log](decision_log.md) で判断の経緯を確認する
+5. [ロードマップ](roadmap.md) で実装順序を確認する
 
 文書間に矛盾がある場合は、次の優先順位で扱う。
 
 1. `design.md` の確定済み現行設計
-2. `design_overview.md` の設計概要・原則
-3. 機能別の詳細設計
-4. `decision_log.md` の履歴（正式設計へ未統合の Decision がある場合を除く）
-5. 古いバージョンの設計・検証記録
+2. 機能別の詳細設計
+3. `decision_log.md` の履歴（正式設計へ未統合の Decision がある場合を除く）
+4. 古いバージョンの設計・検証記録
 
 `roadmap.md` は実装順序の資料であり、業務仕様の正本にはしない。正式設計と矛盾する場合は `design.md` を優先する。
 
@@ -61,12 +59,6 @@ WorkInBox の**正式な現行設計**。状態遷移、タグ、通常ワーク
 - Record は通常ワークフロー共通の保存出口とし、Message-ID で元メールを参照する。
 - 正式締切は SQLite を正本とし、Message-ID で元メールを参照する。
 - AI 判定前に引用された過去メール部分を機械的に除去してから文字数上限を適用する。
-
-### [design_overview.md](design_overview.md)
-
-WorkInBox の目的、設計原則、責務境界、正本、WIB / TrackingBox / TriageBox / Thunderbird の役割を短く確認するための概要文書。
-
-詳細な状態遷移・タグ・業務フローについては `design.md` を正とする。
 
 ### [roadmap.md](roadmap.md)
 
