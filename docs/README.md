@@ -9,21 +9,21 @@
 原則として次の順序で読む。
 
 1. [開発のお約束](development_working_agreement.md)
-2. [全体設計](design.md)
-3. [正式ワークフロー](design_workflow.md)
+2. [正式設計](design.md)
+3. 必要に応じて [設計概要](design_overview.md) で全体像を確認する
 4. 作業対象に対応する詳細設計
 5. 必要に応じて [Decision Log](decision_log.md) で判断の経緯を確認する
 6. [ロードマップ](roadmap.md) で実装順序を確認する
 
 文書間に矛盾がある場合は、次の優先順位で扱う。
 
-1. `design_workflow.md` の確定済みワークフロー
-2. `design.md` の現在の全体設計
+1. `design.md` の確定済み現行設計
+2. `design_overview.md` の設計概要・原則
 3. 機能別の詳細設計
 4. `decision_log.md` の履歴（正式設計へ未統合の Decision がある場合を除く）
 5. 古いバージョンの設計・検証記録
 
-`roadmap.md` は実装順序の資料であり、業務仕様の正本にはしない。正式設計と矛盾する場合は `design_workflow.md` を優先する。
+`roadmap.md` は実装順序の資料であり、業務仕様の正本にはしない。正式設計と矛盾する場合は `design.md` を優先する。
 
 ---
 
@@ -41,15 +41,11 @@ WorkInBox の仕様検討と実装を速く進めるための共通ルール。
 
 設計相談で確定した Decision の履歴。
 
-Decision は一定数まとまった時点または実装前に `design_workflow.md` へ統合する。統合後も判断経緯として残す。
+Decision は一定数まとまった時点または実装前に `design.md` へ統合する。統合後も判断経緯として残す。
 
 ### [design.md](design.md)
 
-WorkInBox の目的、責務境界、正本、WIB / TrackingBox / TriageBox / Thunderbird の役割を短くまとめた全体設計。
-
-### [design_workflow.md](design_workflow.md)
-
-WorkInBox の**正式な業務ワークフロー**。
+WorkInBox の**正式な現行設計**。状態遷移、タグ、通常ワークフロー、専用ワークフロー、Record、締切、TriageBox / TrackingBox / WIB / Thunderbird の責務分担を定義する。
 
 現在の主な整理:
 
@@ -58,18 +54,25 @@ WorkInBox の**正式な業務ワークフロー**。
 - TriageBox は未読メールを TrackingBox より先に処理し、relation と決定的な状態遷移を担当する。
 - TrackingBox はスター付きメールの意味分類と再判定を担当する。
 - 通常ワークフローは `返信必要` / `見る・検討` / `注目`。`何もしなくてよい` は分類結果として `一括処理 + ☆` へ進む。
-- 通常ワークフローの共通終了は、元タグを残して `一括処理` を付け、スターを外す。
+- 通常ワークフローは利用者が着眼点のメールを閲覧して終了を判断し、「通常終了」または「Record に保存して終了」へ進む。
 - 専用ワークフローは `締切あり` / `スケジュール調整`。WIB で進め、利用者が完了または非該当として解除して終了する。
 - スケジュール支援者への依頼は `対応待ち`、支援者から返信が来たら `対応あり` とする。
 - 専用ワークフローのメール relation では `X-WorkInBox-Origin-Message-ID`、標準の `In-Reply-To` / `References`、SQLite relation を役割分担して使う。
-- `見る・検討` から残す情報は Record とし、Message-ID で元メールを参照する。
+- Record は通常ワークフロー共通の保存出口とし、Message-ID で元メールを参照する。
+- 正式締切は SQLite を正本とし、Message-ID で元メールを参照する。
 - AI 判定前に引用された過去メール部分を機械的に除去してから文字数上限を適用する。
+
+### [design_overview.md](design_overview.md)
+
+WorkInBox の目的、設計原則、責務境界、正本、WIB / TrackingBox / TriageBox / Thunderbird の役割を短く確認するための概要文書。
+
+詳細な状態遷移・タグ・業務フローについては `design.md` を正とする。
 
 ### [roadmap.md](roadmap.md)
 
 実装状況と実装順序を確認するための資料。
 
-仕様判断は `design_workflow.md` を優先する。
+仕様判断は `design.md` を優先する。
 
 ---
 
@@ -79,7 +82,7 @@ WorkInBox の**正式な業務ワークフロー**。
 
 AI 初期分類の判定順序、出力、再現率重視の考え方、`判定保留` の条件。
 
-正式ワークフローと矛盾する場合は `design_workflow.md` を優先する。
+正式設計と矛盾する場合は `design.md` を優先する。
 
 ### [triagebox_decision_flow.md](triagebox_decision_flow.md)
 
@@ -92,7 +95,7 @@ TriageBox のヘッダ解析、自己送信判定、返信関係、`返信待ち
 - `In-Reply-To` / `References` による標準メールスレッド判定
 - SQLite relation による永続的な関係解決
 
-正式ワークフローと矛盾する場合は `design_workflow.md` を優先する。
+正式設計と矛盾する場合は `design.md` を優先する。
 
 ### [deadline_support_discussion_2026-08-10.md](deadline_support_discussion_2026-08-10.md)
 
@@ -156,7 +159,7 @@ Thunderbird / IMAP タグ相互運用の検証記録。
 ### 元メール参照
 
 - active メールは INBOX を Message-ID で検索する。
-- Record の元メールは INBOX、次に元メールの送信年月に対応する Archive フォルダを検索する。
+- Record / 締切の元メールは INBOX、次に元メールの送信年月に対応する Archive フォルダを検索する。
 - 任意のフォルダをアカウント全体から広域探索することを通常経路にはしない。
 
 ---
@@ -165,7 +168,7 @@ Thunderbird / IMAP タグ相互運用の検証記録。
 
 新しい設計文書を追加した場合は、この `docs/README.md` にリンクと用途を追加する。
 
-既存仕様を変更した場合は、必要な Decision を `decision_log.md` に残し、まとまった時点で `design_workflow.md` へ統合する。
+既存仕様を変更した場合は、必要な Decision を `decision_log.md` に残し、まとまった時点で `design.md` へ統合する。
 
 開発依頼・レビュー依頼では、原則として次のように指示できる状態を維持する。
 

@@ -2,7 +2,7 @@
 
 この文書は `docs/development_working_agreement.md` に従い、設計議論で確定した Decision を短く残す。
 
-正式仕様へ統合済みの Decision も履歴として残す。正式な現行仕様は `docs/design_workflow.md` を優先する。
+正式仕様へ統合済みの Decision も履歴として残す。正式な現行仕様は `docs/design.md` を優先する。
 
 ---
 
@@ -16,7 +16,7 @@
 - 専用ワークフロー中のメール閲覧は WIB で行い、メール本文の作成・送信そのものは Thunderbird の機能を利用する。
 - WIB が専用ワークフローの文脈を保持することで、完了時のお礼メール等を通常の `返信待ち` にしない決定的処理を可能にする。
 
-統合先: `docs/design_workflow.md` の「基本方針」「専用ワークフロータグ」「締切登録支援」「スケジュール調整支援」。
+統合先: `docs/design.md` の「基本方針」「専用ワークフロータグ」「締切登録支援」「スケジュール調整支援」。
 
 ### Decision 002: 通常ワークフローの共通終了
 
@@ -27,7 +27,7 @@
 - この共通終了操作は Thunderbird Extension から 1 操作で実行できる形を目指す。
 - `見る・検討` を Record として保存する場合は別経路とし、`一括処理` を付けず、`見る・検討` を残したままスターを外す。
 
-統合先: `docs/design_workflow.md` の「通常ワークフロータグ」「Record（WIB 保存情報）」。
+統合先: `docs/design.md` の「通常ワークフロータグ」「Record（WIB 保存情報）」。
 
 ### Decision 003: `対応あり` を追加する
 
@@ -38,7 +38,7 @@
 
 未確定: `対応あり` の IMAP keyword と UI 細部は実装時に決める。
 
-統合先: `docs/design_workflow.md` の「待機・専用ワークフロー状態タグ」「TriageBox の判定原則」「スケジュール調整支援」。
+統合先: `docs/design.md` の「待機・専用ワークフロー状態タグ」「TriageBox の判定原則」「スケジュール調整支援」。
 
 ### Decision 004: TriageBox と TrackingBox の判定順序
 
@@ -52,7 +52,7 @@
 - `対応待ち` への返信は TriageBox が `対応あり + ★` と確定する。
 - 上記の決定的状態は通常の AI 再判定対象から除外する。
 
-統合先: `docs/design_workflow.md` の「スターと着眼点」「TrackingBox」「TriageBox の判定原則」。
+統合先: `docs/design.md` の「スターと着眼点」「TrackingBox」「TriageBox の判定原則」。
 
 ### Decision 005: AI 判定前の本文前処理
 
@@ -64,7 +64,7 @@
 
 未確定: 具体的な引用除去アルゴリズムと文字数上限は実装時に決める。
 
-統合先: `docs/design_workflow.md` の「TrackingBox / AI に渡す本文」。
+統合先: `docs/design.md` の「TrackingBox / AI に渡す本文」。
 
 ### Decision 006: 専用ワークフローの起点と現在着眼点を分ける
 
@@ -75,7 +75,7 @@
 - 専用ワークフローで M1 から新規作成した M2 には `X-WorkInBox-Origin-Message-ID` を付け、M1/M2 の Message-ID relation を SQLite に保存する。
 - M3 以降は `In-Reply-To` / `References` と SQLite relation で M1 の専用ワークフローへ到達する。
 
-統合先: `docs/design_workflow.md` の「スターと着眼点」「スケジュール調整支援」「専用ワークフローのメール relation」。
+統合先: `docs/design.md` の「スターと着眼点」「スケジュール調整支援」「専用ワークフローのメール relation」。
 
 ### Decision 007: WIB ダッシュボードを仕事の出発点にする
 
@@ -88,4 +88,4 @@
 
 未確定: ダッシュボードの最終レイアウト、表示順、優先順位表現は実装時に決める。
 
-統合先: `docs/design_workflow.md` の「利用者フロー」「ダッシュボード」。
+統合先: `docs/design.md` の「利用者フロー」「ダッシュボード」。

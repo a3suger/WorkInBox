@@ -383,7 +383,8 @@ PyCharm の Database ツールや SQLite 対応ツールを使って内容を確
 
 設計の詳細は `docs/` 以下を参照してください。
 
+- `docs/design.md`: 現行の正式設計
+- `docs/design_overview.md`: 全体像と設計原則の概要
 - `docs/design_v0_2.md`: v0.2 の追跡・同期・Web UI 仕様
-- `docs/design_workflow.md`: メール処理全体の考え方
 - `docs/tag_test.md`: Thunderbird タグと IMAP keyword の確認手順
 - `docs/ai_initial_classification.md`: Ollama による AI 初期分類の仕様とプロンプト原則
