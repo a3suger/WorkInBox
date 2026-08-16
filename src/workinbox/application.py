@@ -38,13 +38,15 @@ _INITIAL_CLASSIFICATION_KEYS = frozenset(
 _TRIAGE_MANAGED_KEYS = frozenset(
     {"wib-waiting-reply", "wib-waiting-action", "wib-action-ready"}
 )
+_NORMAL_RESOLUTION_KEYS = frozenset(
+    {"wib-answer", "wib-review", "wib-watch", "wib-pending", "wib-bulk"}
+)
 
 _PENDING_RESOLUTIONS: dict[str, tuple[str, ...]] = {
-    "deadline": ("wib-deadline",),
-    "schedule": ("wib-schedule",),
-    "deadline_schedule": ("wib-deadline", "wib-schedule"),
     "answer": ("wib-answer",),
     "review": ("wib-review",),
+    "watch": ("wib-watch",),
+    "none": ("wib-bulk",),
 }
 
 
@@ -534,7 +536,7 @@ class WorkTagService:
         )
         remove_keys = tuple(
             key
-            for key in _INITIAL_CLASSIFICATION_KEYS
+            for key in _NORMAL_RESOLUTION_KEYS
             if key not in target_keys and key in snapshot.flags
         )
         if remove_keys:
@@ -543,6 +545,38 @@ class WorkTagService:
                 remove_keys,
                 enabled=False,
                 expected_uidvalidity=reference.uidvalidity,
+            )
+
+        if resolution == "none":
+            try:
+                self.imap_client.set_flagged(
+                    reference.uid,
+                    enabled=False,
+                    expected_uidvalidity=reference.uidvalidity,
+                )
+            except (OSError, RuntimeError, ValueError):
+                try:
+                    self.imap_client.set_keywords(
+                        reference.uid,
+                        target_keys,
+                        enabled=False,
+                        expected_uidvalidity=reference.uidvalidity,
+                    )
+                    self.imap_client.set_keyword(
+                        reference.uid,
+                        "wib-pending",
+                        enabled=True,
+                        expected_uidvalidity=reference.uidvalidity,
+                    )
+                except (OSError, RuntimeError, ValueError):
+                    logging.exception(
+                        "Failed to roll back pending no-action resolution for %s",
+                        message_id,
+                    )
+                raise
+            self.database.update_tracking_status(
+                message_id,
+                TrackingStatus.INACTIVE_UNSTARRED,
             )
 
     def set_tag(self, message_id: str, key: str, *, enabled: bool) -> None:
