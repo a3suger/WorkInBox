@@ -26,6 +26,8 @@ from .deadline_dates import normalize_due_at
 from .deadline_ics import DeadlineIcsService
 from .deadline_workflow import DeadlineWorkflowService
 from .models import DeadlineCreatedBy
+from .normal_workflow import NormalWorkflowCompletionService
+from .record_store import RecordStore
 from .work_tags import WORK_TAGS
 
 
@@ -42,6 +44,8 @@ def create_app(
     deadline_extraction_service: DeadlineExtractionService | None = None,
     deadline_workflow_service: DeadlineWorkflowService | None = None,
     deadline_ics_service: DeadlineIcsService | None = None,
+    normal_workflow_service: NormalWorkflowCompletionService | None = None,
+    record_store: RecordStore | None = None,
 ) -> FastAPI:
     sync_service = synchronization_service or SynchronizationService(config)
     tracking_service = query_service or TrackingQueryService(config)
@@ -53,6 +57,8 @@ def create_app(
         tag_service,
     )
     deadline_calendar_service = deadline_ics_service or DeadlineIcsService(deadline_data_service)
+    normal_completion_service = normal_workflow_service or NormalWorkflowCompletionService(config)
+    records = record_store or RecordStore(config.database.path)
     sync_lock = Lock()
 
     app = FastAPI(title="WorkInBox")
@@ -74,11 +80,7 @@ def create_app(
         tag_message: str | None = None,
         tag_failure: str | None = None,
     ):
-        emails = (
-            tracking_service.active_emails()
-            if active
-            else tracking_service.inactive_emails()
-        )
+        emails = tracking_service.active_emails() if active else tracking_service.inactive_emails()
         tagged_emails = tag_service.read_for_emails(emails)
         return _TEMPLATES.TemplateResponse(
             request=request,
@@ -94,12 +96,7 @@ def create_app(
             },
         )
 
-    def render_pending(
-        request: Request,
-        *,
-        message: str | None = None,
-        failure: str | None = None,
-    ):
+    def render_pending(request: Request, *, message: str | None = None, failure: str | None = None):
         return _TEMPLATES.TemplateResponse(
             request=request,
             name="pending.html",
@@ -127,14 +124,12 @@ def create_app(
             if "wib-deadline" not in keys or "wib-deadline-done" in keys:
                 continue
             message = deadline_data_service.database.email_message(tagged.email.message_id)
-            items.append(
-                {
-                    "email": tagged.email,
-                    "tags": tagged.tags,
-                    "body": message.body if message is not None else None,
-                    "candidates": deadline_data_service.candidates(tagged.email.message_id),
-                }
-            )
+            items.append({
+                "email": tagged.email,
+                "tags": tagged.tags,
+                "body": message.body if message is not None else None,
+                "candidates": deadline_data_service.candidates(tagged.email.message_id),
+            })
         return _TEMPLATES.TemplateResponse(
             request=request,
             name="deadlines.html",
@@ -162,13 +157,11 @@ def create_app(
             if "wib-schedule" not in keys or "wib-schedule-done" in keys:
                 continue
             message = deadline_data_service.database.email_message(tagged.email.message_id)
-            items.append(
-                {
-                    "email": tagged.email,
-                    "tags": tagged.tags,
-                    "body": message.body if message is not None else None,
-                }
-            )
+            items.append({
+                "email": tagged.email,
+                "tags": tagged.tags,
+                "body": message.body if message is not None else None,
+            })
         return _TEMPLATES.TemplateResponse(
             request=request,
             name="schedules.html",
@@ -190,22 +183,12 @@ def create_app(
     def run_sync(request: Request, operation: Callable[[], SyncResult]):
         if not sync_lock.acquire(blocking=False):
             logging.warning("Synchronization request ignored because another sync is running")
-            return render_mail_list(
-                request,
-                active=True,
-                sync_failure=(
-                    "同期処理は既に実行中です。完了後にもう一度実行してください。"
-                ),
-            )
+            return render_mail_list(request, active=True, sync_failure="同期処理は既に実行中です。完了後にもう一度実行してください。")
         try:
             try:
                 result = operation()
             except (OSError, RuntimeError, sqlite3.Error) as exc:
-                return render_mail_list(
-                    request,
-                    active=True,
-                    sync_failure=str(exc),
-                )
+                return render_mail_list(request, active=True, sync_failure=str(exc))
             return render_mail_list(request, active=True, sync_result=result)
         finally:
             sync_lock.release()
@@ -221,6 +204,14 @@ def create_app(
     @app.get("/inactive")
     def inactive_emails(request: Request):
         return render_mail_list(request, active=False)
+
+    @app.get("/records")
+    def record_list(request: Request):
+        return _TEMPLATES.TemplateResponse(
+            request=request,
+            name="records.html",
+            context={"records": records.list(), **common_view_flags()},
+        )
 
     @app.get("/pending")
     def pending_emails(request: Request):
@@ -259,6 +250,28 @@ def create_app(
             headers={"Content-Disposition": 'inline; filename="deadlines.ics"'},
         )
 
+    @app.post("/normal-workflow/complete")
+    def complete_normal_workflow(request: Request, message_id: str):
+        try:
+            normal_completion_service.complete(message_id)
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            return render_mail_list(request, active=True, tag_failure=str(exc))
+        return render_mail_list(request, active=True, tag_message="通常ワークフローを終了しました。")
+
+    @app.post("/normal-workflow/record")
+    async def record_and_complete_normal_workflow(request: Request):
+        try:
+            form = await read_urlencoded_form(request)
+            normal_completion_service.save_record_and_complete(
+                form.get("message_id", "").strip(),
+                title=form.get("title", ""),
+                summary=form.get("summary", ""),
+                note=form.get("note", ""),
+            )
+        except (OSError, RuntimeError, ValueError, sqlite3.Error, UnicodeDecodeError) as exc:
+            return render_mail_list(request, active=True, tag_failure=str(exc))
+        return render_mail_list(request, active=True, tag_message="Record に保存して通常ワークフローを終了しました。")
+
     @app.post("/deadlines/add")
     async def add_deadline_candidate(request: Request):
         try:
@@ -285,10 +298,7 @@ def create_app(
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
             return render_deadlines(request, action_failure=str(exc))
         if completion.completed:
-            return render_deadlines(
-                request,
-                action_message="締切を正式登録し、このメールの締切判断を完了しました。",
-            )
+            return render_deadlines(request, action_message="締切を正式登録し、このメールの締切判断を完了しました。")
         return render_deadlines(request, action_message="締切を正式登録しました。")
 
     @app.post("/deadlines/{candidate_id}/reject")
@@ -326,10 +336,7 @@ def create_app(
             tag_service.set_tag(message_id, "wib-schedule-done", enabled=True)
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
             return render_schedules(request, action_failure=str(exc))
-        return render_schedules(
-            request,
-            action_message="スケジュール対応済みとして記録しました。",
-        )
+        return render_schedules(request, action_message="スケジュール対応済みとして記録しました。")
 
     @app.post("/pending/resolve")
     def resolve_pending(request: Request, message_id: str, resolution: str):
@@ -348,37 +355,15 @@ def create_app(
         return run_sync(request, sync_service.full_recheck)
 
     @app.post("/tags/{key}/{operation}")
-    def update_tag(
-        request: Request,
-        key: str,
-        operation: str,
-        message_id: str,
-        view: str = "active",
-    ):
+    def update_tag(request: Request, key: str, operation: str, message_id: str, view: str = "active"):
         active = view != "inactive"
         if operation not in {"add", "remove"}:
-            return render_mail_list(
-                request,
-                active=active,
-                tag_failure=f"Unknown tag operation: {operation}",
-            )
+            return render_mail_list(request, active=active, tag_failure=f"Unknown tag operation: {operation}")
         try:
-            tag_service.set_tag(
-                message_id,
-                key,
-                enabled=operation == "add",
-            )
+            tag_service.set_tag(message_id, key, enabled=operation == "add")
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
-            return render_mail_list(
-                request,
-                active=active,
-                tag_failure=str(exc),
-            )
-        return render_mail_list(
-            request,
-            active=active,
-            tag_message="IMAP タグを更新しました。",
-        )
+            return render_mail_list(request, active=active, tag_failure=str(exc))
+        return render_mail_list(request, active=active, tag_message="IMAP タグを更新しました。")
 
     return app
 
