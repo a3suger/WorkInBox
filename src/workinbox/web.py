@@ -10,7 +10,7 @@ from urllib.parse import parse_qs
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.responses import PlainTextResponse
 from fastapi.templating import Jinja2Templates
 
 from .application import (
@@ -21,6 +21,7 @@ from .application import (
     WorkTagService,
 )
 from .config import AppConfig, load_config
+from .dashboard import DashboardService
 from .deadline_application import DeadlineExtractionResult, DeadlineExtractionService
 from .deadline_dates import normalize_due_at
 from .deadline_ics import DeadlineIcsService
@@ -46,6 +47,7 @@ def create_app(
     deadline_ics_service: DeadlineIcsService | None = None,
     normal_workflow_service: NormalWorkflowCompletionService | None = None,
     record_store: RecordStore | None = None,
+    dashboard_service: DashboardService | None = None,
 ) -> FastAPI:
     sync_service = synchronization_service or SynchronizationService(config)
     tracking_service = query_service or TrackingQueryService(config)
@@ -59,17 +61,47 @@ def create_app(
     deadline_calendar_service = deadline_ics_service or DeadlineIcsService(deadline_data_service)
     normal_completion_service = normal_workflow_service or NormalWorkflowCompletionService(config)
     records = record_store or RecordStore(config.database.path)
+    dashboard = dashboard_service or DashboardService(config, record_store=records)
     sync_lock = Lock()
 
     app = FastAPI(title="WorkInBox")
 
-    def common_view_flags(*, active: bool = False, pending: bool = False, deadlines: bool = False, schedules: bool = False) -> dict[str, bool]:
+    def common_view_flags(
+        *,
+        dashboard_view: bool = False,
+        active: bool = False,
+        pending: bool = False,
+        deadlines: bool = False,
+        schedules: bool = False,
+    ) -> dict[str, bool]:
         return {
+            "dashboard_view": dashboard_view,
             "active_view": active,
             "pending_view": pending,
             "deadlines_view": deadlines,
             "schedules_view": schedules,
         }
+
+    def render_dashboard(
+        request: Request,
+        *,
+        dashboard_failure: str | None = None,
+    ):
+        snapshot = None
+        if dashboard_failure is None:
+            try:
+                snapshot = dashboard.snapshot()
+            except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+                dashboard_failure = str(exc)
+        return _TEMPLATES.TemplateResponse(
+            request=request,
+            name="dashboard.html",
+            context={
+                "snapshot": snapshot,
+                "dashboard_failure": dashboard_failure,
+                **common_view_flags(dashboard_view=True),
+            },
+        )
 
     def render_mail_list(
         request: Request,
@@ -194,8 +226,8 @@ def create_app(
             sync_lock.release()
 
     @app.get("/")
-    def index() -> RedirectResponse:
-        return RedirectResponse(url="/active", status_code=303)
+    def index(request: Request):
+        return render_dashboard(request)
 
     @app.get("/active")
     def active_emails(request: Request):
