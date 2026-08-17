@@ -4,6 +4,14 @@ function setButtonStatus(button, text) {
   button.textContent = text;
 }
 
+async function loadImapTarget() {
+  const response = await fetch("/api/thunderbird/imap-target", { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`WIB Web の IMAP 設定を取得できませんでした: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 async function handleOpenMessage(button) {
   const messageId = button.dataset.wibOpenMessageId;
   if (!messageId) {
@@ -30,6 +38,37 @@ async function handleOpenMessage(button) {
   } finally {
     window.setTimeout(() => {
       button.textContent = button.dataset.wibOriginalLabel || "Thunderbirdで開く";
+      button.disabled = false;
+    }, 2500);
+  }
+}
+
+async function handleOpenWorkView(button) {
+  const view = button.dataset.wibOpenWorkView;
+  if (!view) {
+    return;
+  }
+
+  button.disabled = true;
+  setButtonStatus(button, "Thunderbirdで準備中…");
+
+  try {
+    const imapTarget = await loadImapTarget();
+    const response = await messenger.runtime.sendMessage({
+      type: "workinbox-open-work-view",
+      view,
+      imapTarget,
+    });
+    if (!response?.ok) {
+      throw new Error(response?.error || "Thunderbird の作業ビューを開けませんでした。");
+    }
+    setButtonStatus(button, "開きました");
+  } catch (error) {
+    console.error("[WorkInBox bridge]", error);
+    setButtonStatus(button, `失敗: ${error.message || error}`);
+  } finally {
+    window.setTimeout(() => {
+      button.textContent = button.dataset.wibOriginalLabel || "Thunderbirdで確認";
       button.disabled = false;
     }, 2500);
   }
@@ -71,13 +110,20 @@ async function handleSupportRequest(form) {
 }
 
 document.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-wib-open-message-id]");
-  if (!button) {
+  const workViewButton = event.target.closest("[data-wib-open-work-view]");
+  if (workViewButton) {
+    event.preventDefault();
+    void handleOpenWorkView(workViewButton);
+    return;
+  }
+
+  const messageButton = event.target.closest("[data-wib-open-message-id]");
+  if (!messageButton) {
     return;
   }
 
   event.preventDefault();
-  void handleOpenMessage(button);
+  void handleOpenMessage(messageButton);
 });
 
 document.addEventListener("submit", (event) => {
