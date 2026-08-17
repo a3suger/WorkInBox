@@ -137,17 +137,17 @@ class WebFoundationTest(unittest.TestCase):
             "schedules.html",
         )
         self.assertIn("data-wib-support-request-form", source)
-        self.assertIn('name="method" value="reply"', source)
-        self.assertIn('name="method" value="forward"', source)
+        self.assertNotIn('name="method"', source)
+        self.assertNotIn('name="keep_reply_subject"', source)
         self.assertIn('value="schedule_adjustment"', source)
         self.assertIn('value="schedule_entry"', source)
         self.assertIn('<select name="to" required', source)
         self.assertIn("{{ supporter.label }}", source)
         self.assertIn('name="cc" value="{{ self_cc }}"', source)
-        self.assertIn("元メールの件名をそのまま使う", source)
+        self.assertIn("別スレッドの新規メール", source)
+        self.assertIn("X-WorkInBox-Origin-Message-ID", source)
         self.assertIn("schedule_support.supporters", source)
         self.assertIn("対応待ち", source)
-        self.assertIn("依頼済み", source)
 
 
 if __name__ == "__main__":
