@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Record - WorkInBox{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2>Record</h2>
+    <div class="muted">{{ records | length }} 件</div>
+  </div>
+</div>
+
+{% if records %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>タイトル</th>
+      <th>要約</th>
+      <th>メモ</th>
+      <th>元メール</th>
+      <th>保存日時</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for record in records %}
+    <tr>
+      <td>{{ record.title }}</td>
+      <td>{{ record.summary or "-" }}</td>
+      <td>{{ record.note or "-" }}</td>
+      <td>
+        <button type="button" data-wib-open-message-id="{{ record.source_message_id }}">Thunderbirdで開く</button>
+      </td>
+      <td>{{ record.created_at }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty">保存済み Record はありません。</div>
+{% endif %}
+{% endblock %}
