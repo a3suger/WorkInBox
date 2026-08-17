@@ -39,7 +39,22 @@ class FakeImap:
     def search(self, charset, *criteria: str):
         FakeImap.searches.append(criteria)
         mapping = {
-            ("UNSEEN", "UNFLAGGED"): b"1 2 3 4",
+            (
+                "UNSEEN",
+                "UNFLAGGED",
+                "UNKEYWORD",
+                "wib-bulk",
+                "UNKEYWORD",
+                "wib-batch",
+            ): b"1 2 3 4",
+            (
+                "SEEN",
+                "UNFLAGGED",
+                "UNKEYWORD",
+                "wib-bulk",
+                "UNKEYWORD",
+                "wib-batch",
+            ): b"5 6",
             ("FLAGGED", "KEYWORD", "wib-answer"): b"10 11",
             ("FLAGGED", "KEYWORD", "wib-review"): b"12",
             ("FLAGGED", "KEYWORD", "wib-watch"): b"13 14 15",
@@ -50,8 +65,6 @@ class FakeImap:
             ("FLAGGED", "KEYWORD", "wib-waiting-action"): b"26",
             ("FLAGGED", "KEYWORD", "wib-action-ready"): b"27 28",
         }
-        if criteria[:2] == ("SEEN", "UNFLAGGED"):
-            return "OK", [b"5 6"]
         return "OK", [mapping.get(criteria, b"")]
 
 
@@ -83,19 +96,23 @@ class DashboardServiceTest(unittest.TestCase):
         self.assertEqual(snapshot.records, 3)
 
     @patch("workinbox.dashboard.imaplib.IMAP4_SSL", FakeImap)
-    def test_read_unattended_search_excludes_all_wib_keywords(self) -> None:
+    def test_unattended_search_excludes_only_bulk_completion_keywords(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             DashboardService(
                 self.config(Path(directory) / "workinbox.db"),
                 record_store=FakeRecordStore(),
             ).snapshot()
 
-        read_search = next(criteria for criteria in FakeImap.searches if criteria[:2] == ("SEEN", "UNFLAGGED"))
-        self.assertIn("wib-answer", read_search)
-        self.assertIn("wib-deadline", read_search)
-        self.assertIn("wib-action-ready", read_search)
-        self.assertIn("wib-bulk", read_search)
-        self.assertIn("wib-batch", read_search)
+        unread_search = next(criteria for criteria in FakeImap.searches if criteria[0] == "UNSEEN")
+        read_search = next(criteria for criteria in FakeImap.searches if criteria[0] == "SEEN")
+
+        for search in (unread_search, read_search):
+            self.assertIn("UNFLAGGED", search)
+            self.assertIn("wib-bulk", search)
+            self.assertIn("wib-batch", search)
+            self.assertNotIn("wib-answer", search)
+            self.assertNotIn("wib-deadline", search)
+            self.assertNotIn("wib-action-ready", search)
 
 
 if __name__ == "__main__":
