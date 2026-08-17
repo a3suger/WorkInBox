@@ -175,7 +175,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             identity=identity,
         )
 
-    def test_support_request_copy_marks_origin_requested_and_becomes_waiting_action(self) -> None:
+    def test_support_request_copy_becomes_waiting_action_without_readding_requested(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
             config = self.make_config(path)
@@ -183,7 +183,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
                 "<origin@example>",
                 "sender@example.com",
                 1,
-                flags=("\\Flagged", "wib-schedule"),
+                flags=("\\Flagged", "wib-schedule", "wib-requested"),
             )
             request = triage_message(
                 "<request@example>",
@@ -197,6 +197,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
 
             self.assertEqual(result.support_requests, 1)
             self.assertIn("wib-requested", imap.messages["<origin@example>"].flags)
+            self.assertNotIn((1, "wib-requested", True), imap.keyword_updates)
             self.assertIn("wib-waiting-action", imap.messages["<request@example>"].flags)
             self.assertIn("\\Flagged", imap.messages["<request@example>"].flags)
             self.assertEqual(
@@ -228,7 +229,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
                 "<origin@example>",
                 "sender@example.com",
                 1,
-                flags=("\\Flagged", "wib-schedule"),
+                flags=("\\Flagged", "wib-schedule", "wib-requested"),
             )
             request = triage_message(
                 "<request@example>",
@@ -281,7 +282,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
                 "<origin@example>",
                 "sender@example.com",
                 1,
-                flags=("\\Flagged", "wib-schedule"),
+                flags=("\\Flagged", "wib-schedule", "wib-requested"),
             )
             request = triage_message(
                 "<request@example>",
@@ -357,7 +358,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
                 "<origin@example>",
                 "sender@example.com",
                 1,
-                flags=("\\Flagged", "wib-schedule"),
+                flags=("\\Flagged", "wib-schedule", "wib-requested"),
             )
             request = triage_message(
                 "<request@example>",
