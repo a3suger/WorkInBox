@@ -32,6 +32,22 @@ class TriageRelationStore:
             )
             connection.execute(
                 """
+                CREATE TABLE IF NOT EXISTS dedicated_workflow_focus (
+                    workflow_origin_message_id TEXT PRIMARY KEY,
+                    current_focus_message_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS dedicated_workflow_current_focus
+                ON dedicated_workflow_focus (current_focus_message_id)
+                """
+            )
+            connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS triage_checkpoints (
                     mailbox TEXT PRIMARY KEY,
                     uidvalidity INTEGER NOT NULL,
@@ -72,6 +88,70 @@ class TriageRelationStore:
                     now,
                 ),
             )
+
+    def ensure_workflow_focus(self, workflow_origin_message_id: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                """
+                INSERT INTO dedicated_workflow_focus (
+                    workflow_origin_message_id, current_focus_message_id,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(workflow_origin_message_id) DO NOTHING
+                """,
+                (
+                    workflow_origin_message_id,
+                    workflow_origin_message_id,
+                    now,
+                    now,
+                ),
+            )
+
+    def set_current_focus(
+        self,
+        workflow_origin_message_id: str,
+        current_focus_message_id: str,
+    ) -> None:
+        self.ensure_workflow_focus(workflow_origin_message_id)
+        now = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                """
+                UPDATE dedicated_workflow_focus
+                SET current_focus_message_id = ?, updated_at = ?
+                WHERE workflow_origin_message_id = ?
+                """,
+                (
+                    current_focus_message_id,
+                    now,
+                    workflow_origin_message_id,
+                ),
+            )
+
+    def current_focus_for(self, workflow_origin_message_id: str) -> str | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT current_focus_message_id
+                FROM dedicated_workflow_focus
+                WHERE workflow_origin_message_id = ?
+                """,
+                (workflow_origin_message_id,),
+            ).fetchone()
+        return str(row[0]) if row is not None else None
+
+    def workflow_origin_for_focus(self, current_focus_message_id: str) -> str | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT workflow_origin_message_id
+                FROM dedicated_workflow_focus
+                WHERE current_focus_message_id = ?
+                """,
+                (current_focus_message_id,),
+            ).fetchone()
+        return str(row[0]) if row is not None else None
 
     def checkpoint(self, mailbox: str) -> tuple[int, int] | None:
         with sqlite3.connect(self.path) as connection:
