@@ -31,48 +31,25 @@ class WebFoundationTest(unittest.TestCase):
             config = self._config(path)
             database = EmailDatabase(path)
             database.initialize()
-            database.synchronize(
-                [
-                    EmailMessage(
-                        "<active@example>",
-                        "active@example.com",
-                        None,
-                        "Active mail",
-                        "Sat, 8 Aug 2026 09:00:00 +0000",
-                        None,
-                        mailbox="INBOX",
-                        uidvalidity=10,
-                        uid=1,
-                    ),
-                    EmailMessage(
-                        "<inactive@example>",
-                        "inactive@example.com",
-                        None,
-                        "Inactive mail",
-                        "Fri, 7 Aug 2026 09:00:00 +0000",
-                        None,
-                        mailbox="INBOX",
-                        uidvalidity=10,
-                        uid=2,
-                    ),
-                ]
-            )
-            database.update_tracking_status(
-                "<inactive@example>",
-                TrackingStatus.INACTIVE_UNSTARRED,
-            )
+            database.synchronize([
+                EmailMessage(
+                    "<active@example>", "active@example.com", None, "Active mail",
+                    "Sat, 8 Aug 2026 09:00:00 +0000", None,
+                    mailbox="INBOX", uidvalidity=10, uid=1,
+                ),
+                EmailMessage(
+                    "<inactive@example>", "inactive@example.com", None, "Inactive mail",
+                    "Fri, 7 Aug 2026 09:00:00 +0000", None,
+                    mailbox="INBOX", uidvalidity=10, uid=2,
+                ),
+            ])
+            database.update_tracking_status("<inactive@example>", TrackingStatus.INACTIVE_UNSTARRED)
 
             service = TrackingQueryService(config, database=database)
             active = service.active_emails()
             inactive = service.inactive_emails()
-            self.assertEqual(
-                [email.message_id for email in active],
-                ["<active@example>"],
-            )
-            self.assertEqual(
-                [email.message_id for email in inactive],
-                ["<inactive@example>"],
-            )
+            self.assertEqual([email.message_id for email in active], ["<active@example>"])
+            self.assertEqual([email.message_id for email in inactive], ["<inactive@example>"])
             self.assertEqual(active[0].uid, 1)
             self.assertEqual(active[0].uidvalidity, 10)
             self.assertEqual(active[0].mailbox, "INBOX")
@@ -80,19 +57,19 @@ class WebFoundationTest(unittest.TestCase):
     def test_web_app_has_expected_routes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             app = create_app(self._config(Path(directory) / "workinbox.db"))
-            routes = {
-                route.path: set(route.methods or ())
-                for route in app.routes
-            }
+            routes = {route.path: set(route.methods or ()) for route in app.routes}
 
         self.assertIn("GET", routes["/"])
         self.assertIn("GET", routes["/active"])
         self.assertIn("GET", routes["/inactive"])
+        self.assertIn("GET", routes["/records"])
         self.assertIn("GET", routes["/pending"])
         self.assertIn("GET", routes["/deadlines"])
         self.assertIn("GET", routes["/schedules"])
         self.assertIn("GET", routes["/api/thunderbird/imap-target"])
         self.assertIn("GET", routes["/deadlines.ics"])
+        self.assertIn("POST", routes["/normal-workflow/complete"])
+        self.assertIn("POST", routes["/normal-workflow/record"])
         self.assertIn("POST", routes["/deadlines/add"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/register"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/reject"])
@@ -106,36 +83,36 @@ class WebFoundationTest(unittest.TestCase):
     def test_thunderbird_imap_target_excludes_password(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             app = create_app(self._config(Path(directory) / "workinbox.db"))
-            route = next(
-                route
-                for route in app.routes
-                if route.path == "/api/thunderbird/imap-target"
-            )
+            route = next(route for route in app.routes if route.path == "/api/thunderbird/imap-target")
             payload = route.endpoint()
 
-        self.assertEqual(
-            payload,
-            {
-                "host": "imap.example",
-                "port": 993,
-                "username": "user",
-                "mailbox": "INBOX",
-            },
-        )
+        self.assertEqual(payload, {
+            "host": "imap.example",
+            "port": 993,
+            "username": "user",
+            "mailbox": "INBOX",
+        })
         self.assertNotIn("password", payload)
 
     def test_templates_are_loadable(self) -> None:
-        self.assertIsNotNone(_TEMPLATES.get_template("base.html"))
-        self.assertIsNotNone(_TEMPLATES.get_template("emails.html"))
-        self.assertIsNotNone(_TEMPLATES.get_template("pending.html"))
-        self.assertIsNotNone(_TEMPLATES.get_template("deadlines.html"))
-        self.assertIsNotNone(_TEMPLATES.get_template("schedules.html"))
+        for name in (
+            "base.html", "emails.html", "pending.html", "deadlines.html",
+            "schedules.html", "records.html",
+        ):
+            self.assertIsNotNone(_TEMPLATES.get_template(name))
+
+    def test_email_template_contains_normal_completion_controls(self) -> None:
+        source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "emails.html")
+        self.assertIn("/normal-workflow/complete", source)
+        self.assertIn("/normal-workflow/record", source)
+        self.assertIn("通常終了", source)
+        self.assertIn("Record に保存して終了", source)
+        self.assertIn("wib-answer", source)
+        self.assertIn("wib-review", source)
+        self.assertIn("wib-watch", source)
 
     def test_schedule_template_contains_support_request_bridge(self) -> None:
-        source, _, _ = _TEMPLATES.env.loader.get_source(
-            _TEMPLATES.env,
-            "schedules.html",
-        )
+        source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "schedules.html")
         self.assertIn("data-wib-support-request-form", source)
         self.assertNotIn('name="method"', source)
         self.assertNotIn('name="keep_reply_subject"', source)
