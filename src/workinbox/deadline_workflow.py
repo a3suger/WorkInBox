@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .application import DeadlineService, WorkTagService
-from .models import Deadline, DeadlineCandidate, DeadlineCandidateStatus
+from .models import Deadline, DeadlineCandidate, DeadlineCandidateStatus, TrackingStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,9 +81,57 @@ class DeadlineWorkflowService:
                 enabled=False,
             )
 
+        self._apply_common_end_transition(message_id)
         return DeadlineMessageCompletion(
             message_id=message_id,
             completed=True,
             registered_count=registered_count,
             rejected_count=rejected_count,
+        )
+
+    def _apply_common_end_transition(self, message_id: str) -> None:
+        """Apply docs/design.md dedicated-workflow common end transition."""
+        database = self.work_tag_service.database
+        database.initialize()
+        reference = database.imap_reference(message_id)
+        if reference is None:
+            raise RuntimeError(f"IMAP identity is unavailable for {message_id}")
+        if reference.mailbox != self.work_tag_service.config.imap.mailbox:
+            raise RuntimeError(
+                f"Mail is stored in {reference.mailbox!r}, not configured mailbox "
+                f"{self.work_tag_service.config.imap.mailbox!r}"
+            )
+
+        snapshot = self.work_tag_service.imap_client.inspect_flags(
+            reference.uid,
+            expected_uidvalidity=reference.uidvalidity,
+        )
+        flags = set(snapshot.flags)
+
+        deadline_unfinished = (
+            "wib-deadline" in flags and "wib-deadline-done" not in flags
+        )
+        schedule_unfinished = (
+            "wib-schedule" in flags and "wib-schedule-done" not in flags
+        )
+        if deadline_unfinished or schedule_unfinished:
+            return
+
+        if {"wib-answer", "wib-review", "wib-watch"}.intersection(flags):
+            return
+
+        self.work_tag_service.imap_client.set_keyword(
+            reference.uid,
+            "wib-bulk",
+            enabled=True,
+            expected_uidvalidity=reference.uidvalidity,
+        )
+        self.work_tag_service.imap_client.set_flagged(
+            reference.uid,
+            enabled=False,
+            expected_uidvalidity=reference.uidvalidity,
+        )
+        database.update_tracking_status(
+            message_id,
+            TrackingStatus.INACTIVE_UNSTARRED,
         )
