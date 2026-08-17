@@ -63,7 +63,7 @@
 
 {% if tag_failure %}
 <div class="notice error">
-  <strong>タグ更新に失敗しました。</strong><br>
+  <strong>更新に失敗しました。</strong><br>
   {{ tag_failure }}
 </div>
 {% endif %}
@@ -86,8 +86,28 @@
     {% for item in emails %}
     {% set email = item.email %}
     {% set present_keys = item.tags | map(attribute='key') | list %}
+    {% set has_normal_workflow = 'wib-answer' in present_keys or 'wib-review' in present_keys or 'wib-watch' in present_keys %}
     <tr>
-      <td>{{ email.subject or "(件名なし)" }}</td>
+      <td>
+        {{ email.subject or "(件名なし)" }}
+        {% if active_view and has_normal_workflow and not item.error %}
+        <div style="margin-top: 10px; display: grid; gap: 8px;">
+          <form method="post" action="/normal-workflow/complete?message_id={{ email.message_id | urlencode }}">
+            <button type="submit" class="primary">通常終了</button>
+          </form>
+          <details>
+            <summary>Record に保存して終了</summary>
+            <form method="post" action="/normal-workflow/record" style="display: grid; gap: 7px; margin-top: 8px; min-width: 280px;">
+              <input type="hidden" name="message_id" value="{{ email.message_id }}">
+              <label>タイトル<input type="text" name="title" value="{{ email.subject or '' }}" style="width: 100%; box-sizing: border-box;"></label>
+              <label>要約<textarea name="summary" rows="2" style="width: 100%; box-sizing: border-box;"></textarea></label>
+              <label>メモ<textarea name="note" rows="2" style="width: 100%; box-sizing: border-box;"></textarea></label>
+              <button type="submit">Record 保存終了</button>
+            </form>
+          </details>
+        </div>
+        {% endif %}
+      </td>
       <td>{{ email.sender }}</td>
       <td>{{ email.received_at or "-" }}</td>
       <td class="status">{{ email.tracking_status.value }}</td>
