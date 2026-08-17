@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}ダッシュボード - WorkInBox{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2>ダッシュボード</h2>
+    <div class="muted">ここからメールの着眼判断と WorkInBox の仕事を始めます。</div>
+  </div>
+  <div class="actions">
+    <form method="post" action="/sync">
+      <button class="primary" type="submit">通常同期</button>
+    </form>
+  </div>
+</div>
+
+{% if dashboard_failure %}
+<div class="notice error">
+  <strong>ダッシュボードの集計に失敗しました。</strong><br>
+  {{ dashboard_failure }}
+</div>
+{% endif %}
+
+{% if snapshot %}
+<section>
+  <h3>まだ着眼判断していないメール</h3>
+  <div class="dashboard-grid">
+    <article class="dashboard-card">
+      <div class="dashboard-count">{{ snapshot.unattended_unread }}</div>
+      <h4>未着眼・未読</h4>
+      <p class="muted">スターなし AND 未読</p>
+      <button type="button" data-wib-open-work-view="unattended-unread">Thunderbirdで確認</button>
+    </article>
+    <article class="dashboard-card">
+      <div class="dashboard-count">{{ snapshot.unattended_read }}</div>
+      <h4>未着眼・既読</h4>
+      <p class="muted">スターなし AND 既読 AND WIB作業タグなし</p>
+      <button type="button" data-wib-open-work-view="unattended-read">Thunderbirdで確認</button>
+    </article>
+  </div>
+</section>
+
+<section style="margin-top: 24px;">
+  <h3>通常ワークフロー</h3>
+  <div class="dashboard-grid">
+    <article class="dashboard-card">
+      <div class="dashboard-count">{{ snapshot.answer }}</div>
+      <h4>返信必要</h4>
+      <button type="button" data-wib-open-work-view="answer">Thunderbirdで開く</button>
+    </article>
+    <article class="dashboard-card">
+      <div class="dashboard-count">{{ snapshot.review }}</div>
+      <h4>見る・検討</h4>
+      <button type="button" data-wib-open-work-view="review">Thunderbirdで開く</button>
+    </article>
+    <article class="dashboard-card">
+      <div class="dashboard-count">{{ snapshot.watch }}</div>
+      <h4>注目</h4>
+      <button type="button" data-wib-open-work-view="watch">Thunderbirdで開く</button>
+    </article>
+  </div>
+</section>
+
+<section style="margin-top: 24px;">
+  <h3>WIB で進める仕事</h3>
+  <div class="dashboard-grid">
+    <article class="dashboard-card">
+      <div class="dashboard-count">{{ snapshot.deadline }}</div>
+      <h4>締切登録支援</h4>
+      <a class="dashboard-link" href="/deadlines">締切を確認</a>
+    </article>
+    <article class="dashboard-card">
+      <div class="dashboard-count">{{ snapshot.schedule }}</div>
+      <h4>スケジュール調整</h4>
+      <a class="dashboard-link" href="/schedules">スケジュール調整を確認</a>
+    </article>
+    <article class="dashboard-card">
+      <div class="dashboard-count">{{ snapshot.pending }}</div>
+      <h4>判定保留</h4>
+      <a class="dashboard-link" href="/pending">判定を確定</a>
+    </article>
+    <article class="dashboard-card">
+      <div class="dashboard-count">{{ snapshot.waiting_total }}</div>
+      <h4>待機・対応あり</h4>
+      <p class="muted">返信待ち {{ snapshot.waiting_reply }} / 対応待ち {{ snapshot.waiting_action }} / 対応あり {{ snapshot.action_ready }}</p>
+      <a class="dashboard-link" href="/active">Active 一覧で確認</a>
+    </article>
+    <article class="dashboard-card">
+      <div class="dashboard-count">{{ snapshot.records }}</div>
+      <h4>Record</h4>
+      <a class="dashboard-link" href="/records">Record を確認</a>
+    </article>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
