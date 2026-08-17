@@ -151,7 +151,7 @@ class DeadlineWorkflowTest(unittest.TestCase):
             self.assertIn("\\Flagged", imap.flags)
             self.assertNotIn("wib-bulk", imap.flags)
 
-    def test_zero_candidates_does_not_complete(self) -> None:
+    def test_zero_candidates_does_not_complete_automatically(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             message_id, _database, imap, _deadline_service, workflow = self.make_services(
                 Path(directory) / "workinbox.db"
@@ -160,6 +160,35 @@ class DeadlineWorkflowTest(unittest.TestCase):
             completion = workflow.complete_if_ready(message_id)
 
             self.assertFalse(completion.completed)
+            self.assertEqual(imap.flags, ("\\Flagged", "wib-deadline"))
+
+    def test_zero_candidates_can_be_explicitly_dismissed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            message_id, database, imap, _deadline_service, workflow = self.make_services(
+                Path(directory) / "workinbox.db"
+            )
+
+            completion = workflow.dismiss_no_deadline(message_id)
+
+            self.assertTrue(completion.completed)
+            self.assertNotIn("wib-deadline", imap.flags)
+            self.assertIn("wib-bulk", imap.flags)
+            self.assertNotIn("\\Flagged", imap.flags)
+            self.assertEqual(
+                database.list_tracked_emails(active=False)[0].tracking_status,
+                TrackingStatus.INACTIVE_UNSTARRED,
+            )
+
+    def test_no_deadline_dismissal_rejects_existing_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            message_id, _database, imap, deadline_service, workflow = self.make_services(
+                Path(directory) / "workinbox.db"
+            )
+            deadline_service.add_candidate(message_id, "提出締切", due_at="2026-08-20")
+
+            with self.assertRaises(ValueError):
+                workflow.dismiss_no_deadline(message_id)
+
             self.assertEqual(imap.flags, ("\\Flagged", "wib-deadline"))
 
 
