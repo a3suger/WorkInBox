@@ -1,0 +1,24 @@
+[
+  {
+    "namespace": "mailViews",
+    "description": "Minimal WorkInBox adapter for persistent Thunderbird custom mail views.",
+    "functions": [
+      {
+        "name": "ensureUnattendedView",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "tabId", "type": "integer" }
+        ],
+        "returns": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "created": { "type": "boolean" },
+            "applied": { "type": "boolean" }
+          }
+        }
+      }
+    ]
+  }
+]
