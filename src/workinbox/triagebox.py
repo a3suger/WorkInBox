@@ -18,7 +18,6 @@ _WAITING_ACTION = "wib-waiting-action"
 _ACTION_READY = "wib-action-ready"
 _BULK = "wib-bulk"
 _SCHEDULE = "wib-schedule"
-_REQUESTED = "wib-requested"
 _SUPPORT_REQUEST = "schedule_support_request"
 _SUPPORT_REQUEST_REPLIED = "schedule_support_request_replied"
 _SUPPORT_REPLY = "schedule_support_reply"
@@ -280,7 +279,6 @@ class TriageService:
             logging.info("TriageBox self mail: origin lacks required schedule state")
             return False
 
-        self._set_keyword(origin, _REQUESTED, enabled=True)
         self._set_keyword(item, _WAITING_ACTION, enabled=True)
         self._set_flagged(item, enabled=True)
         self.relations.record(
@@ -289,7 +287,7 @@ class TriageService:
             _SUPPORT_REQUEST,
         )
         logging.info(
-            "TriageBox self mail: marked origin requested and support request waiting-action/starred: %s",
+            "TriageBox self mail: support request marked waiting-action/starred and relation saved: %s",
             item.email.message_id,
         )
         return True
