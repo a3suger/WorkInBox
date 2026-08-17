@@ -88,6 +88,11 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
             applied: true,
           };
         },
+
+        async resetView(tabId) {
+          const threePaneWindow = resolveThreePaneWindow(tabId);
+          threePaneWindow.gViewWrapper.setMailView(-1, null);
+        },
       },
     };
   }
