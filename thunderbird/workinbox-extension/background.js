@@ -340,11 +340,9 @@ function prependRequestBody(details, requestText) {
 
 async function beginSupportRequest(request) {
   const originMessageId = String(request.messageId || "").trim();
-  const method = String(request.method || "reply").trim();
   const requestKind = String(request.requestKind || "schedule_adjustment").trim();
   const to = String(request.to || "").trim();
   const cc = String(request.cc || "").trim();
-  const keepReplySubject = request.keepReplySubject !== false;
 
   if (!originMessageId) {
     throw new Error("元メールの Message-ID がありません。");
@@ -362,26 +360,17 @@ async function beginSupportRequest(request) {
   }
 
   const copy = requestCopy(requestKind);
-  let composeTab;
-  if (method === "reply") {
-    composeTab = await messenger.compose.beginReply(originMessage.id, "replyToSender");
-  } else if (method === "forward") {
-    composeTab = await messenger.compose.beginForward(originMessage.id, "forwardInline");
-  } else {
-    throw new Error(`Unknown schedule request method: ${method}`);
-  }
-
+  // M2 is deliberately a new thread. Its WorkInBox relation to M1 is carried
+  // only by X-WorkInBox-Origin-Message-ID; M2 must not inherit reply headers.
+  const composeTab = await messenger.compose.beginNew();
   const details = await messenger.compose.getComposeDetails(composeTab.id);
   const updates = {
     to: [to],
     cc: [cc],
+    subject: copy.subject,
     customHeaders: withOriginHeader(details.customHeaders, originMessageId),
     ...prependRequestBody(details, copy.body),
   };
-
-  if (method === "forward" || !keepReplySubject) {
-    updates.subject = copy.subject;
-  }
 
   await messenger.compose.setComposeDetails(composeTab.id, updates);
   pendingSupportRequests.set(composeTab.id, originMessageId);
