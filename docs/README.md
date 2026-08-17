@@ -89,9 +89,9 @@ TriageBox のヘッダ解析、自己送信判定、返信関係、`返信待ち
 
 正式設計と矛盾する場合は `design.md` を優先する。
 
-### [deadline_support_discussion_2026-08-10.md](deadline_support_discussion_2026-08-10.md)
+### [deadline_workflow.md](deadline_workflow.md)
 
-締切登録支援の詳細設計・議論記録。
+締切候補、正式登録、候補0件時の利用者判断、専用ワークフロー終了後の共通遷移、元メール参照をまとめた現行詳細設計。
 
 ### [thunderbird_bridge.md](thunderbird_bridge.md)
 
@@ -116,6 +116,10 @@ Thunderbird タグ定義のバックアップ/復元に関する運用資料。
 ---
 
 ## 履歴・検証資料
+
+### [deadline_support_discussion_2026-08-10.md](deadline_support_discussion_2026-08-10.md)
+
+2026-08-10 時点の締切登録支援の設計議論記録。現在仕様ではなく、現行の締切詳細設計は `deadline_workflow.md` を参照する。
 
 ### [design_v0_2.md](design_v0_2.md)
 
