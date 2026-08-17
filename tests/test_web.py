@@ -71,6 +71,7 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("POST", routes["/normal-workflow/complete"])
         self.assertIn("POST", routes["/normal-workflow/record"])
         self.assertIn("POST", routes["/deadlines/add"])
+        self.assertIn("POST", routes["/deadlines/no-deadline"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/register"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/reject"])
         self.assertIn("POST", routes["/deadlines/{candidate_id}/revise"])
@@ -110,6 +111,12 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("wib-answer", source)
         self.assertIn("wib-review", source)
         self.assertIn("wib-watch", source)
+
+    def test_deadline_template_requires_explicit_zero_candidate_exit(self) -> None:
+        source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "deadlines.html")
+        self.assertIn("AI抽出は完了していますが、締切候補は見つかりませんでした", source)
+        self.assertIn("/deadlines/no-deadline", source)
+        self.assertIn("締切なしとして終了", source)
 
     def test_schedule_template_contains_support_request_bridge(self) -> None:
         source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "schedules.html")
