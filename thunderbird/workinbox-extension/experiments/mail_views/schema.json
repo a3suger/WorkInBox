@@ -18,6 +18,14 @@
             "applied": { "type": "boolean" }
           }
         }
+      },
+      {
+        "name": "resetView",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "tabId", "type": "integer" }
+        ]
       }
     ]
   }
