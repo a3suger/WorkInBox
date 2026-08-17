@@ -129,8 +129,11 @@
     </div>
     {% else %}
     <div class="notice" style="margin-top: 14px; margin-bottom: 0;">
-      AI抽出は完了していますが、締切候補は見つかりませんでした。
+      AI抽出は完了していますが、締切候補は見つかりませんでした。本文を確認し、締切がある場合は手動で追加してください。
     </div>
+    <form method="post" action="/deadlines/no-deadline?message_id={{ email.message_id | urlencode }}" style="margin-top: 10px;">
+      <button type="submit">締切なしとして終了</button>
+    </form>
     {% endif %}
 
     <details class="deadline-add" style="margin-top: 16px;">
