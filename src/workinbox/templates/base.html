@@ -156,17 +156,34 @@
       padding: 2px 7px;
       font-size: 0.78rem;
     }
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+    }
+    .dashboard-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .dashboard-card h4 { margin: 4px 0 8px; }
+    .dashboard-card p { margin: 6px 0 12px; }
+    .dashboard-count { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .dashboard-link { display: inline-block; margin-top: 4px; }
   </style>
 </head>
 <body>
 <header>
   <h1>WorkInBox</h1>
   <nav>
+    <a href="/" class="{% if dashboard_view %}current{% endif %}">ダッシュボード</a>
     <a href="/active" class="{% if active_view and not pending_view and not deadlines_view and not schedules_view %}current{% endif %}">Active</a>
     <a href="/pending" class="{% if pending_view %}current{% endif %}">判定保留</a>
     <a href="/deadlines" class="{% if deadlines_view %}current{% endif %}">締切</a>
     <a href="/schedules" class="{% if schedules_view %}current{% endif %}">スケジュール調整</a>
-    <a href="/inactive" class="{% if not active_view and not pending_view and not deadlines_view and not schedules_view %}current{% endif %}">Inactive</a>
+    <a href="/records">Record</a>
+    <a href="/inactive" class="{% if not dashboard_view and not active_view and not pending_view and not deadlines_view and not schedules_view %}current{% endif %}">Inactive</a>
   </nav>
 </header>
 <main>
