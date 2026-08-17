@@ -75,15 +75,16 @@ WIB を起点として作成した専用ワークフロー関連メール候補�
 
 M1 から支援者へ作る M2 は、M1 への Reply / Forward ではなく Thunderbird の新規メール作成として開始する。M2 の `X-WorkInBox-Origin-Message-ID` に M1 の Message-ID を入れ、自分宛て/Cc の M2 が INBOX に到着した時点で TriageBox が M1/M2 relation を確定する。
 
-スケジュール調整の起点メール M1 と、自分宛て/Cc で INBOX に到着した支援依頼メール M2 の relation が確定した場合、M2 は次の状態になる。
+M2 の新規メール作成が成立した時点で、Thunderbird Extension が起点 M1 に履歴タグ `依頼済み` を付ける。TriageBox は `依頼済み` を付け直さない。
+
+スケジュール調整の起点メール M1 と、自分宛て/Cc で INBOX に到着した支援依頼メール M2 の relation が確定した場合、TriageBox は M2 を次の状態にする。
 
 ```text
+M1 = 依頼済み（Extension が送信成立時に付与済み）
 M2 = 対応待ち + ★
 ```
 
-M1/M2 relation は SQLite に保存する。
-
-`依頼済み` の付与タイミングと Thunderbird Extension / TriageBox の責務境界は Issue #11 で正式設計へ最終整合する。この relation 設計では付与責務を決め直さない。
+TriageBox は M1/M2 relation を SQLite に保存する。この責務分離により、`依頼済み` は送信成立の履歴、`対応待ち` と relation は self-Cc M2 を実際に確認した事実として扱える。
 
 ### 1-2. `X-WorkInBox-Origin-Message-ID` がない
 
@@ -199,9 +200,10 @@ TrackingBox の通常 AI 判定除外には少なくとも次を含める。
 ```mermaid
 flowchart TD
     A[M1: スケジュール調整 + ★] --> B[WIB から支援者へ新規 M2 を作成]
+    B --> BA[M1: 依頼済み]
     B --> C[M2: X-WorkInBox-Origin-Message-ID = M1]
     C --> D[自分宛て/Cc の M2 を TriageBox が確認]
-    D --> E[M2: 対応待ち + ★]
+    D --> E[M2: 対応待ち + ★ / M1-M2 relation 保存]
     E --> F[支援者から M3 が返信]
     F --> G[In-Reply-To / References で M2 を特定]
     G --> H[M2: 対応待ち + 一括処理 + ☆]
@@ -234,6 +236,9 @@ M2 が `schedule_support_request_replied` に更新された後は、同じ未�
 ## 7. 実装上の原則
 
 - M2 は M1 への Reply / Forward ではなく新規 compose で作成する。
+- M2 の送信成立時に Thunderbird Extension が M1 へ `依頼済み` を付ける。
+- TriageBox は M1 へ `依頼済み` を重複付与しない。
+- self-Cc の M2 を確認した TriageBox が M2 へ `対応待ち + ★` を付け、M1/M2 relation を保存する。
 - M1/M2 の専用 relation は `X-WorkInBox-Origin-Message-ID` と SQLite で保持する。
 - M2→M3 は標準 `In-Reply-To` / `References` を優先し、SQLite relation で専用ワークフローの起点 M1 へ結び直す。
 - 関係判定は件名一致より Message-ID を優先する。
@@ -251,6 +256,5 @@ M2 が `schedule_support_request_replied` に更新された後は、同じ未�
 
 ## 今後の別 Issue
 
-- `依頼済み` の付与責務: Issue #11
 - `current_focus_message_id` の永続化: Issue #12
 - 通常の `返信待ち` への返信遷移の追加整理
