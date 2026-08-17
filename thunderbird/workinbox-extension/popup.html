@@ -18,20 +18,23 @@
     </section>
 
     <section>
-      <h2>Quick Filter PoC</h2>
-      <p>WIB Web の IMAP 設定から対象 Thunderbird アカウントを自動解決し、その mailbox にスター付き + WIBタグの Quick Filter を適用します。</p>
+      <h2>WIB 作業ビュー</h2>
+      <p>WIB Web の IMAP 設定から対象アカウントと mailbox を自動解決します。未着眼は「スターなし AND 一括処理なし」のカスタムビュー、通常ワークフロー等は「対象タグ AND スター付き」の Quick Filter を使います。</p>
       <label for="work-view-kind">作業ビュー</label>
       <select id="work-view-kind">
+        <option value="unattended-unread">未着眼・未読</option>
+        <option value="unattended-read">未着眼・既読</option>
         <option value="answer">返信必要</option>
-        <option value="deadline">締切あり</option>
-        <option value="schedule">スケジュール調整</option>
         <option value="review">見る・検討</option>
         <option value="watch">注目</option>
+        <option value="deadline">締切あり</option>
+        <option value="schedule">スケジュール調整</option>
         <option value="waitingReply">返信待ち</option>
         <option value="waitingAction">対応待ち</option>
         <option value="actionReady">対応あり</option>
       </select>
       <button id="open-work-view" type="button">選択したビューを見る</button>
+      <p class="status">未着眼・未読は未読 Quick Filter を重ねます。未読整理後は未着眼・既読を開き、残りを確認します。</p>
     </section>
 
     <section>
