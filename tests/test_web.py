@@ -97,10 +97,24 @@ class WebFoundationTest(unittest.TestCase):
 
     def test_templates_are_loadable(self) -> None:
         for name in (
-            "base.html", "emails.html", "pending.html", "deadlines.html",
+            "base.html", "dashboard.html", "emails.html", "pending.html", "deadlines.html",
             "schedules.html", "records.html",
         ):
             self.assertIsNotNone(_TEMPLATES.get_template(name))
+
+    def test_dashboard_template_contains_required_starting_points(self) -> None:
+        source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "dashboard.html")
+        self.assertIn("未着眼・未読", source)
+        self.assertIn("未着眼・既読", source)
+        self.assertIn('data-wib-open-work-view="unattended-unread"', source)
+        self.assertIn('data-wib-open-work-view="unattended-read"', source)
+        self.assertIn('data-wib-open-work-view="answer"', source)
+        self.assertIn('data-wib-open-work-view="review"', source)
+        self.assertIn('data-wib-open-work-view="watch"', source)
+        self.assertIn('href="/deadlines"', source)
+        self.assertIn('href="/schedules"', source)
+        self.assertIn('href="/pending"', source)
+        self.assertIn('href="/records"', source)
 
     def test_email_template_contains_normal_completion_controls(self) -> None:
         source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "emails.html")
