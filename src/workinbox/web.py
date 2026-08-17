@@ -291,6 +291,17 @@ def create_app(
             return render_deadlines(request, action_failure=str(exc))
         return render_deadlines(request, action_message="締切候補を手動で追加しました。")
 
+    @app.post("/deadlines/no-deadline")
+    def dismiss_no_deadline(request: Request, message_id: str):
+        try:
+            deadline_flow_service.dismiss_no_deadline(message_id)
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            return render_deadlines(request, action_failure=str(exc))
+        return render_deadlines(
+            request,
+            action_message="締切なしとして締切登録支援を終了しました。",
+        )
+
     @app.post("/deadlines/{candidate_id}/register")
     def register_deadline_candidate(request: Request, candidate_id: int):
         try:
