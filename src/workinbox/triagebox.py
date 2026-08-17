@@ -18,9 +18,16 @@ _WAITING_ACTION = "wib-waiting-action"
 _ACTION_READY = "wib-action-ready"
 _BULK = "wib-bulk"
 _SCHEDULE = "wib-schedule"
+_DEADLINE = "wib-deadline"
 _SUPPORT_REQUEST = "schedule_support_request"
 _SUPPORT_REQUEST_REPLIED = "schedule_support_request_replied"
 _SUPPORT_REPLY = "schedule_support_reply"
+_SUPPORT_RELATION_KINDS = {
+    _SUPPORT_REQUEST,
+    _SUPPORT_REQUEST_REPLIED,
+    _SUPPORT_REPLY,
+}
+_DEDICATED_WORKFLOW_KEYS = {_SCHEDULE, _DEADLINE}
 
 
 class TriageSenderKind(StrEnum):
@@ -218,6 +225,8 @@ class TriageService:
                         support_requests += 1
                 elif self._handle_waiting_action_reply(item):
                     waiting_action_replies += 1
+                else:
+                    self._handle_dedicated_thread_focus(item)
             except (OSError, RuntimeError, ValueError) as exc:
                 logging.warning(
                     "TriageBox failed for %s: %s",
@@ -279,6 +288,7 @@ class TriageService:
             logging.info("TriageBox self mail: origin lacks required schedule state")
             return False
 
+        self.relations.ensure_workflow_focus(origin_message_id)
         self._set_keyword(item, _WAITING_ACTION, enabled=True)
         self._set_flagged(item, enabled=True)
         self.relations.record(
@@ -312,6 +322,7 @@ class TriageService:
         self._set_keyword(item, _ACTION_READY, enabled=True)
         self._set_flagged(item, enabled=True)
         if origin_message_id is not None:
+            self.relations.ensure_workflow_focus(origin_message_id)
             self.relations.record(
                 waiting_message.email.message_id,
                 origin_message_id,
@@ -330,6 +341,43 @@ class TriageService:
             item.email.message_id,
         )
         return True
+
+    def _handle_dedicated_thread_focus(self, item: TriageMessage) -> bool:
+        for message_id in item.headers.referenced_message_ids:
+            relation_kind = self.relations.relation_kind_for(message_id)
+            if relation_kind in _SUPPORT_RELATION_KINDS:
+                continue
+
+            workflow_origin = self.relations.workflow_origin_for_focus(message_id)
+            if workflow_origin is None:
+                referenced = self.imap_client.find_message_by_message_id(message_id)
+                if referenced is None:
+                    continue
+                if not _DEDICATED_WORKFLOW_KEYS.intersection(referenced.flags):
+                    continue
+                workflow_origin = referenced.email.message_id
+                self.relations.ensure_workflow_focus(workflow_origin)
+
+            previous_focus = self.relations.current_focus_for(workflow_origin)
+            if previous_focus == item.email.message_id:
+                return True
+
+            if previous_focus and previous_focus != workflow_origin:
+                previous = self.imap_client.find_message_by_message_id(previous_focus)
+                if previous is not None:
+                    self._set_keyword(previous, _BULK, enabled=True)
+                    self._set_flagged(previous, enabled=False)
+
+            self._set_flagged(item, enabled=True)
+            self.relations.set_current_focus(workflow_origin, item.email.message_id)
+            logging.info(
+                "TriageBox dedicated thread focus moved: origin=%s previous=%s current=%s",
+                workflow_origin,
+                previous_focus or "<none>",
+                item.email.message_id,
+            )
+            return True
+        return False
 
     def _resolve_waiting_action(self, item: TriageMessage) -> TriageMessage | None:
         for message_id in item.headers.referenced_message_ids:
