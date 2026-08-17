@@ -2,6 +2,8 @@ const WORKINBOX_ORIGIN_HEADER = "X-WorkInBox-Origin-Message-ID";
 const REQUESTED_TAG = "wib-requested";
 
 const WORK_VIEWS = {
+  "unattended-unread": { label: "未着眼・未読", unattended: true, unread: true },
+  "unattended-read": { label: "未着眼・既読", unattended: true, unread: false },
   answer: { tagKey: "wib-answer", label: "返信必要" },
   deadline: { tagKey: "wib-deadline", label: "締切あり" },
   schedule: { tagKey: "wib-schedule", label: "スケジュール調整" },
@@ -260,16 +262,28 @@ async function openWorkView(viewName, imapTarget) {
   const { account, mailbox } = await resolveWorkViewMailbox(imapTarget);
   const mailTab = await resolveDedicatedWorkViewTab(mailbox);
 
-  await messenger.mailTabs.setQuickFilter(mailTab.id, {
-    show: true,
-    flagged: true,
-    tags: {
-      mode: "all",
+  if (view.unattended) {
+    await messenger.mailTabs.setQuickFilter(mailTab.id, { show: false });
+    await messenger.mailViews.ensureUnattendedView(mailTab.id);
+    if (view.unread) {
+      await messenger.mailTabs.setQuickFilter(mailTab.id, {
+        show: true,
+        unread: true,
+      });
+    }
+  } else {
+    await messenger.mailViews.resetView(mailTab.id);
+    await messenger.mailTabs.setQuickFilter(mailTab.id, {
+      show: true,
+      flagged: true,
       tags: {
-        [view.tagKey]: true,
+        mode: "all",
+        tags: {
+          [view.tagKey]: true,
+        },
       },
-    },
-  });
+    });
+  }
 
   await messenger.tabs.update(mailTab.id, { active: true });
 
@@ -283,12 +297,14 @@ async function openWorkView(viewName, imapTarget) {
     ok: true,
     view: viewName,
     viewLabel: view.label,
-    tagKey: view.tagKey,
+    tagKey: view.tagKey || "",
     accountName: account.name || account.id,
     folderName: mailbox.name || imapTarget.mailbox,
     tabTitle: titleResult?.appliedTitle || requestedTabTitle,
     tabId: mailTab.id,
     dedicatedTab: true,
+    unattended: Boolean(view.unattended),
+    unreadQuickFilter: Boolean(view.unattended && view.unread),
   };
 }
 
