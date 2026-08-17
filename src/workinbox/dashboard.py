@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 from .config import AppConfig
 from .record_store import RecordStore
-from .work_tags import WORK_TAG_KEYS
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +47,6 @@ class DashboardService:
 
     def snapshot(self) -> DashboardSnapshot:
         self.records.initialize()
-        excluded_work_keywords = tuple(sorted((*WORK_TAG_KEYS, "wib-batch")))
 
         with imaplib.IMAP4_SSL(self.config.imap.host, self.config.imap.port) as client:
             client.login(self.config.imap.username, self.config.imap.password)
@@ -56,11 +54,24 @@ class DashboardService:
             if status != "OK":
                 raise RuntimeError(f"Unable to select mailbox: {self.config.imap.mailbox}")
 
-            unattended_unread = self._count(client, "UNSEEN", "UNFLAGGED")
-            read_criteria: list[str] = ["SEEN", "UNFLAGGED"]
-            for keyword in excluded_work_keywords:
-                read_criteria.extend(("UNKEYWORD", keyword))
-            unattended_read = self._count(client, *read_criteria)
+            unattended_unread = self._count(
+                client,
+                "UNSEEN",
+                "UNFLAGGED",
+                "UNKEYWORD",
+                "wib-bulk",
+                "UNKEYWORD",
+                "wib-batch",
+            )
+            unattended_read = self._count(
+                client,
+                "SEEN",
+                "UNFLAGGED",
+                "UNKEYWORD",
+                "wib-bulk",
+                "UNKEYWORD",
+                "wib-batch",
+            )
 
             return DashboardSnapshot(
                 unattended_unread=unattended_unread,
