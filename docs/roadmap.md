@@ -1,5 +1,18 @@
 # WorkInBox 開発ロードマップ
 
+> **この文書の役割**
+>
+> この文書は WorkInBox の中長期的な実装順序・方向性を示す。
+> 現在の進捗状態の正本ではない。
+>
+> 現在の実装状況・完了状態は GitHub Issue / commit / GitHub Actions を確認する。
+> 作業中断・再開時の現在位置と残作業は `docs/current_work.md` を参照する。
+> `docs/roadmap.md` の記載と GitHub / git の実状態が異なる場合は、GitHub / git の実状態を優先する。
+>
+> 2026-08-22 時点では、`docs/design.md` 追従実装 #6〜#16 は完了し、
+> #17〜#25 の実機確認が残っている。
+> 詳細は `docs/current_work.md` を参照する。
+
 ## 方針
 
 WorkInBox は Thunderbird を置き換えるメールクライアントではなく、メールから発生する仕事を整理するための業務支援システムである。

@@ -9,10 +9,13 @@
 原則として次の順序で読む。
 
 1. [開発のお約束](development_working_agreement.md)
-2. [正式設計](design.md)
-3. 作業対象に対応する詳細設計
-4. 必要に応じて [Decision Log](decision_log.md) で判断の経緯を確認する
-5. [ロードマップ](roadmap.md) で実装順序を確認する
+2. [現在の作業状態](current_work.md)
+3. [正式設計](design.md)
+4. 作業対象に対応する詳細設計
+5. 必要に応じて [Decision Log](decision_log.md) で判断の経緯を確認する
+6. [ロードマップ](roadmap.md) で中長期の実装順序を確認する
+
+チャット引き継ぎ時は [chat_handoff.md](chat_handoff.md) の手順に従う。
 
 文書間に矛盾がある場合は、次の優先順位で扱う。
 
@@ -21,7 +24,7 @@
 3. `decision_log.md` の履歴（正式設計へ未統合の Decision がある場合を除く）
 4. 古いバージョンの設計・検証記録
 
-`roadmap.md` は実装順序の資料であり、業務仕様の正本にはしない。正式設計と矛盾する場合は `design.md` を優先する。
+`roadmap.md` は中長期の実装順序の資料であり、現在の進捗や業務仕様の正本にはしない。現在状態は GitHub / git と `current_work.md` を確認し、正式設計と矛盾する場合は `design.md` を優先する。
 
 ---
 
@@ -60,11 +63,23 @@ WorkInBox の**正式な現行設計**。状態遷移、タグ、通常ワーク
 - 正式締切は SQLite を正本とし、Message-ID で元メールを参照する。
 - AI 判定前に引用された過去メール部分を機械的に除去してから文字数上限を適用する。
 
+### [current_work.md](current_work.md)
+
+現在の作業位置、完了済み作業、残作業、中断理由、GitHub / git の状態を記録する引き継ぎ用文書。
+
+`作業中断` 時に更新し、`作業再開` 時に最初に確認する。
+
+### [chat_handoff.md](chat_handoff.md)
+
+チャット上限や担当交代時に、新しいチャット・新しい作業者へ引き継ぐための固定手順。
+
+現在状態そのものは `current_work.md` を参照するため、通常は頻繁に書き換えない。
+
 ### [roadmap.md](roadmap.md)
 
-実装状況と実装順序を確認するための資料。
+中長期の実装順序と方向性を確認するための資料。
 
-仕様判断は `design.md` を優先する。
+現在の進捗状態は GitHub / git と `current_work.md` を優先し、仕様判断は `design.md` を優先する。
 
 ---
 

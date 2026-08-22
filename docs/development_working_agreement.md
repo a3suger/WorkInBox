@@ -120,3 +120,92 @@ Thunderbird + WIB で実機確認
 仕様検討中に関連する新しいアイデアが出ても、そのテーマの実装に不要なら「実装時」または「将来」へ送る。
 
 WorkInBox は、長く考えて完成形を当てにいくより、**小さく決め、小さく実装し、実際に使って修正する**方法を基本とする。
+
+---
+
+## 4. 作業中断・作業再開
+
+長時間作業、チャット上限、ツール制限、担当交代などがあっても現在位置を復元できるよう、
+`docs/current_work.md` を現在作業の引き継ぎ記録として使用する。
+
+### `作業中断` の指示を受けた場合
+
+利用者から `作業中断` と指示された場合、作業者は新しい実装を開始せず、
+現在の作業状態を整理してから終了する。
+
+`docs/current_work.md` に少なくとも次を記録する。
+
+- 現在対象としている親 Issue / 実装 Issue / 実機確認 Issue
+- 最新の `作業再開` 以降に実施した作業
+- main に反映した commit SHA
+- ローカルにのみ存在する未 push commit があればその SHA と内容
+- 自動テスト結果
+- GitHub Actions の run と結果
+- Close / 作成 / 更新した Issue
+- 現在調査中・実装途中の事項
+- 残作業を実施順に列挙
+- 中断理由
+- 新しい設計判断が必要な状態かどうか
+- 再開時に最初に確認すべき事項
+
+可能であれば、記録内容を GitHub の Issue / commit / Actions と照合する。
+GitHub とローカルの状態が異なる場合は、その差分も明記する。
+
+`docs/current_work.md` 自体の更新も、可能であれば main に commit してから作業を終了する。
+
+### `作業再開` の指示を受けた場合
+
+利用者から `作業再開` と指示された場合、作業者は直ちに新しい実装を始めない。
+
+最初に次を確認する。
+
+1. `docs/development_working_agreement.md`
+2. `docs/current_work.md`
+3. 現在対象となっている GitHub Issue
+4. ローカル `main` と `origin/main` の最新 commit
+5. 必要に応じて最近の GitHub Actions
+6. 作業対象に関係する `docs/design.md` と詳細設計
+
+そのうえで次を照合する。
+
+- 最後に完了した作業
+- 残作業
+- 現在の Issue 状態
+- main に存在する commit
+- 未 push commit の有無
+- GitHub Actions の結果
+
+`docs/current_work.md` と GitHub / git の実状態が食い違う場合は、
+GitHub / git の実状態を優先し、`docs/current_work.md` を更新してから作業を再開する。
+
+中断理由が「新しい設計判断待ち」の場合は、利用者の判断なしに実装を再開しない。
+
+チャット引き継ぎ、時間都合、ツール中断等であり、新しい設計判断を必要としない場合は、
+`docs/current_work.md` の「残作業」の先頭から再開する。
+
+### チャット引き継ぎ
+
+チャット上限等により別チャットへ移る場合は、`docs/chat_handoff.md` を固定の引き継ぎ手順として使用する。
+
+`docs/chat_handoff.md` には個別 Issue や一時的な commit SHA を原則として書かず、
+現在状態は `docs/current_work.md` から取得する。
+
+新しいチャットでは、利用者は原則として次のように依頼できる状態を維持する。
+
+> `docs/chat_handoff.md` に従って作業を引き継ぎ、`docs/current_work.md` の残作業から再開してください。
+
+### 作業状態の正本
+
+用途ごとの優先順位は次とする。
+
+1. `docs/design.md`
+   - 現行設計の正本
+2. GitHub / git の実状態
+   - Issue / commit / Actions / ローカルと remote の差分
+3. `docs/current_work.md`
+   - 現在位置・残作業・中断理由の引き継ぎ記録
+4. `docs/roadmap.md`
+   - 中長期の実装順序・方向性
+
+`docs/roadmap.md` だけから現在の進捗や完了状態を判断しない。
+
