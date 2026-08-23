@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 from .config import AppConfig
+from .database import EmailDatabase
 from .record_store import RecordStore
 
 
@@ -43,12 +44,21 @@ class DashboardService:
         config: AppConfig,
         *,
         record_store: RecordStore | None = None,
+        database: EmailDatabase | None = None,
     ) -> None:
         self.config = config
         self.records = record_store or RecordStore(config.database.path)
+        self.database = database or EmailDatabase(config.database.path)
 
     def snapshot(self) -> DashboardSnapshot:
         self.records.initialize()
+        self.database.initialize()
+        active_uids = {
+            reference.uid
+            for reference in self.database.active_imap_references(
+                self.config.imap.mailbox
+            )
+        }
         unattended_since = date.today() - timedelta(
             days=self.config.imap.new_mail_lookback_days - 1
         )
@@ -101,6 +111,7 @@ class DashboardService:
                     "wib-deadline",
                     "UNKEYWORD",
                     "wib-deadline-done",
+                    allowed_uids=active_uids,
                 ),
                 schedule=self._count(
                     client,
@@ -109,6 +120,7 @@ class DashboardService:
                     "wib-schedule",
                     "UNKEYWORD",
                     "wib-schedule-done",
+                    allowed_uids=active_uids,
                 ),
                 pending=self._count(client, "FLAGGED", "KEYWORD", "wib-pending"),
                 waiting_reply=self._count(
@@ -124,8 +136,18 @@ class DashboardService:
             )
 
     @staticmethod
-    def _count(client: imaplib.IMAP4_SSL, *criteria: str) -> int:
-        status, data = client.search(None, *criteria)
+    def _count(
+        client: imaplib.IMAP4_SSL,
+        *criteria: str,
+        allowed_uids: set[int] | None = None,
+    ) -> int:
+        if allowed_uids is None:
+            status, data = client.search(None, *criteria)
+        else:
+            status, data = client.uid("search", None, *criteria)
         if status != "OK":
             raise RuntimeError(f"IMAP dashboard search failed: {' '.join(criteria)}")
-        return len(data[0].split()) if data and data[0] else 0
+        values = data[0].split() if data and data[0] else []
+        if allowed_uids is None:
+            return len(values)
+        return sum(int(value) in allowed_uids for value in values)

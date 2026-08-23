@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from workinbox.config import AppConfig, DatabaseConfig, ImapConfig
 from workinbox.dashboard import DashboardService
+from workinbox.models import ImapReference
 
 
 class FakeRecordStore:
@@ -16,6 +17,17 @@ class FakeRecordStore:
 
     def list(self):
         return [object(), object(), object()]
+
+
+class FakeEmailDatabase:
+    def initialize(self) -> None:
+        pass
+
+    def active_imap_references(self, mailbox: str) -> list[ImapReference]:
+        return [
+            ImapReference(f"<{uid}@example>", mailbox, 55, uid)
+            for uid in (20, 21, 22)
+        ]
 
 
 class FakeImap:
@@ -56,6 +68,11 @@ class FakeImap:
         }
         return "OK", [mapping.get(criteria, b"")]
 
+    def uid(self, command: str, charset, *criteria: str):
+        if command != "search":
+            raise AssertionError(command)
+        return self.search(charset, *criteria)
+
 
 class DashboardServiceTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -73,6 +90,7 @@ class DashboardServiceTest(unittest.TestCase):
             snapshot = DashboardService(
                 self.config(Path(directory) / "workinbox.db"),
                 record_store=FakeRecordStore(),
+                database=FakeEmailDatabase(),
             ).snapshot()
 
         self.assertEqual(snapshot.unattended_unread, 4)
@@ -95,6 +113,7 @@ class DashboardServiceTest(unittest.TestCase):
             DashboardService(
                 self.config(Path(directory) / "workinbox.db"),
                 record_store=FakeRecordStore(),
+                database=FakeEmailDatabase(),
             ).snapshot()
 
         unread_search = next(criteria for criteria in FakeImap.searches if criteria[0] == "UNSEEN")
@@ -109,6 +128,22 @@ class DashboardServiceTest(unittest.TestCase):
             self.assertNotIn("wib-answer", search)
             self.assertNotIn("wib-deadline", search)
             self.assertNotIn("wib-action-ready", search)
+
+    @patch("workinbox.dashboard.imaplib.IMAP4_SSL", FakeImap)
+    def test_dedicated_counts_include_only_database_active_uids(self) -> None:
+        class OneActiveDatabase(FakeEmailDatabase):
+            def active_imap_references(self, mailbox: str) -> list[ImapReference]:
+                return [ImapReference("<deadline@example>", mailbox, 55, 20)]
+
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = DashboardService(
+                self.config(Path(directory) / "workinbox.db"),
+                record_store=FakeRecordStore(),
+                database=OneActiveDatabase(),
+            ).snapshot()
+
+        self.assertEqual(snapshot.deadline, 1)
+        self.assertEqual(snapshot.schedule, 0)
 
 
 if __name__ == "__main__":
