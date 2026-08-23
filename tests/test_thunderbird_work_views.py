@@ -78,8 +78,8 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("messenger.messageDisplay.getDisplayedMessage(tab.id)", background)
         self.assertIn("NORMAL_WORKFLOW_TAGS", background)
         self.assertIn("await addTag(message, BULK_TAG)", background)
-        self.assertIn("await messenger.messages.get(message.id)", background)
-        self.assertIn("includes(BULK_TAG)", background)
+        self.assertIn("await messenger.messages.tags.get(BULK_TAG)", background)
+        self.assertNotIn("await messenger.messages.get(message.id)", background)
         self.assertIn(
             "await messenger.messages.update(message.id, { flagged: false })",
             background,
