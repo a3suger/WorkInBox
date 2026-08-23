@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import logging
 import sqlite3
 from pathlib import Path
@@ -8,7 +7,6 @@ from threading import Lock
 from typing import Callable
 from urllib.parse import parse_qs
 
-import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 from fastapi.templating import Jinja2Templates
@@ -20,7 +18,7 @@ from .application import (
     TrackingQueryService,
     WorkTagService,
 )
-from .config import AppConfig, load_config
+from .config import AppConfig
 from .dashboard import DashboardService
 from .deadline_application import DeadlineExtractionResult, DeadlineExtractionService
 from .deadline_dates import normalize_due_at
@@ -412,15 +410,12 @@ def create_app(
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(description="Run the WorkInBox web UI")
-    parser.add_argument("--config", default="config.yaml", help="YAML configuration path")
-    parser.add_argument("--host", default="127.0.0.1", help="Web server bind address")
-    parser.add_argument("--port", type=int, default=8000, help="Web server port")
-    args = parser.parse_args()
+    # Keep the historical module entry point working, but always use the
+    # runtime wrapper that runs synchronization in a child process and exposes
+    # structured progress through /api/sync-status.
+    from .web_runtime import cli as runtime_cli
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    config = load_config(args.config)
-    uvicorn.run(create_app(config), host=args.host, port=args.port)
+    runtime_cli()
 
 
 if __name__ == "__main__":

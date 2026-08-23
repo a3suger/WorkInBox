@@ -4,11 +4,13 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.responses import RedirectResponse
 
 from workinbox.config import AppConfig, DatabaseConfig, ImapConfig
 from workinbox.web_runtime import create_app
+from workinbox.web import cli as legacy_web_cli
 
 
 class FakeSyncProcessManager:
@@ -58,6 +60,12 @@ class WebRuntimeTest(unittest.TestCase):
             ImapConfig("imap.example", 993, "user", "pass", "INBOX", 7),
             DatabaseConfig(path),
         )
+
+    @patch("workinbox.web_runtime.cli")
+    def test_legacy_web_module_uses_progress_runtime(self, runtime_cli) -> None:
+        legacy_web_cli()
+
+        runtime_cli.assert_called_once_with()
 
     def test_sync_status_reports_background_process(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

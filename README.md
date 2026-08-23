@@ -207,7 +207,7 @@ workinbox-web --config config.yaml
 または:
 
 ```bash
-python -m workinbox.web --config config.yaml
+python -m workinbox.web_runtime --config config.yaml
 ```
 
 既定ではローカルホストだけにバインドします。
@@ -302,7 +302,7 @@ Web UI 用には別の Python 実行構成を作ると便利です。
 ```text
 Name: WorkInBox Web
 Run: module
-Module name: workinbox.web
+Module name: workinbox.web_runtime
 Script parameters: --config config.yaml
 Working directory: /path/to/WorkInBox
 Python interpreter: /path/to/WorkInBox/.venv/bin/python
