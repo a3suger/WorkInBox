@@ -66,6 +66,19 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
             "experiments/mail_views/implementation.js",
         )
 
+    def test_message_display_action_completes_normal_workflow_in_one_click(self) -> None:
+        manifest = json.loads((EXTENSION / "manifest.json").read_text(encoding="utf-8"))
+        background = (EXTENSION / "background.js").read_text(encoding="utf-8")
+
+        self.assertEqual(
+            manifest["message_display_action"]["default_title"],
+            "WIB: 通常ワークフローを終了",
+        )
+        self.assertIn("messenger.messageDisplayAction.onClicked", background)
+        self.assertIn("messenger.messageDisplay.getDisplayedMessage(tab.id)", background)
+        self.assertIn("NORMAL_WORKFLOW_TAGS", background)
+        self.assertIn("await addTag(message, BULK_TAG, { flagged: false })", background)
+
     def test_popup_uses_current_work_view_names(self) -> None:
         popup = (EXTENSION / "popup.html").read_text(encoding="utf-8")
 

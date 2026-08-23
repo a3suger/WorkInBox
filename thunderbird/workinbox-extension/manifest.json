@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "WorkInBox Thunderbird Connector",
   "description": "Provides Thunderbird-side UI and bridge functions for WorkInBox.",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "browser_specific_settings": {
     "gecko": {
       "id": "workinbox-connector@workinbox.local",
@@ -99,6 +99,10 @@
   "icons": {
     "32": "icons/workinbox.svg",
     "64": "icons/workinbox.svg"
+  },
+  "message_display_action": {
+    "default_title": "WIB: 通常ワークフローを終了",
+    "default_icon": "icons/workinbox.svg"
   },
   "browser_action": {
     "default_title": "WorkInBox",

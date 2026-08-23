@@ -1,5 +1,7 @@
 const WORKINBOX_ORIGIN_HEADER = "X-WorkInBox-Origin-Message-ID";
 const REQUESTED_TAG = "wib-requested";
+const BULK_TAG = "wib-bulk";
+const NORMAL_WORKFLOW_TAGS = new Set(["wib-answer", "wib-review", "wib-watch"]);
 
 const WORK_VIEWS = {
   "unattended-unread": { label: "未着眼・未読", unattended: true, unread: true },
@@ -422,6 +424,33 @@ async function addTag(message, tagKey, { flagged } = {}) {
   await messenger.messages.update(message.id, properties);
 }
 
+async function setNormalCompletionActionStatus(tabId, badgeText, title) {
+  await messenger.messageDisplayAction.setBadgeText({ tabId, text: badgeText });
+  await messenger.messageDisplayAction.setTitle({ tabId, title });
+  window.setTimeout(() => {
+    void messenger.messageDisplayAction.setBadgeText({ tabId, text: "" });
+    void messenger.messageDisplayAction.setTitle({
+      tabId,
+      title: "WIB: 通常ワークフローを終了",
+    });
+  }, 3000);
+}
+
+async function completeDisplayedNormalWorkflow(tab) {
+  const message = await messenger.messageDisplay.getDisplayedMessage(tab.id);
+  if (!message) {
+    throw new Error("表示中のメールを取得できませんでした。");
+  }
+  if (!(message.tags || []).some((tag) => NORMAL_WORKFLOW_TAGS.has(tag))) {
+    throw new Error(
+      "返信必要・見る／検討・注目のいずれもないため、通常終了できません。",
+    );
+  }
+
+  await addTag(message, BULK_TAG, { flagged: false });
+  await setNormalCompletionActionStatus(tab.id, "✓", "WIB: 通常終了しました");
+}
+
 async function originMessageIdFromSentMessages(sendInfo) {
   const sentMessages = Array.isArray(sendInfo?.messages) ? sendInfo.messages : [];
   for (const sentMessage of sentMessages) {
@@ -480,6 +509,17 @@ async function applySupportRequestSentState(tab, sendInfo) {
 messenger.compose.onAfterSend.addListener((tab, sendInfo) => {
   void applySupportRequestSentState(tab, sendInfo).catch((error) => {
     console.error("[WorkInBox bridge] failed to apply support request state", error);
+  });
+});
+
+messenger.messageDisplayAction.onClicked.addListener((tab) => {
+  void completeDisplayedNormalWorkflow(tab).catch(async (error) => {
+    console.error("[WorkInBox normal completion]", error);
+    await setNormalCompletionActionStatus(
+      tab.id,
+      "!",
+      `WIB: ${error.message || error}`,
+    );
   });
 });
 
