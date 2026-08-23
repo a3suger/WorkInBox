@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import logging
+import json
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 from threading import Lock, Thread
 from typing import TextIO
+
+from .sync_progress import PROGRESS_MARKER
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,6 +23,7 @@ class SyncProcessManager:
         self._lock = Lock()
         self._process: subprocess.Popen[str] | None = None
         self._started_at: datetime | None = None
+        self._progress: dict[str, object] | None = None
 
     @property
     def is_running(self) -> bool:
@@ -40,6 +44,11 @@ class SyncProcessManager:
                 return None
             return self._started_at
 
+    @property
+    def progress(self) -> dict[str, object] | None:
+        with self._lock:
+            return dict(self._progress) if self._progress is not None else None
+
     def start(self, *, full_recheck: bool = False) -> bool:
         with self._lock:
             if self._is_running_unlocked():
@@ -51,6 +60,7 @@ class SyncProcessManager:
                 "workinbox.main",
                 "--config",
                 str(self.config_path),
+                "--emit-progress",
             ]
             if full_recheck:
                 command.append("--full-recheck")
@@ -64,6 +74,13 @@ class SyncProcessManager:
                 bufsize=1,
             )
             self._started_at = datetime.now().astimezone()
+            self._progress = {
+                "phase": "starting",
+                "label": "同期プロセスを開始しています",
+                "current": 0,
+                "total": None,
+                "errors": 0,
+            }
             _LOGGER.info("Synchronization process started: pid=%d", self._process.pid)
 
             if self._process.stdout is not None:
@@ -102,11 +119,20 @@ class SyncProcessManager:
             return False
         return self._process.poll() is None
 
-    @staticmethod
-    def _forward_output(pid: int, stream: TextIO) -> None:
+    def _forward_output(self, pid: int, stream: TextIO) -> None:
         try:
             for line in stream:
                 text = line.rstrip("\r\n")
+                if text.startswith(PROGRESS_MARKER):
+                    try:
+                        event = json.loads(text[len(PROGRESS_MARKER):])
+                    except (json.JSONDecodeError, TypeError):
+                        _LOGGER.warning("Invalid synchronization progress: %s", text)
+                    else:
+                        if isinstance(event, dict):
+                            with self._lock:
+                                self._progress = event
+                        continue
                 if text:
                     _LOGGER.info("sync[%d] %s", pid, text)
         finally:

@@ -58,6 +58,7 @@ def create_app(
             "running": manager.is_running,
             "pid": manager.pid,
             "started_at": started_at.isoformat(timespec="seconds") if started_at else None,
+            "progress": manager.progress,
             "current_time": datetime.now().astimezone().isoformat(timespec="seconds"),
             "poll_interval_ms": 2000,
         }

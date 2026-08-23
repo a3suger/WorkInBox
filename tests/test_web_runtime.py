@@ -30,6 +30,18 @@ class FakeSyncProcessManager:
     def started_at(self) -> datetime | None:
         return self.started_at_value if self.running else None
 
+    @property
+    def progress(self) -> dict[str, object] | None:
+        if not self.running:
+            return None
+        return {
+            "phase": "triage",
+            "label": "TriageBox: 未読メール確認",
+            "current": 2,
+            "total": 5,
+            "errors": 0,
+        }
+
     def start(self, *, full_recheck: bool = False) -> bool:
         if self.running:
             return False
@@ -61,6 +73,7 @@ class WebRuntimeTest(unittest.TestCase):
             self.assertIsNone(idle["pid"])
             self.assertIsNone(idle["started_at"])
             self.assertEqual(idle["poll_interval_ms"], 2000)
+            self.assertIsNone(idle["progress"])
             self.assertIsInstance(idle["current_time"], str)
 
             manager.start()
@@ -72,6 +85,7 @@ class WebRuntimeTest(unittest.TestCase):
                 manager.started_at.isoformat(timespec="seconds"),
             )
             self.assertEqual(running["poll_interval_ms"], 2000)
+            self.assertEqual(running["progress"]["phase"], "triage")
             self.assertIsInstance(running["current_time"], str)
 
     def test_normal_sync_route_starts_process_and_marks_redirect_for_reload(self) -> None:

@@ -19,6 +19,7 @@ from .models import (
     ImapReference,
 )
 from .triagebox import TriageFetchResult, TriageMessage, parse_triage_headers
+from .sync_progress import ProgressCallback
 
 
 _FLAGGED_RE = re.compile(rb"(?:^|[ (])\\Flagged(?:[ )]|$)", re.IGNORECASE)
@@ -179,8 +180,18 @@ def _raw_from_fetch(fetched: list[bytes | tuple[bytes, bytes] | None]) -> bytes 
 
 
 class ImapClient:
-    def __init__(self, config: ImapConfig) -> None:
+    def __init__(
+        self,
+        config: ImapConfig,
+        *,
+        progress_callback: ProgressCallback | None = None,
+    ) -> None:
         self.config = config
+        self.progress_callback = progress_callback
+
+    def _progress(self, **event: object) -> None:
+        if self.progress_callback is not None:
+            self.progress_callback(dict(event))
 
     def inspect_flags(self, uid: int, *, expected_uidvalidity: int | None = None) -> ImapFlagsSnapshot:
         with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
@@ -335,6 +346,13 @@ class ImapClient:
                 raise RuntimeError("IMAP UNSEEN search failed")
             uid_values = data[0].split() if data and data[0] else []
             logging.info("TriageBox IMAP search returned %d candidate UIDs", len(uid_values))
+            self._progress(
+                phase="triage-fetch",
+                label="TriageBox: 未読メール取得",
+                current=0,
+                total=len(uid_values),
+                errors=0,
+            )
 
             ordered: list[tuple[str, int, TriageMessage]] = []
             for index, uid_bytes in enumerate(uid_values, start=1):
@@ -366,6 +384,13 @@ class ImapClient:
                         internaldate or "<unavailable>",
                         item.email.message_id,
                     )
+                self._progress(
+                    phase="triage-fetch",
+                    label="TriageBox: 未読メール取得",
+                    current=index,
+                    total=len(uid_values),
+                    errors=0,
+                )
 
             ordered.sort(key=lambda value: (value[0], value[1]))
             logging.info("TriageBox IMAP candidates sorted oldest-first")
@@ -433,7 +458,8 @@ class ImapClient:
                 raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
 
             current_uidvalidity = _uidvalidity(client)
-            for reference in existing:
+            existing = list(existing)
+            for index, reference in enumerate(existing, start=1):
                 if reference.uidvalidity != current_uidvalidity:
                     raise RuntimeError(
                         "IMAP UIDVALIDITY changed; automatic recovery is not supported"
@@ -473,6 +499,20 @@ class ImapClient:
                     checks.append(
                         ImapCheckResult(reference.message_id, ImapCheckState.UNSTARRED)
                     )
+                self._progress(
+                    phase="tracking-existing",
+                    label="TrackingBox: 既存active確認",
+                    current=index,
+                    total=len(existing),
+                    errors=sum(check.state == ImapCheckState.ERROR for check in checks),
+                )
+            self._progress(
+                phase="tracking-existing",
+                label="TrackingBox: 既存active確認",
+                current=len(existing),
+                total=len(existing),
+                errors=sum(check.state == ImapCheckState.ERROR for check in checks),
+            )
 
             since = _new_mail_since(date.today(), self.config.new_mail_lookback_days)
             status, data = client.uid(
@@ -481,7 +521,15 @@ class ImapClient:
             if status != "OK":
                 raise RuntimeError("IMAP FLAGGED search failed")
 
-            for uid_bytes in data[0].split() if data and data[0] else []:
+            flagged_uids = data[0].split() if data and data[0] else []
+            self._progress(
+                phase="tracking-discovery",
+                label="TrackingBox: 新着スター付き取り込み",
+                current=0,
+                total=len(flagged_uids),
+                errors=0,
+            )
+            for index, uid_bytes in enumerate(flagged_uids, start=1):
                 uid = int(uid_bytes)
                 try:
                     status, fetched = client.uid(
@@ -498,6 +546,20 @@ class ImapClient:
                 message = _email_message(parsed, self.config.imap.mailbox if hasattr(self.config, 'imap') else self.config.mailbox, current_uidvalidity, uid)
                 if message is not None:
                     messages.append(message)
+                self._progress(
+                    phase="tracking-discovery",
+                    label="TrackingBox: 新着スター付き取り込み",
+                    current=index,
+                    total=len(flagged_uids),
+                    errors=0,
+                )
+            self._progress(
+                phase="tracking-discovery",
+                label="TrackingBox: 新着スター付き取り込み",
+                current=len(flagged_uids),
+                total=len(flagged_uids),
+                errors=0,
+            )
         return checks, messages
 
     def fetch_flagged(self) -> list[EmailMessage]:

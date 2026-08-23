@@ -2,13 +2,14 @@
 
 ## 状態
 
-作業中断
+作業中
 
 ## 現在の対象
 
 - 親 Issue: #5 `docs/design.md 追従実装`
 - #6〜#16 の実装 Issue: すべて Closed
 - 残っている作業: #17〜#25 の実機確認
+- 現在の準備作業: 実機テスト再開時に読む単一手順書 `docs/manual_test_runbook.md` の整備
 
 ## GitHub / git の現在状態
 
@@ -40,9 +41,16 @@ aaee149 .gitignore の修正
 - 実装 Issue #6〜#16: Closed
 - 実機確認 Issue #17〜#25: Open
 - 最新 Actions: run `32571406463` success
-- ローカル自動テスト: `118 passed, 6 subtests passed`
+- ローカル自動テスト: `119 passed, 6 subtests passed`
 
 ## 最新の「作業再開」以降に完了した作業
+
+### 0. 実機テスト準備と同期進捗表示
+
+- 実機テスト再開用の単一手順書 `docs/manual_test_runbook.md` を追加した。
+- 通常同期中にTriageBox / TrackingBoxのどの段階かをWeb UIへ表示するようにした。
+- 未読取得・未読確認・既存active確認・新着取り込み・AI対象確認・AI初期分類について、処理済み件数 / 対象件数 / エラー件数を2秒間隔で表示する。
+- ローカル自動テスト: `119 passed, 6 subtests passed`
 
 ### 1. 未着眼条件の正式設計修正
 

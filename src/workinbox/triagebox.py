@@ -7,6 +7,7 @@ from email.message import Message
 from email.utils import parseaddr
 from enum import StrEnum
 from typing import Protocol
+from .sync_progress import ProgressCallback
 
 from .config import AppConfig
 from .models import EmailMessage, ImapFlagsSnapshot
@@ -168,14 +169,27 @@ class TriageService:
         imap_client: TriageImapClient,
         *,
         relation_store: TriageRelationStore | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> None:
         self.config = config
         self.imap_client = imap_client
         self.relations = relation_store or TriageRelationStore(config.database.path)
+        self.progress_callback = progress_callback
+
+    def _progress(self, **event: object) -> None:
+        if self.progress_callback is not None:
+            self.progress_callback(dict(event))
 
     def run(self) -> TriageResult:
         identity = self.config.identity
         if identity is None:
+            self._progress(
+                phase="triage",
+                label="TriageBox: identity未設定のためスキップ",
+                current=0,
+                total=0,
+                errors=0,
+            )
             logging.info("TriageBox skipped: identity is not configured")
             return TriageResult()
 
@@ -201,6 +215,13 @@ class TriageService:
             return TriageResult(errors=(TriageError("<mailbox>", str(exc)),))
 
         unread = fetched.messages
+        self._progress(
+            phase="triage",
+            label="TriageBox: 未読メール確認",
+            current=0,
+            total=len(unread),
+            errors=0,
+        )
         logging.info(
             "TriageBox will process %d unread candidate messages oldest-first",
             len(unread),
@@ -234,6 +255,13 @@ class TriageService:
                     exc,
                 )
                 errors.append(self._error(item, exc))
+            self._progress(
+                phase="triage",
+                label="TriageBox: 未読メール確認",
+                current=index,
+                total=len(unread),
+                errors=len(errors),
+            )
 
         if errors:
             logging.warning(

@@ -192,6 +192,7 @@
     <div class="sync-status-detail">
       開始: <span id="wib-sync-started-at">-</span> / 現在: <span id="wib-sync-current-time">-</span>
     </div>
+    <div class="sync-status-detail" id="wib-sync-progress">段階を確認中…</div>
   </div>
   {% block content %}{% endblock %}
 </main>
@@ -201,6 +202,7 @@
   const pid = document.getElementById("wib-sync-pid");
   const startedAt = document.getElementById("wib-sync-started-at");
   const currentTime = document.getElementById("wib-sync-current-time");
+  const progress = document.getElementById("wib-sync-progress");
   const pageUrl = new URL(window.location.href);
   const syncStarted = pageUrl.searchParams.get("sync_started") === "1";
   let observedRunning = false;
@@ -245,6 +247,12 @@
         pid.textContent = data.pid ? ` (PID ${data.pid})` : "";
         startedAt.textContent = formatTime(data.started_at);
         currentTime.textContent = formatTime(data.current_time);
+        const item = data.progress || {};
+        const current = Number.isFinite(item.current) ? item.current : 0;
+        const total = Number.isFinite(item.total) ? item.total : null;
+        const count = total === null ? `${current}件処理` : `${current} / ${total}件`;
+        const errors = Number.isFinite(item.errors) && item.errors > 0 ? ` / エラー ${item.errors}件` : "";
+        progress.textContent = `${item.label || "処理段階を確認中"} — ${count}${errors}`;
         setSyncButtonsDisabled(true);
         return;
       }
@@ -254,6 +262,7 @@
       pid.textContent = "";
       startedAt.textContent = "-";
       currentTime.textContent = "-";
+      progress.textContent = "段階を確認中…";
       setSyncButtonsDisabled(false);
       if (observedRunning || syncStarted) {
         reloadWithoutSyncMarker();

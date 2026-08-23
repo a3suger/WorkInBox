@@ -25,7 +25,7 @@ class SyncProcessManagerTest(unittest.TestCase):
 
         self.assertTrue(started)
         command = popen.call_args.args[0]
-        self.assertEqual(command[-2:], ["--config", "test-config.yaml"])
+        self.assertEqual(command[-3:], ["--config", "test-config.yaml", "--emit-progress"])
         self.assertIn("workinbox.main", command)
         self.assertEqual(popen.call_args.kwargs["stdout"], __import__("subprocess").PIPE)
         self.assertEqual(popen.call_args.kwargs["stderr"], __import__("subprocess").STDOUT)
@@ -66,16 +66,29 @@ class SyncProcessManagerTest(unittest.TestCase):
 
         command = popen.call_args.args[0]
         self.assertEqual(command[-1], "--full-recheck")
+        self.assertIn("--emit-progress", command)
 
     def test_forward_output_routes_child_lines_through_logging(self) -> None:
         stream = io.StringIO("first line\nsecond line\n")
 
         with self.assertLogs("workinbox.sync_process", level=logging.INFO) as captured:
-            SyncProcessManager._forward_output(4321, stream)
+            SyncProcessManager("test-config.yaml")._forward_output(4321, stream)
 
         self.assertIn("sync[4321] first line", captured.output[0])
         self.assertIn("sync[4321] second line", captured.output[1])
         self.assertIn("output closed: pid=4321", captured.output[2])
+
+    def test_forward_output_captures_structured_progress(self) -> None:
+        manager = SyncProcessManager("test-config.yaml")
+        stream = io.StringIO(
+            'WORKINBOX_PROGRESS {"phase":"triage","label":"TriageBox","current":3,"total":8,"errors":0}\n'
+        )
+
+        manager._forward_output(4321, stream)
+
+        self.assertEqual(manager.progress["phase"], "triage")
+        self.assertEqual(manager.progress["current"], 3)
+        self.assertEqual(manager.progress["total"], 8)
 
 
 if __name__ == "__main__":

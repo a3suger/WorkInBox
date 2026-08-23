@@ -21,6 +21,7 @@ from .models import (
 )
 from .triage_store import TriageRelationStore
 from .triagebox import TriageResult, TriageService
+from .sync_progress import ProgressCallback
 from .work_tags import WorkTagDefinition, definitions_for_flags, require_work_tag
 
 
@@ -109,15 +110,30 @@ class SynchronizationService:
         imap_client: ImapClient | None = None,
         classifier: OllamaClassifier | None = None,
         triage_service: TriageService | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> None:
         self.config = config
         self.database = database or EmailDatabase(config.database.path)
-        self.imap_client = imap_client or ImapClient(config.imap)
+        self.progress_callback = progress_callback
+        self.imap_client = imap_client or ImapClient(
+            config.imap,
+            progress_callback=progress_callback,
+        )
         self.classifier = classifier or OllamaClassifier(config.ai)
-        self.triage_service = triage_service or TriageService(config, self.imap_client)
+        self.triage_service = triage_service or TriageService(
+            config,
+            self.imap_client,
+            progress_callback=progress_callback,
+        )
+
+    def _progress(self, **event: object) -> None:
+        if self.progress_callback is not None:
+            self.progress_callback(dict(event))
 
     def synchronize(self, mode: SyncMode = SyncMode.NORMAL) -> SyncResult:
         self.database.initialize()
+
+        self._progress(phase="starting", label="同期準備", current=0, total=None, errors=0)
 
         triage_result = TriageResult()
         if mode == SyncMode.NORMAL:
@@ -127,6 +143,14 @@ class SynchronizationService:
         existing = self.database.imap_references(
             self.config.imap.mailbox,
             include_inactive=include_inactive,
+        )
+
+        self._progress(
+            phase="tracking",
+            label="TrackingBox: 既存active確認と新着取り込み",
+            current=0,
+            total=len(existing),
+            errors=0,
         )
 
         checks, messages = self.imap_client.synchronize(existing)
@@ -163,6 +187,14 @@ class SynchronizationService:
         if mode == SyncMode.NORMAL:
             ai_classified, ai_errors = self._classify_unclassified_active()
 
+        self._progress(
+            phase="complete",
+            label="同期完了",
+            current=1,
+            total=1,
+            errors=len(triage_result.errors) + len(errors) + len(ai_errors),
+        )
+
         return SyncResult(
             mode=mode,
             checked=len(checks),
@@ -187,10 +219,32 @@ class SynchronizationService:
     ) -> tuple[list[TrackedEmail], list[SyncError]]:
         eligible: list[TrackedEmail] = []
         errors: list[SyncError] = []
-        for tracked in self.database.list_tracked_emails(active=True):
+        tracked_emails = self.database.list_tracked_emails(active=True)
+        self._progress(
+            phase="tracking-ai-check",
+            label="TrackingBox: AI分類対象確認",
+            current=0,
+            total=len(tracked_emails),
+            errors=0,
+        )
+        for current, tracked in enumerate(tracked_emails, start=1):
             if tracked.uid is None or tracked.uidvalidity is None or tracked.mailbox is None:
+                self._progress(
+                    phase="tracking-ai-check",
+                    label="TrackingBox: AI分類対象確認",
+                    current=current,
+                    total=len(tracked_emails),
+                    errors=len(errors),
+                )
                 continue
             if tracked.mailbox != self.config.imap.mailbox:
+                self._progress(
+                    phase="tracking-ai-check",
+                    label="TrackingBox: AI分類対象確認",
+                    current=current,
+                    total=len(tracked_emails),
+                    errors=len(errors),
+                )
                 continue
             try:
                 snapshot = self.imap_client.inspect_flags(
@@ -204,10 +258,31 @@ class SynchronizationService:
                     exc,
                 )
                 errors.append(SyncError(tracked.message_id, str(exc)))
+                self._progress(
+                    phase="tracking-ai-check",
+                    label="TrackingBox: AI分類対象確認",
+                    current=current,
+                    total=len(tracked_emails),
+                    errors=len(errors),
+                )
                 continue
             if (_INITIAL_CLASSIFICATION_KEYS | _TRIAGE_MANAGED_KEYS).intersection(snapshot.flags):
+                self._progress(
+                    phase="tracking-ai-check",
+                    label="TrackingBox: AI分類対象確認",
+                    current=current,
+                    total=len(tracked_emails),
+                    errors=len(errors),
+                )
                 continue
             eligible.append(tracked)
+            self._progress(
+                phase="tracking-ai-check",
+                label="TrackingBox: AI分類対象確認",
+                current=current,
+                total=len(tracked_emails),
+                errors=len(errors),
+            )
         return eligible, errors
 
     def _classify_one(self, tracked: TrackedEmail) -> _AiClassificationOutcome:
@@ -271,6 +346,13 @@ class SynchronizationService:
 
     def _classify_unclassified_active(self) -> tuple[int, tuple[SyncError, ...]]:
         eligible, errors = self._eligible_unclassified()
+        self._progress(
+            phase="tracking-ai",
+            label="TrackingBox: AI初期分類",
+            current=0,
+            total=len(eligible),
+            errors=len(errors),
+        )
         if not eligible:
             return 0, tuple(errors)
 
@@ -285,12 +367,19 @@ class SynchronizationService:
 
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wib-ai") as executor:
             futures = {executor.submit(self._classify_one, tracked): tracked for tracked in eligible}
-            for future in as_completed(futures):
+            for current, future in enumerate(as_completed(futures), start=1):
                 outcome = future.result()
                 if outcome.classified:
                     classified += 1
                 elif outcome.error is not None:
                     errors.append(SyncError(outcome.message_id, outcome.error))
+                self._progress(
+                    phase="tracking-ai",
+                    label="TrackingBox: AI初期分類",
+                    current=current,
+                    total=len(eligible),
+                    errors=len(errors),
+                )
 
         logging.info(
             "AI classification finished: %d/%d messages in %.2fs",

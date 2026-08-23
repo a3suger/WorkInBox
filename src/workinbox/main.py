@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .application import SyncMode, SyncResult, SynchronizationService
 from .config import load_config
+from .sync_progress import ProgressCallback, stdout_progress
 
 
 _LOG_LEVEL_ENV = "WORKINBOX_LOG_LEVEL"
@@ -28,9 +29,14 @@ def synchronize(
     config_path: str | Path,
     *,
     full_recheck: bool = False,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[int, int, int]:
     config = load_config(config_path)
-    service = SynchronizationService(config)
+    service = (
+        SynchronizationService(config, progress_callback=progress_callback)
+        if progress_callback is not None
+        else SynchronizationService(config)
+    )
     mode = SyncMode.FULL_RECHECK if full_recheck else SyncMode.NORMAL
 
     logging.info("Connecting IMAP server")
@@ -74,6 +80,11 @@ def cli() -> int:
         action="store_true",
         help="Recheck inactive messages as well as active messages",
     )
+    parser.add_argument(
+        "--emit-progress",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
     try:
         log_level = _configured_log_level()
@@ -83,7 +94,11 @@ def cli() -> int:
     logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s %(message)s")
 
     try:
-        synchronize(args.config, full_recheck=args.full_recheck)
+        synchronize(
+            args.config,
+            full_recheck=args.full_recheck,
+            progress_callback=stdout_progress if args.emit_progress else None,
+        )
     except (OSError, ValueError, RuntimeError, sqlite3.Error) as exc:
         logging.error("Synchronization failed: %s", exc)
         return 1
