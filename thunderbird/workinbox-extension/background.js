@@ -447,7 +447,15 @@ async function completeDisplayedNormalWorkflow(tab) {
     );
   }
 
-  await addTag(message, BULK_TAG, { flagged: false });
+  // Thunderbird applies `flagged` before `tags` when both are sent in one
+  // update. In a flagged Quick Filter that can remove the message from the
+  // view before the keyword update completes. Apply and verify the tag first.
+  await addTag(message, BULK_TAG);
+  const taggedMessage = await messenger.messages.get(message.id);
+  if (!(taggedMessage.tags || []).includes(BULK_TAG)) {
+    throw new Error("一括処理タグを追加できなかったため、スターを維持しました。");
+  }
+  await messenger.messages.update(message.id, { flagged: false });
   await setNormalCompletionActionStatus(tab.id, "✓", "WIB: 通常終了しました");
 }
 

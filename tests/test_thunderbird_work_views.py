@@ -77,7 +77,13 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("messenger.messageDisplayAction.onClicked", background)
         self.assertIn("messenger.messageDisplay.getDisplayedMessage(tab.id)", background)
         self.assertIn("NORMAL_WORKFLOW_TAGS", background)
-        self.assertIn("await addTag(message, BULK_TAG, { flagged: false })", background)
+        self.assertIn("await addTag(message, BULK_TAG)", background)
+        self.assertIn("await messenger.messages.get(message.id)", background)
+        self.assertIn("includes(BULK_TAG)", background)
+        self.assertIn(
+            "await messenger.messages.update(message.id, { flagged: false })",
+            background,
+        )
 
     def test_popup_uses_current_work_view_names(self) -> None:
         popup = (EXTENSION / "popup.html").read_text(encoding="utf-8")
