@@ -5,6 +5,7 @@ imap:
   password: secret
   mailbox: INBOX
   new_mail_lookback_days: 7
+  timeout_seconds: 30
 
 identity:
   mailbox_address: user@example.jp

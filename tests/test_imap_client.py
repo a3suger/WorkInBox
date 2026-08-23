@@ -27,8 +27,10 @@ class FakeImap:
     last_select_readonly: bool | None = None
     last_store_args: tuple[object, ...] | None = None
     flags_60: tuple[str, ...] = ("\\Seen", "\\Flagged", "$label1", "WorkInBoxTest")
+    last_init_kwargs: dict[str, object] | None = None
 
-    def __init__(self, *args: object) -> None:
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        FakeImap.last_init_kwargs = kwargs
         self.fetch_responses: dict[int, tuple[str, list[object]]] = {
             10: ("OK", [(b"1 (UID 10 FLAGS (\\Seen))", b"")]),
             20: ("OK", [None]),
@@ -92,10 +94,21 @@ class ImapClientTest(unittest.TestCase):
         FakeImap.last_search_args = None
         FakeImap.last_select_readonly = None
         FakeImap.last_store_args = None
+        FakeImap.last_init_kwargs = None
         FakeImap.flags_60 = ("\\Seen", "\\Flagged", "$label1", "WorkInBoxTest")
         self.config = ImapConfig(
             "imap.example", 993, "user", "pass", "INBOX", 7
         )
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
+    def test_connection_uses_configured_timeout(self) -> None:
+        config = ImapConfig(
+            "imap.example", 993, "user", "pass", "INBOX", 7, 12.5
+        )
+
+        ImapClient(config).inspect_flags(60)
+
+        self.assertEqual(FakeImap.last_init_kwargs, {"timeout": 12.5})
 
     @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
     @patch("workinbox.imap_client.date")

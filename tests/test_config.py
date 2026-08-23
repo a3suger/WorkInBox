@@ -24,6 +24,7 @@ database:
             )
             config = load_config(path)
             self.assertEqual(config.imap.new_mail_lookback_days, 7)
+            self.assertEqual(config.imap.timeout_seconds, 30.0)
             self.assertEqual(config.ai.url, "http://127.0.0.1:11434")
             self.assertEqual(config.ai.model, "qwen2.5:7b")
             self.assertEqual(config.ai.body_max_chars, 4000)
@@ -171,6 +172,24 @@ database:
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "at least 1"):
+                load_config(path)
+
+    def test_imap_timeout_must_be_positive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text(
+                """imap:
+  host: imap.example
+  username: user
+  password: pass
+  new_mail_lookback_days: 7
+  timeout_seconds: 0
+database:
+  path: workinbox.db
+""",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "imap.timeout_seconds"):
                 load_config(path)
 
     def test_ai_body_max_chars_must_be_positive(self) -> None:

@@ -16,6 +16,7 @@ class ImapConfig:
     password: str
     mailbox: str = "INBOX"
     new_mail_lookback_days: int = 1
+    timeout_seconds: float = 30.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +103,9 @@ def load_config(path: str | Path) -> AppConfig:
         new_mail_lookback_days = int(imap_raw["new_mail_lookback_days"])
         if new_mail_lookback_days < 1:
             raise ValueError("new_mail_lookback_days must be at least 1")
+        timeout_seconds = float(imap_raw.get("timeout_seconds", 30.0))
+        if timeout_seconds <= 0:
+            raise ValueError("imap.timeout_seconds must be greater than 0")
         imap = ImapConfig(
             host=str(imap_raw["host"]),
             port=int(imap_raw.get("port", 993)),
@@ -109,6 +113,7 @@ def load_config(path: str | Path) -> AppConfig:
             password=str(imap_raw["password"]),
             mailbox=str(imap_raw.get("mailbox", "INBOX")),
             new_mail_lookback_days=new_mail_lookback_days,
+            timeout_seconds=timeout_seconds,
         )
         database_path = Path(str(database_raw["path"]))
 

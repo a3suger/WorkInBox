@@ -14,6 +14,7 @@ class FakeFocusImapClient:
     def __init__(self, messages: list[TriageMessage]) -> None:
         self.messages = {item.email.message_id: item for item in messages}
         self.unread_ids = [item.email.message_id for item in messages]
+        self.find_calls: list[str] = []
 
     def add(self, item: TriageMessage) -> None:
         self.messages[item.email.message_id] = item
@@ -33,6 +34,7 @@ class FakeFocusImapClient:
         return TriageFetchResult(tuple(selected), 10, highest)
 
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None:
+        self.find_calls.append(message_id)
         return self.messages.get(message_id)
 
     def set_keyword(
@@ -179,6 +181,52 @@ class DedicatedWorkflowFocusTest(unittest.TestCase):
             self.assertEqual(store.current_focus_for("<m1@example>"), "<m4@example>")
             self.assertIn("\\Flagged", imap.messages["<m4@example>"].flags)
             self.assertIn("\\Flagged", imap.messages["<m1@example>"].flags)
+
+    def test_unknown_long_thread_searches_only_nearest_reply_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            reply = message(
+                "<reply@example>",
+                "sender@example.com",
+                10,
+                in_reply_to=("<nearest@example>",),
+                references=(
+                    "<oldest@example>",
+                    "<older@example>",
+                    "<nearest@example>",
+                ),
+            )
+            imap = FakeFocusImapClient([reply])
+
+            result = TriageService(self.config(path), imap).run()
+
+            self.assertEqual(result.errors, ())
+            self.assertEqual(imap.find_calls, ["<nearest@example>"])
+
+    def test_progress_reports_relation_check_before_message_finishes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            reply = message(
+                "<reply@example>",
+                "sender@example.com",
+                10,
+                in_reply_to=("<nearest@example>",),
+            )
+            imap = FakeFocusImapClient([reply])
+            events: list[dict[str, object]] = []
+
+            TriageService(
+                self.config(path), imap, progress_callback=events.append
+            ).run()
+
+            self.assertTrue(
+                any(
+                    event.get("phase") == "triage-relations"
+                    and event.get("current") == 1
+                    and event.get("total") == 1
+                    for event in events
+                )
+            )
 
 
 if __name__ == "__main__":

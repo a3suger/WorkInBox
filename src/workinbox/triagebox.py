@@ -240,6 +240,13 @@ class TriageService:
                 item.email.message_id,
                 kind,
             )
+            self._progress(
+                phase="triage-relations",
+                label="TriageBox: 返信関係確認",
+                current=index,
+                total=len(unread),
+                errors=len(errors),
+            )
             try:
                 if kind == TriageSenderKind.SELF:
                     if self._handle_self_support_request(item):
@@ -371,41 +378,63 @@ class TriageService:
         return True
 
     def _handle_dedicated_thread_focus(self, item: TriageMessage) -> bool:
-        for message_id in item.headers.referenced_message_ids:
+        referenced_message_ids = item.headers.referenced_message_ids
+
+        # Resolve every reference against the local relation store first.  This is
+        # inexpensive and covers continuations of workflows already known to WIB.
+        for message_id in referenced_message_ids:
             relation_kind = self.relations.relation_kind_for(message_id)
             if relation_kind in _SUPPORT_RELATION_KINDS:
                 continue
 
             workflow_origin = self.relations.workflow_origin_for_focus(message_id)
-            if workflow_origin is None:
-                referenced = self.imap_client.find_message_by_message_id(message_id)
-                if referenced is None:
-                    continue
-                if not _DEDICATED_WORKFLOW_KEYS.intersection(referenced.flags):
-                    continue
-                workflow_origin = referenced.email.message_id
-                self.relations.ensure_workflow_focus(workflow_origin)
+            if workflow_origin is not None:
+                return self._move_dedicated_thread_focus(
+                    item, workflow_origin=workflow_origin
+                )
 
-            previous_focus = self.relations.current_focus_for(workflow_origin)
-            if previous_focus == item.email.message_id:
-                return True
+        # An unknown thread only needs its nearest reply target inspected.  Older
+        # References can contain dozens of IDs; searching the whole mailbox for
+        # each of them made normal synchronization appear to stop indefinitely.
+        if not referenced_message_ids:
+            return False
+        nearest_message_id = referenced_message_ids[0]
+        if self.relations.relation_kind_for(nearest_message_id) in _SUPPORT_RELATION_KINDS:
+            return False
+        referenced = self.imap_client.find_message_by_message_id(nearest_message_id)
+        if referenced is None:
+            return False
+        if not _DEDICATED_WORKFLOW_KEYS.intersection(referenced.flags):
+            return False
+        workflow_origin = referenced.email.message_id
+        self.relations.ensure_workflow_focus(workflow_origin)
+        return self._move_dedicated_thread_focus(item, workflow_origin=workflow_origin)
 
-            if previous_focus and previous_focus != workflow_origin:
-                previous = self.imap_client.find_message_by_message_id(previous_focus)
-                if previous is not None:
-                    self._set_keyword(previous, _BULK, enabled=True)
-                    self._set_flagged(previous, enabled=False)
-
-            self._set_flagged(item, enabled=True)
-            self.relations.set_current_focus(workflow_origin, item.email.message_id)
-            logging.info(
-                "TriageBox dedicated thread focus moved: origin=%s previous=%s current=%s",
-                workflow_origin,
-                previous_focus or "<none>",
-                item.email.message_id,
-            )
+    def _move_dedicated_thread_focus(
+        self,
+        item: TriageMessage,
+        *,
+        workflow_origin: str,
+    ) -> bool:
+        previous_focus = self.relations.current_focus_for(workflow_origin)
+        if previous_focus == item.email.message_id:
             return True
-        return False
+
+        if previous_focus and previous_focus != workflow_origin:
+            previous = self.imap_client.find_message_by_message_id(previous_focus)
+            if previous is not None:
+                self._set_keyword(previous, _BULK, enabled=True)
+                self._set_flagged(previous, enabled=False)
+
+        self._set_flagged(item, enabled=True)
+        self.relations.set_current_focus(workflow_origin, item.email.message_id)
+        logging.info(
+            "TriageBox dedicated thread focus moved: origin=%s previous=%s current=%s",
+            workflow_origin,
+            previous_focus or "<none>",
+            item.email.message_id,
+        )
+        return True
 
     def _resolve_waiting_action(self, item: TriageMessage) -> TriageMessage | None:
         for message_id in item.headers.referenced_message_ids:

@@ -188,13 +188,16 @@ class ImapClient:
     ) -> None:
         self.config = config
         self.progress_callback = progress_callback
+        self._message_id_cache: dict[str, TriageMessage | None] = {}
 
     def _progress(self, **event: object) -> None:
         if self.progress_callback is not None:
             self.progress_callback(dict(event))
 
     def inspect_flags(self, uid: int, *, expected_uidvalidity: int | None = None) -> ImapFlagsSnapshot:
-        with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
+        with imaplib.IMAP4_SSL(
+            self.config.host, self.config.port, timeout=self.config.timeout_seconds
+        ) as client:
             client.login(self.config.username, self.config.password)
             status, _ = client.select(self.config.mailbox, readonly=True)
             if status != "OK":
@@ -274,7 +277,9 @@ class ImapClient:
         *,
         expected_uidvalidity: int | None,
     ) -> ImapFlagsSnapshot:
-        with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
+        with imaplib.IMAP4_SSL(
+            self.config.host, self.config.port, timeout=self.config.timeout_seconds
+        ) as client:
             client.login(self.config.username, self.config.password)
             status, _ = client.select(self.config.mailbox, readonly=False)
             if status != "OK":
@@ -298,7 +303,9 @@ class ImapClient:
             )
 
     def fetch_unread(self, checkpoint: tuple[int, int] | None = None) -> TriageFetchResult:
-        with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
+        with imaplib.IMAP4_SSL(
+            self.config.host, self.config.port, timeout=self.config.timeout_seconds
+        ) as client:
             client.login(self.config.username, self.config.password)
             status, _ = client.select(self.config.mailbox, readonly=True)
             if status != "OK":
@@ -401,7 +408,12 @@ class ImapClient:
             )
 
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None:
-        with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
+        if message_id in self._message_id_cache:
+            return self._message_id_cache[message_id]
+
+        with imaplib.IMAP4_SSL(
+            self.config.host, self.config.port, timeout=self.config.timeout_seconds
+        ) as client:
             client.login(self.config.username, self.config.password)
             status, _ = client.select(self.config.mailbox, readonly=True)
             if status != "OK":
@@ -414,7 +426,9 @@ class ImapClient:
             for uid_bytes in reversed(uid_values):
                 item, _ = self._fetch_triage_message(client, int(uid_bytes), current_uidvalidity)
                 if item is not None:
+                    self._message_id_cache[message_id] = item
                     return item
+            self._message_id_cache[message_id] = None
             return None
 
     def _fetch_triage_message(
@@ -451,7 +465,9 @@ class ImapClient:
     ) -> tuple[list[ImapCheckResult], list[EmailMessage]]:
         checks: list[ImapCheckResult] = []
         messages: list[EmailMessage] = []
-        with imaplib.IMAP4_SSL(self.config.host, self.config.port) as client:
+        with imaplib.IMAP4_SSL(
+            self.config.host, self.config.port, timeout=self.config.timeout_seconds
+        ) as client:
             client.login(self.config.username, self.config.password)
             status, _ = client.select(self.config.mailbox, readonly=True)
             if status != "OK":
