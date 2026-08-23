@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,7 +21,7 @@ class FakeRecordStore:
 class FakeImap:
     searches: list[tuple[str, ...]] = []
 
-    def __init__(self, *args: object) -> None:
+    def __init__(self, *args: object, **kwargs: object) -> None:
         pass
 
     def __enter__(self) -> "FakeImap":
@@ -38,23 +39,11 @@ class FakeImap:
 
     def search(self, charset, *criteria: str):
         FakeImap.searches.append(criteria)
+        if criteria[0] == "UNSEEN":
+            return "OK", [b"1 2 3 4"]
+        if criteria[0] == "SEEN":
+            return "OK", [b"5 6"]
         mapping = {
-            (
-                "UNSEEN",
-                "UNFLAGGED",
-                "UNKEYWORD",
-                "wib-bulk",
-                "UNKEYWORD",
-                "wib-batch",
-            ): b"1 2 3 4",
-            (
-                "SEEN",
-                "UNFLAGGED",
-                "UNKEYWORD",
-                "wib-bulk",
-                "UNKEYWORD",
-                "wib-batch",
-            ): b"5 6",
             ("FLAGGED", "KEYWORD", "wib-answer"): b"10 11",
             ("FLAGGED", "KEYWORD", "wib-review"): b"12",
             ("FLAGGED", "KEYWORD", "wib-watch"): b"13 14 15",
@@ -88,6 +77,7 @@ class DashboardServiceTest(unittest.TestCase):
 
         self.assertEqual(snapshot.unattended_unread, 4)
         self.assertEqual(snapshot.unattended_read, 2)
+        self.assertEqual(snapshot.unattended_lookback_days, 7)
         self.assertEqual(snapshot.normal_total, 6)
         self.assertEqual(snapshot.deadline, 1)
         self.assertEqual(snapshot.schedule, 2)
@@ -96,7 +86,11 @@ class DashboardServiceTest(unittest.TestCase):
         self.assertEqual(snapshot.records, 3)
 
     @patch("workinbox.dashboard.imaplib.IMAP4_SSL", FakeImap)
-    def test_unattended_search_excludes_only_bulk_completion_keywords(self) -> None:
+    @patch("workinbox.dashboard.date")
+    def test_unattended_search_excludes_only_bulk_completion_keywords(
+        self, mock_date
+    ) -> None:
+        mock_date.today.return_value = date(2026, 8, 23)
         with tempfile.TemporaryDirectory() as directory:
             DashboardService(
                 self.config(Path(directory) / "workinbox.db"),
@@ -110,6 +104,8 @@ class DashboardServiceTest(unittest.TestCase):
             self.assertIn("UNFLAGGED", search)
             self.assertIn("wib-bulk", search)
             self.assertIn("wib-batch", search)
+            self.assertIn("SINCE", search)
+            self.assertIn("17-Aug-2026", search)
             self.assertNotIn("wib-answer", search)
             self.assertNotIn("wib-deadline", search)
             self.assertNotIn("wib-action-ready", search)
