@@ -2,14 +2,14 @@
 
 ## 状態
 
-作業中
+中断中（実運用テスト期間）
 
 ## 現在の対象
 
 - 親 Issue: #5 `docs/design.md 追従実装`
 - #6〜#16 の実装 Issue: すべて Closed
 - 残っている作業: #17〜#25 の実機確認
-- 現在の準備作業: 実機テスト再開時に読む単一手順書 `docs/manual_test_runbook.md` の整備
+- 現在位置: 実機テストを開始できる状態。通常運用の中で #17〜#25 を順次確認する
 
 ## GitHub / git の現在状態
 
@@ -19,21 +19,23 @@
 - 実装 Issue #6〜#16: Closed
 - 実機確認 Issue #17〜#25: Open
 - #16 `Thunderbird Bridge / Quick Filter を docs/design.md に合わせる`: Closed
-- #16 の最新実装 commit: `3c28ec56a8c457c1d26fe86e37d1656be5553dd3`
-- 最新 GitHub Actions: run `32571406463` success (`88e7c50`)
+- 今回の作業では Issue の Close / 作成 / 更新は行っていない。
+- Actions はこの実行環境からGitHubへ接続できず、`3f2bc0b` の結果を未確認。
 
 ### ローカル git
 
-引き継ぎ確認開始時の履歴:
+2026-08-23 中断時の履歴:
 
 ```text
-88e7c50 docs: add work interruption and handoff process
-aaee149 .gitignore の修正
-3c28ec5 Align Thunderbird Bridge with current design
+3f2bc0b Fix Thunderbird bridge IMAP target URL
+3d86028 Fix Thunderbird 153 work view compatibility
+4f503f1 Avoid mailbox searches during TriageBox relation checks
+0aa38ff Prevent TriageBox reply lookup stalls
+daf237a Use progress runtime for legacy web entry point
+7af3360 Show synchronization phase and progress
 ```
 
-引き継ぎ確認開始時点でローカル `main` と `origin/main` は一致し、未 push commit、未 commit 変更はなかった。
-以前未 push と記録されていた `aaee149` は push 済み。
+中断処理開始時点でローカル `main` と `origin/main` は `3f2bc0b` で一致し、未 push commit、未 commit 変更はなかった。
 
 ### 2026-08-23 引き継ぎ時の再確認
 
@@ -42,6 +44,17 @@ aaee149 .gitignore の修正
 - 実機確認 Issue #17〜#25: Open
 - 最新 Actions: run `32571406463` success
 - ローカル自動テスト: `119 passed, 6 subtests passed`
+
+### 2026-08-23 実機確認の到達点
+
+- Thunderbird の既存「プライベート」タグを WIB の `一括処理` へ変換する後段フィルターを追加し、実行済み。
+- 通常同期の処理段階と件数をWeb UIで確認できるようになった。
+- TriageBox が `2 / 1349件` 付近で停滞する問題を修正し、実機で通常同期がスムーズに完了することを確認した。
+- AI判定には時間がかかったが、利用者判断では想定範囲内だった。
+- Thunderbird 153.0.2esr で作業ビューを開けない問題を2段階で修正した。
+- 最終的に WIB の「Thunderbirdで確認」から対象一覧が表示されることを実機確認した。
+- しばらく通常運用でテストするため、#17〜#25 は Open のまま継続する。
+- ローカル自動テスト: `125 tests OK`（既知の subtest を含む）
 
 ## 最新の「作業再開」以降に完了した作業
 
@@ -177,7 +190,7 @@ Thunderbird 実機確認は #25 に分離済み。
 
 ## 中断理由
 
-チャット引き継ぎ基盤の整備と、ChatGPT 側 GitHub 接続不調のため。
+通常同期とThunderbird作業ビューが実機で動く状態になったため、しばらく通常運用でテストする。
 
 新しい設計判断待ちによる中断ではない。
 
@@ -188,9 +201,10 @@ Thunderbird 実機確認は #25 に分離済み。
 3. `git status -sb` でローカル `main` と `origin/main` の差を確認する。
 4. ローカル `main` と `origin/main` が一致し、未 push commit がないことを確認する。
 5. GitHub #5 と #17〜#25 の状態を確認する。
-6. 最新 GitHub Actions が run `32571406463` success 以後に変化していないか確認する。
-7. 実機確認 #17〜#25 の内容を読み、まとめて実施できる確認を整理する。
-8. 新しい設計判断が不要なら、残作業の先頭から再開する。
+6. commit `3f2bc0b` までのGitHub Actions結果を確認する。
+7. 通常運用中に見つかった違和感・エラー・確認済み項目を利用者へ確認する。
+8. `docs/manual_test_runbook.md` に従い、#24 + #25 の継続確認から再開する。
+9. 新しい設計判断が不要なら、残りの実機確認へ進む。
 
 ## 設計判断待ち
 
