@@ -77,8 +77,12 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("messenger.messageDisplayAction.onClicked", background)
         self.assertIn("messenger.messageDisplay.getDisplayedMessage(tab.id)", background)
         self.assertIn("NORMAL_WORKFLOW_TAGS", background)
-        self.assertIn("await addTag(message, BULK_TAG)", background)
-        self.assertIn("await messenger.messages.tags.get(BULK_TAG)", background)
+        self.assertIn("const bulkTagKey = await resolveBulkTagKey()", background)
+        self.assertIn("await addTag(message, bulkTagKey)", background)
+        self.assertIn("await messenger.messages.tags.list()", background)
+        self.assertIn("await messenger.messages.tags.create(", background)
+        self.assertIn('const LEGACY_BULK_TAG = "wib-batch"', background)
+        self.assertIn('tag: "一括処理"', background)
         self.assertNotIn("await messenger.messages.get(message.id)", background)
         self.assertIn(
             "await messenger.messages.update(message.id, { flagged: false })",

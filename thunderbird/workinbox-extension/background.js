@@ -1,6 +1,12 @@
 const WORKINBOX_ORIGIN_HEADER = "X-WorkInBox-Origin-Message-ID";
 const REQUESTED_TAG = "wib-requested";
 const BULK_TAG = "wib-bulk";
+const LEGACY_BULK_TAG = "wib-batch";
+const BULK_TAG_DEFINITION = {
+  key: BULK_TAG,
+  tag: "一括処理",
+  color: "#424242",
+};
 const NORMAL_WORKFLOW_TAGS = new Set(["wib-answer", "wib-review", "wib-watch"]);
 
 const WORK_VIEWS = {
@@ -424,6 +430,36 @@ async function addTag(message, tagKey, { flagged } = {}) {
   await messenger.messages.update(message.id, properties);
 }
 
+async function resolveBulkTagKey() {
+  const registeredTags = await messenger.messages.tags.list();
+  const current = registeredTags.find((tag) => tag.key === BULK_TAG);
+  if (current) {
+    return current.key;
+  }
+
+  // Older WIB installations used wib-batch for the same visible tag.
+  // Thunderbird rejects creating another tag with the same display name, so
+  // keep using the valid legacy key until the explicit tag migration is run.
+  const legacy = registeredTags.find((tag) => tag.key === LEGACY_BULK_TAG);
+  if (legacy) {
+    return legacy.key;
+  }
+
+  const sameLabel = registeredTags.find(
+    (tag) => tag.tag === BULK_TAG_DEFINITION.tag,
+  );
+  if (sameLabel) {
+    return sameLabel.key;
+  }
+
+  await messenger.messages.tags.create(
+    BULK_TAG_DEFINITION.key,
+    BULK_TAG_DEFINITION.tag,
+    BULK_TAG_DEFINITION.color,
+  );
+  return BULK_TAG;
+}
+
 async function setNormalCompletionActionStatus(tabId, badgeText, title) {
   await messenger.messageDisplayAction.setBadgeText({ tabId, text: badgeText });
   await messenger.messageDisplayAction.setTitle({ tabId, title });
@@ -452,8 +488,8 @@ async function completeDisplayedNormalWorkflow(tab) {
   // view before the keyword update completes. Apply the tag first, then unstar.
   // Do not immediately re-read the message: Thunderbird can return a stale
   // MessageHeader while the IMAP keyword update is still propagating.
-  await messenger.messages.tags.get(BULK_TAG);
-  await addTag(message, BULK_TAG);
+  const bulkTagKey = await resolveBulkTagKey();
+  await addTag(message, bulkTagKey);
   await messenger.messages.update(message.id, { flagged: false });
   await setNormalCompletionActionStatus(tab.id, "✓", "WIB: 通常終了しました");
 }
