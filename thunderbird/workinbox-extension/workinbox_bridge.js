@@ -5,7 +5,11 @@ function setButtonStatus(button, text) {
 }
 
 async function loadImapTarget() {
-  const response = await fetch("/api/thunderbird/imap-target", { cache: "no-store" });
+  // In a Thunderbird content script, a root-relative fetch can be resolved
+  // against the moz-extension origin. Build the URL explicitly from the WIB
+  // page so the request always goes to the running WIB Web server.
+  const targetUrl = new URL("/api/thunderbird/imap-target", window.location.href);
+  const response = await fetch(targetUrl.href, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`WIB Web の IMAP 設定を取得できませんでした: HTTP ${response.status}`);
   }

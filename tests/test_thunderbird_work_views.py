@@ -49,7 +49,10 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
 
         self.assertIn("[data-wib-open-work-view]", bridge)
         self.assertIn('type: "workinbox-open-work-view"', bridge)
-        self.assertIn('/api/thunderbird/imap-target', bridge)
+        self.assertIn(
+            'new URL("/api/thunderbird/imap-target", window.location.href)',
+            bridge,
+        )
         self.assertIn("button.title = message", bridge)
         self.assertIn("}, 10000);", bridge)
 
