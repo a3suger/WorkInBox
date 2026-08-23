@@ -8,6 +8,7 @@ from workinbox.application import WorkTagService
 from workinbox.config import AppConfig, DatabaseConfig, ImapConfig
 from workinbox.database import EmailDatabase
 from workinbox.models import EmailMessage, ImapFlagsSnapshot
+from workinbox.triage_store import TriageRelationStore
 from workinbox.work_tags import WORK_TAGS, definitions_for_flags, require_work_tag
 
 
@@ -141,6 +142,22 @@ class WorkTagServiceTest(unittest.TestCase):
                 service.set_tag("<mail@example>", "not-a-wib-tag", enabled=True)
 
             self.assertEqual(imap.write_calls, [])
+
+    def test_setting_dedicated_tag_registers_workflow_origin(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            self._seed(database)
+            service = WorkTagService(
+                self._config(path), database=database, imap_client=FakeTagImapClient()
+            )
+
+            service.set_tag("<mail@example>", "wib-schedule", enabled=True)
+
+            store = TriageRelationStore(path)
+            self.assertEqual(
+                store.current_focus_for("<mail@example>"), "<mail@example>"
+            )
 
     def test_require_work_tag_returns_canonical_definition(self) -> None:
         self.assertEqual(require_work_tag("wib-answer").label, "返信必要")

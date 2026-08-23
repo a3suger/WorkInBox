@@ -215,6 +215,11 @@ class TriageService:
             return TriageResult(errors=(TriageError("<mailbox>", str(exc)),))
 
         unread = fetched.messages
+        # Register dedicated workflow origins already present in this batch before
+        # processing replies. This makes reply resolution a local SQLite lookup.
+        for item in unread:
+            if _DEDICATED_WORKFLOW_KEYS.intersection(item.flags):
+                self.relations.ensure_workflow_focus(item.email.message_id)
         self._progress(
             phase="triage",
             label="TriageBox: 未読メール確認",
@@ -393,22 +398,11 @@ class TriageService:
                     item, workflow_origin=workflow_origin
                 )
 
-        # An unknown thread only needs its nearest reply target inspected.  Older
-        # References can contain dozens of IDs; searching the whole mailbox for
-        # each of them made normal synchronization appear to stop indefinitely.
-        if not referenced_message_ids:
-            return False
-        nearest_message_id = referenced_message_ids[0]
-        if self.relations.relation_kind_for(nearest_message_id) in _SUPPORT_RELATION_KINDS:
-            return False
-        referenced = self.imap_client.find_message_by_message_id(nearest_message_id)
-        if referenced is None:
-            return False
-        if not _DEDICATED_WORKFLOW_KEYS.intersection(referenced.flags):
-            return False
-        workflow_origin = referenced.email.message_id
-        self.relations.ensure_workflow_focus(workflow_origin)
-        return self._move_dedicated_thread_focus(item, workflow_origin=workflow_origin)
+        # Do not search the whole mailbox for unknown references. Dedicated
+        # origins are registered when their WIB tag is assigned (or when such a
+        # message is present in this unread batch), so an unknown reference is an
+        # ordinary mail thread from TriageBox's point of view.
+        return False
 
     def _move_dedicated_thread_focus(
         self,

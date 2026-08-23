@@ -299,6 +299,10 @@ class SynchronizationService:
                 enabled=True,
                 expected_uidvalidity=tracked.uidvalidity,
             )
+            if {"wib-schedule", "wib-deadline"}.intersection(tag_keys):
+                relation_store = TriageRelationStore(self.config.database.path)
+                relation_store.initialize()
+                relation_store.ensure_workflow_focus(tracked.message_id)
             if classification.should_unstar():
                 try:
                     self.imap_client.set_flagged(
@@ -623,6 +627,10 @@ class WorkTagService:
             enabled=True,
             expected_uidvalidity=reference.uidvalidity,
         )
+        if {"wib-schedule", "wib-deadline"}.intersection(target_keys):
+            relation_store = TriageRelationStore(self.config.database.path)
+            relation_store.initialize()
+            relation_store.ensure_workflow_focus(message_id)
         remove_keys = tuple(
             key
             for key in _NORMAL_RESOLUTION_KEYS
@@ -698,6 +706,8 @@ class WorkTagService:
             )
             if target_message_id == message_id:
                 source_reference = reference
+                if enabled and key in {"wib-schedule", "wib-deadline"}:
+                    relation_store.ensure_workflow_focus(message_id)
 
         if (
             key == "wib-schedule-done"

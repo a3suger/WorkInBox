@@ -182,7 +182,7 @@ class DedicatedWorkflowFocusTest(unittest.TestCase):
             self.assertIn("\\Flagged", imap.messages["<m4@example>"].flags)
             self.assertIn("\\Flagged", imap.messages["<m1@example>"].flags)
 
-    def test_unknown_long_thread_searches_only_nearest_reply_target(self) -> None:
+    def test_unknown_long_thread_does_not_search_mailbox(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
             reply = message(
@@ -201,7 +201,7 @@ class DedicatedWorkflowFocusTest(unittest.TestCase):
             result = TriageService(self.config(path), imap).run()
 
             self.assertEqual(result.errors, ())
-            self.assertEqual(imap.find_calls, ["<nearest@example>"])
+            self.assertEqual(imap.find_calls, [])
 
     def test_progress_reports_relation_check_before_message_finishes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
