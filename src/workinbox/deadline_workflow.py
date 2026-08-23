@@ -47,12 +47,22 @@ class DeadlineWorkflowService:
         return candidate, completion
 
     def dismiss_no_deadline(self, message_id: str) -> DeadlineMessageCompletion:
-        """End a zero-candidate deadline workflow by explicit user judgment."""
+        """Reject unresolved candidates and end by explicit no-deadline judgment."""
         candidates = self.deadline_service.candidates(message_id)
-        if candidates:
+        if any(
+            candidate.status == DeadlineCandidateStatus.REGISTERED
+            for candidate in candidates
+        ):
             raise ValueError(
-                "締切候補があるため、候補ごとに登録または登録しないを選択してください"
+                "正式登録済みの締切があるため、締切なしとして終了できません"
             )
+
+        for candidate in candidates:
+            if candidate.status == DeadlineCandidateStatus.PENDING:
+                self.deadline_service.reject_candidate(candidate.id)
+
+        if candidates:
+            return self.complete_if_ready(message_id)
 
         self.work_tag_service.set_tag(
             message_id,

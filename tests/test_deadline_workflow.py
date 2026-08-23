@@ -181,15 +181,51 @@ class DeadlineWorkflowTest(unittest.TestCase):
 
     def test_no_deadline_dismissal_rejects_existing_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            message_id, _database, imap, deadline_service, workflow = self.make_services(
+            message_id, database, imap, deadline_service, workflow = self.make_services(
                 Path(directory) / "workinbox.db"
             )
-            deadline_service.add_candidate(message_id, "提出締切", due_at="2026-08-20")
+            first = deadline_service.add_candidate(
+                message_id, "提出締切", due_at="2026-08-20"
+            )
+            second = deadline_service.add_candidate(
+                message_id, "確認期限", due_at="2026-08-21"
+            )
 
-            with self.assertRaises(ValueError):
+            completion = workflow.dismiss_no_deadline(message_id)
+
+            self.assertTrue(completion.completed)
+            self.assertEqual(completion.rejected_count, 2)
+            self.assertEqual(
+                deadline_service.database.deadline_candidate(first.id).status.value,
+                "rejected",
+            )
+            self.assertEqual(
+                deadline_service.database.deadline_candidate(second.id).status.value,
+                "rejected",
+            )
+            self.assertNotIn("wib-deadline", imap.flags)
+            self.assertIn("wib-bulk", imap.flags)
+            self.assertNotIn("\\Flagged", imap.flags)
+            self.assertEqual(
+                database.list_tracked_emails(active=False)[0].tracking_status,
+                TrackingStatus.INACTIVE_UNSTARRED,
+            )
+
+    def test_no_deadline_dismissal_refuses_registered_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            message_id, _database, imap, deadline_service, workflow = self.make_services(
+                Path(directory) / "workinbox.db",
+                ("\\Flagged", "wib-deadline", "wib-review"),
+            )
+            candidate = deadline_service.add_candidate(
+                message_id, "提出締切", due_at="2026-08-20"
+            )
+            workflow.register_candidate(candidate.id)
+
+            with self.assertRaisesRegex(ValueError, "正式登録済み"):
                 workflow.dismiss_no_deadline(message_id)
 
-            self.assertEqual(imap.flags, ("\\Flagged", "wib-deadline"))
+            self.assertIn("wib-deadline-done", imap.flags)
 
 
 if __name__ == "__main__":

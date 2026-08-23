@@ -129,11 +129,12 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("wib-review", source)
         self.assertIn("wib-watch", source)
 
-    def test_deadline_template_requires_explicit_zero_candidate_exit(self) -> None:
+    def test_deadline_template_offers_explicit_whole_mail_exit(self) -> None:
         source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "deadlines.html")
         self.assertIn("AI抽出は完了していますが、締切候補は見つかりませんでした", source)
         self.assertIn("/deadlines/no-deadline", source)
-        self.assertIn("締切なしとして終了", source)
+        self.assertIn("このメールには締切なしとして終了", source)
+        self.assertIn("未確定の候補をすべて登録しない状態", source)
 
     def test_schedule_template_contains_support_request_bridge(self) -> None:
         source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "schedules.html")

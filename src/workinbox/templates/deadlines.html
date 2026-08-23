@@ -131,10 +131,11 @@
     <div class="notice" style="margin-top: 14px; margin-bottom: 0;">
       AI抽出は完了していますが、締切候補は見つかりませんでした。本文を確認し、締切がある場合は手動で追加してください。
     </div>
-    <form method="post" action="/deadlines/no-deadline?message_id={{ email.message_id | urlencode }}" style="margin-top: 10px;">
-      <button type="submit">締切なしとして終了</button>
-    </form>
     {% endif %}
+
+    <form method="post" action="/deadlines/no-deadline?message_id={{ email.message_id | urlencode }}" style="margin-top: 14px;" onsubmit="return window.confirm('このメールには登録すべき締切がないと判断し、未確定の候補をすべて登録しない状態にして終了します。よろしいですか？');">
+      <button type="submit">このメールには締切なしとして終了</button>
+    </form>
 
     <details class="deadline-add" style="margin-top: 16px;">
       <summary>＋ 締切を追加</summary>
