@@ -19,19 +19,28 @@
 - 実機確認 Issue #17〜#25: Open
 - #16 `Thunderbird Bridge / Quick Filter を docs/design.md に合わせる`: Closed
 - #16 の最新実装 commit: `3c28ec56a8c457c1d26fe86e37d1656be5553dd3`
-- GitHub Actions: #149 success
+- 最新 GitHub Actions: run `32571406463` success (`88e7c50`)
 
 ### ローカル git
 
+引き継ぎ確認開始時の履歴:
+
 ```text
-aaee149 (HEAD -> main) .gitignore の修正
-3c28ec5 (origin/main, origin/HEAD) Align Thunderbird Bridge with current design
+88e7c50 docs: add work interruption and handoff process
+aaee149 .gitignore の修正
+3c28ec5 Align Thunderbird Bridge with current design
 ```
 
-したがって、ローカル `main` は `origin/main` より 1 commit 先に進んでいる。
+引き継ぎ確認開始時点でローカル `main` と `origin/main` は一致し、未 push commit、未 commit 変更はなかった。
+以前未 push と記録されていた `aaee149` は push 済み。
 
-`aaee149` は現時点では未 push とみなす。
-再開時に `git status` / `git log --oneline --decorate -n 5` / `git status -sb` で必ず再確認する。
+### 2026-08-23 引き継ぎ時の再確認
+
+- GitHub Issue #5: Open
+- 実装 Issue #6〜#16: Closed
+- 実機確認 Issue #17〜#25: Open
+- 最新 Actions: run `32571406463` success
+- ローカル自動テスト: `118 passed, 6 subtests passed`
 
 ## 最新の「作業再開」以降に完了した作業
 
@@ -102,7 +111,17 @@ Thunderbird 実機確認は #25 に分離済み。
 
 残作業は実機確認 #17〜#25。
 
-### 優先して確認する候補
+### 実機確認の進め方
+
+通常の受信箱と実際の業務メールを使い、次のまとまりで確認すると重複作業を減らせる。
+
+1. #24 + #25: WIB ダッシュボードの件数・導線と Thunderbird 作業ビューを同じ受信箱で確認する
+2. #17 + #22 + #23: AI 初期分類から通常終了 / Record 保存 / 締切登録までを、該当する実メールごとに確認する
+3. #18 + #19 + #20 + #21: 実際のスケジュール調整支援 1 件を M1 として、支援依頼 M2、支援者返信 M3、元スレッド継続 M4 の順にまとめて確認する
+
+人工的なテストメールは作らず、各 Issue の「実施タイミング」に従う。条件に合う実メールがまだない項目は Open のまま維持する。
+
+### Issue 順の確認候補
 
 1. #17 AI 初期分類を実メールで確認する
 2. #18 対応待ち → 対応あり を実メールで確認する
@@ -141,9 +160,9 @@ Thunderbird 実機確認は #25 に分離済み。
 1. `docs/development_working_agreement.md` を読む。
 2. この `docs/current_work.md` を読む。
 3. `git status -sb` でローカル `main` と `origin/main` の差を確認する。
-4. `aaee149` が未 push のままか確認する。
+4. ローカル `main` と `origin/main` が一致し、未 push commit がないことを確認する。
 5. GitHub #5 と #17〜#25 の状態を確認する。
-6. 最新 GitHub Actions が #149 success 以後に変化していないか確認する。
+6. 最新 GitHub Actions が run `32571406463` success 以後に変化していないか確認する。
 7. 実機確認 #17〜#25 の内容を読み、まとめて実施できる確認を整理する。
 8. 新しい設計判断が不要なら、残作業の先頭から再開する。
 
