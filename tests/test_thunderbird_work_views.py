@@ -22,6 +22,15 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("Ci.nsMsgSearchAttrib.Keywords", implementation)
         self.assertIn("Ci.nsMsgSearchOp.DoesntContain", implementation)
         self.assertIn('const VIEW_NAME = "WIB 未着眼";', implementation)
+        self.assertIn(
+            "threePaneWindow.gViewWrapper.setMailView(VIEW_NAME, null, true)",
+            implementation,
+        )
+        self.assertIn(
+            "threePaneWindow.gViewWrapper.setMailView(0, null, true)",
+            implementation,
+        )
+        self.assertNotIn("setMailView(-1", implementation)
 
     def test_background_routes_unattended_and_normal_views_separately(self) -> None:
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
@@ -41,6 +50,8 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("[data-wib-open-work-view]", bridge)
         self.assertIn('type: "workinbox-open-work-view"', bridge)
         self.assertIn('/api/thunderbird/imap-target', bridge)
+        self.assertIn("button.title = message", bridge)
+        self.assertIn("}, 10000);", bridge)
 
     def test_manifest_registers_mail_views_experiment(self) -> None:
         manifest = json.loads((EXTENSION / "manifest.json").read_text(encoding="utf-8"))

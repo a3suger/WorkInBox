@@ -79,9 +79,12 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
     return {
       mailViews: {
         async ensureUnattendedView(tabId) {
-          const { view, created } = findOrCreateUnattendedView();
+          const { created } = findOrCreateUnattendedView();
           const threePaneWindow = resolveThreePaneWindow(tabId);
-          threePaneWindow.gViewWrapper.setMailView(0, VIEW_NAME, view.searchTerms);
+          // Thunderbird 153's DBViewWrapper accepts the custom mail-view name
+          // as the first argument. Passing 0 selects the built-in "all mail"
+          // view and ignores the custom terms.
+          threePaneWindow.gViewWrapper.setMailView(VIEW_NAME, null, true);
           return {
             name: VIEW_NAME,
             created,
@@ -91,7 +94,9 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
 
         async resetView(tabId) {
           const threePaneWindow = resolveThreePaneWindow(tabId);
-          threePaneWindow.gViewWrapper.setMailView(-1, null);
+          // 0 is Thunderbird's built-in "all mail" view. -1 has no view
+          // definition and fails when Thunderbird tries to build its terms.
+          threePaneWindow.gViewWrapper.setMailView(0, null, true);
         },
       },
     };

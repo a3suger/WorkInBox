@@ -45,6 +45,12 @@ aaee149 .gitignore の修正
 
 ## 最新の「作業再開」以降に完了した作業
 
+### 0-3. Thunderbird 153 作業ビュー互換修正
+
+- Thunderbird 153.0.2esr の同梱実装と Extension の custom Mail View 呼び出しを照合した。
+- `WIB 未着眼` の適用時に built-in all mail の番号 `0` を渡していた箇所を、custom view名を渡す形へ修正した。
+- 通常ビューへ戻す際に存在しない番号 `-1` を渡していた箇所を、all mail の番号 `0` へ修正した。
+
 ### 0-2. TriageBox の長時間停止対策
 
 - 実機同期で `TriageBox: 未読メール確認 — 2 / 1349件` のまま進まない事象を調査した。

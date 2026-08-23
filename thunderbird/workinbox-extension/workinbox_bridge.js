@@ -50,6 +50,7 @@ async function handleOpenWorkView(button) {
   }
 
   button.disabled = true;
+  button.title = "";
   setButtonStatus(button, "Thunderbirdで準備中…");
 
   try {
@@ -65,12 +66,14 @@ async function handleOpenWorkView(button) {
     setButtonStatus(button, "開きました");
   } catch (error) {
     console.error("[WorkInBox bridge]", error);
-    setButtonStatus(button, `失敗: ${error.message || error}`);
+    const message = error.message || String(error);
+    button.title = message;
+    setButtonStatus(button, `失敗: ${message}`);
   } finally {
     window.setTimeout(() => {
       button.textContent = button.dataset.wibOriginalLabel || "Thunderbirdで確認";
       button.disabled = false;
-    }, 2500);
+    }, 10000);
   }
 }
 
