@@ -2,7 +2,7 @@
 
 ## 状態
 
-作業中（実運用テスト継続）
+作業中断（実運用テスト継続）
 
 ## 現在の対象
 
@@ -23,6 +23,10 @@
 - Actions はこの実行環境からGitHubへ接続できず、`3f2bc0b` の結果を未確認。
 
 ### ローカル git
+
+2026-08-24 中断時、ローカル `main` と `origin/main` は `4901ff0` で一致し、未 push commit、未 commit 変更はなかった。
+直近 commit `4901ff0 Add one-click normal workflow completion` には、Thunderbird Extension `0.2.10` の通常終了ボタンと旧 `wib-batch` 互換対応が含まれる。
+ローカル自動テストは `129 tests OK`。`4901ff0` の GitHub Actions はこの実行環境から確認できていない。
 
 2026-08-23 作業再開時、ローカル `main` と `origin/main` は `991cef0` で一致し、未 push commit、未 commit 変更はなかった。
 GitHub API は実行環境の接続制限により確認できなかった。
@@ -229,7 +233,9 @@ Thunderbird 実機確認は #25 に分離済み。
 
 ## 中断理由
 
-通常同期とThunderbird作業ビューが実機で動く状態になったため、しばらく通常運用でテストする。
+Thunderbird Extension `0.2.10` の通常終了ボタンが実機で正しく動くことを確認し、利用者の指示により作業を一旦中断する。
+
+#22 は通常終了の主要遷移を確認済み。次回は、通常タグがないメールで終了ボタンが何も変更しないことと、Record保存終了の3項目を確認する。#24・#25および#18〜#21の実運用確認も残っている。
 
 新しい設計判断待ちによる中断ではない。
 
@@ -240,9 +246,9 @@ Thunderbird 実機確認は #25 に分離済み。
 3. `git status -sb` でローカル `main` と `origin/main` の差を確認する。
 4. ローカル `main` と `origin/main` が一致し、未 push commit がないことを確認する。
 5. GitHub #5 と #17〜#25 の状態を確認する。
-6. commit `3f2bc0b` までのGitHub Actions結果を確認する。
+6. commit `4901ff0` のGitHub Actions結果を確認する。
 7. 通常運用中に見つかった違和感・エラー・確認済み項目を利用者へ確認する。
-8. `docs/manual_test_runbook.md` に従い、#24 + #25 の継続確認から再開する。
+8. `docs/manual_test_runbook.md` に従い、#22の未確認項目または #24 + #25 の継続確認から再開する。
 9. 新しい設計判断が不要なら、残りの実機確認へ進む。
 
 ## 設計判断待ち
