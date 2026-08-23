@@ -8,7 +8,7 @@ from .config import AppConfig
 from .database import EmailDatabase
 from .deadline_extractor import OllamaDeadlineExtractor
 from .imap_client import ImapClient
-from .models import DeadlineCreatedBy, TrackedEmail
+from .models import DeadlineCreatedBy, ImapFlagsSnapshot, ImapReference, TrackedEmail
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,21 +50,57 @@ class DeadlineExtractionService:
         candidates_added = 0
         errors: list[DeadlineExtractionError] = []
 
-        for tracked in self.database.list_tracked_emails(active=True):
+        tracked_emails = self.database.list_tracked_emails(active=True)
+        references = [
+            ImapReference(
+                tracked.message_id,
+                tracked.mailbox,
+                tracked.uidvalidity,
+                tracked.uid,
+            )
+            for tracked in tracked_emails
+            if self._has_imap_identity(tracked)
+            and tracked.mailbox == self.config.imap.mailbox
+        ]
+        snapshots: dict[str, ImapFlagsSnapshot] = {}
+        batch_errors: dict[str, str] = {}
+        batch_reader = getattr(self.imap_client, "inspect_flags_many", None)
+        if callable(batch_reader):
+            try:
+                snapshots, batch_errors = batch_reader(references)
+            except (OSError, RuntimeError, ValueError) as exc:
+                batch_errors = {
+                    reference.message_id: str(exc) for reference in references
+                }
+
+        for tracked in tracked_emails:
             if not self._has_imap_identity(tracked):
                 continue
             if tracked.mailbox != self.config.imap.mailbox:
                 continue
 
             checked += 1
-            try:
-                snapshot = self.imap_client.inspect_flags(
-                    tracked.uid,
-                    expected_uidvalidity=tracked.uidvalidity,
-                )
-            except (OSError, RuntimeError, ValueError) as exc:
-                errors.append(DeadlineExtractionError(tracked.message_id, str(exc)))
-                continue
+            if callable(batch_reader):
+                snapshot = snapshots.get(tracked.message_id)
+                if snapshot is None:
+                    errors.append(
+                        DeadlineExtractionError(
+                            tracked.message_id,
+                            batch_errors.get(
+                                tracked.message_id, "IMAP flags are unavailable"
+                            ),
+                        )
+                    )
+                    continue
+            else:
+                try:
+                    snapshot = self.imap_client.inspect_flags(
+                        tracked.uid,
+                        expected_uidvalidity=tracked.uidvalidity,
+                    )
+                except (OSError, RuntimeError, ValueError) as exc:
+                    errors.append(DeadlineExtractionError(tracked.message_id, str(exc)))
+                    continue
 
             flags = set(snapshot.flags)
             if "wib-deadline" not in flags or "wib-deadline-done" in flags:

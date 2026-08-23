@@ -217,6 +217,57 @@ class ImapClient:
                 flags=flags,
             )
 
+    def inspect_flags_many(
+        self,
+        references: Iterable[ImapReference],
+    ) -> tuple[dict[str, ImapFlagsSnapshot], dict[str, str]]:
+        """Read flags for multiple tracked messages over one IMAP connection."""
+        references = list(references)
+        snapshots: dict[str, ImapFlagsSnapshot] = {}
+        errors: dict[str, str] = {}
+        if not references:
+            return snapshots, errors
+
+        with imaplib.IMAP4_SSL(
+            self.config.host, self.config.port, timeout=self.config.timeout_seconds
+        ) as client:
+            client.login(self.config.username, self.config.password)
+            status, _ = client.select(self.config.mailbox, readonly=True)
+            if status != "OK":
+                raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
+            current_uidvalidity = _uidvalidity(client)
+
+            for reference in references:
+                if reference.mailbox != self.config.mailbox:
+                    errors[reference.message_id] = (
+                        f"mailbox mismatch: {reference.mailbox}"
+                    )
+                    continue
+                if reference.uidvalidity != current_uidvalidity:
+                    errors[reference.message_id] = (
+                        "IMAP UIDVALIDITY changed; tag inspection aborted"
+                    )
+                    continue
+                try:
+                    status, fetched = client.uid(
+                        "fetch", str(reference.uid), "(UID FLAGS)"
+                    )
+                except (imaplib.IMAP4.error, OSError) as exc:
+                    errors[reference.message_id] = str(exc)
+                    continue
+                if status != "OK":
+                    errors[reference.message_id] = (
+                        f"IMAP fetch failed for UID {reference.uid}"
+                    )
+                    continue
+                snapshots[reference.message_id] = ImapFlagsSnapshot(
+                    mailbox=self.config.mailbox,
+                    uidvalidity=current_uidvalidity,
+                    uid=reference.uid,
+                    flags=_parse_flags(fetched),
+                )
+        return snapshots, errors
+
     def set_keyword(
         self,
         uid: int,

@@ -23,6 +23,7 @@ RAW_MESSAGE = (
 
 
 class FakeImap:
+    init_count: int = 0
     last_search_args: tuple[object, ...] | None = None
     last_select_readonly: bool | None = None
     last_store_args: tuple[object, ...] | None = None
@@ -30,6 +31,7 @@ class FakeImap:
     last_init_kwargs: dict[str, object] | None = None
 
     def __init__(self, *args: object, **kwargs: object) -> None:
+        FakeImap.init_count += 1
         FakeImap.last_init_kwargs = kwargs
         self.fetch_responses: dict[int, tuple[str, list[object]]] = {
             10: ("OK", [(b"1 (UID 10 FLAGS (\\Seen))", b"")]),
@@ -91,6 +93,7 @@ class FakeImap:
 
 class ImapClientTest(unittest.TestCase):
     def setUp(self) -> None:
+        FakeImap.init_count = 0
         FakeImap.last_search_args = None
         FakeImap.last_select_readonly = None
         FakeImap.last_store_args = None
@@ -109,6 +112,19 @@ class ImapClientTest(unittest.TestCase):
         ImapClient(config).inspect_flags(60)
 
         self.assertEqual(FakeImap.last_init_kwargs, {"timeout": 12.5})
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
+    def test_inspect_flags_many_reuses_one_connection(self) -> None:
+        references = [
+            ImapReference("<one@example>", "INBOX", 55, 60),
+            ImapReference("<two@example>", "INBOX", 55, 60),
+        ]
+
+        snapshots, errors = ImapClient(self.config).inspect_flags_many(references)
+
+        self.assertEqual(FakeImap.init_count, 1)
+        self.assertEqual(set(snapshots), {"<one@example>", "<two@example>"})
+        self.assertEqual(errors, {})
 
     @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
     @patch("workinbox.imap_client.date")

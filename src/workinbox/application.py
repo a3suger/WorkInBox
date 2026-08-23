@@ -16,6 +16,8 @@ from .models import (
     DeadlineCandidate,
     DeadlineCreatedBy,
     ImapCheckState,
+    ImapFlagsSnapshot,
+    ImapReference,
     TrackedEmail,
     TrackingStatus,
 )
@@ -530,33 +532,60 @@ class WorkTagService:
         self.imap_client = imap_client or ImapClient(config.imap)
 
     def read_for_emails(self, emails: list[TrackedEmail]) -> list[TrackedEmailTagView]:
-        views: list[TrackedEmailTagView] = []
+        references: list[ImapReference] = []
+        identity_errors: dict[str, str] = {}
         for email in emails:
             if email.uid is None or email.uidvalidity is None or email.mailbox is None:
-                views.append(
-                    TrackedEmailTagView(
-                        email=email,
-                        tags=(),
-                        error="IMAP identity is unavailable",
-                    )
-                )
+                identity_errors[email.message_id] = "IMAP identity is unavailable"
                 continue
             if email.mailbox != self.config.imap.mailbox:
+                identity_errors[email.message_id] = (
+                    f"mailbox mismatch: {email.mailbox}"
+                )
+                continue
+            references.append(
+                ImapReference(
+                    email.message_id,
+                    email.mailbox,
+                    email.uidvalidity,
+                    email.uid,
+                )
+            )
+
+        snapshots: dict[str, ImapFlagsSnapshot] = {}
+        errors = dict(identity_errors)
+        batch_reader = getattr(self.imap_client, "inspect_flags_many", None)
+        if callable(batch_reader):
+            try:
+                batch_snapshots, batch_errors = batch_reader(references)
+                snapshots.update(batch_snapshots)
+                errors.update(batch_errors)
+            except (OSError, RuntimeError, ValueError) as exc:
+                errors.update(
+                    {reference.message_id: str(exc) for reference in references}
+                )
+        else:
+            for reference in references:
+                try:
+                    snapshots[reference.message_id] = self.imap_client.inspect_flags(
+                        reference.uid,
+                        expected_uidvalidity=reference.uidvalidity,
+                    )
+                except (OSError, RuntimeError) as exc:
+                    errors[reference.message_id] = str(exc)
+
+        views: list[TrackedEmailTagView] = []
+        for email in emails:
+            snapshot = snapshots.get(email.message_id)
+            error = errors.get(email.message_id)
+            if snapshot is None:
                 views.append(
                     TrackedEmailTagView(
                         email=email,
                         tags=(),
-                        error=f"mailbox mismatch: {email.mailbox}",
+                        error=error or "IMAP flags are unavailable",
                     )
                 )
-                continue
-            try:
-                snapshot = self.imap_client.inspect_flags(
-                    email.uid,
-                    expected_uidvalidity=email.uidvalidity,
-                )
-            except (OSError, RuntimeError) as exc:
-                views.append(TrackedEmailTagView(email=email, tags=(), error=str(exc)))
                 continue
             views.append(
                 TrackedEmailTagView(
