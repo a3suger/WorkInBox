@@ -72,7 +72,8 @@ daf237a Use progress runtime for legacy web entry point
 - 説明欄には締切IDベースのWIB案内URLも追加し、外部ブラウザまたはBridge未接続時は締切・件名・差出人・受信日時をWIBページに表示する。
 - Extensionバージョンを `0.2.11` に更新した。
 - ローカル自動テストは `131 tests OK`。
-- 次にThunderbird 153実機でVTODOのURL表示場所・リンク動作・元メール自動表示を確認する。
+- Thunderbird 153実機ではVTODOの `mid:` URLが「関連リンク」として表示される。その関連リンクをクリックし、外部ブラウザを経由せず元メールが素早く表示されることを確認した。「主URL」という別の操作対象はない。
+- 説明欄のWIB案内URLを外部ブラウザで開いた場合の情報表示と、元メールが見つからない場合の失敗表示は未確認。
 
 ### 0-7. #22 Thunderbird通常終了ボタン
 
