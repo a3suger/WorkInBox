@@ -56,6 +56,12 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("button.title = message", bridge)
         self.assertIn("}, 10000);", bridge)
 
+    def test_deadline_source_page_auto_opens_its_message(self) -> None:
+        bridge = (EXTENSION / "workinbox_bridge.js").read_text(encoding="utf-8")
+
+        self.assertIn('"[data-wib-auto-open-message-id]"', bridge)
+        self.assertIn("void handleOpenMessage(autoOpenMessageButton)", bridge)
+
     def test_manifest_registers_mail_views_experiment(self) -> None:
         manifest = json.loads((EXTENSION / "manifest.json").read_text(encoding="utf-8"))
         experiment = manifest["experiment_apis"]["mailViews"]

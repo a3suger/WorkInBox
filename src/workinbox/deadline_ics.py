@@ -12,7 +12,7 @@ class DeadlineIcsService:
     def __init__(self, deadline_service: DeadlineService) -> None:
         self.deadline_service = deadline_service
 
-    def render(self) -> str:
+    def render(self, *, source_base_url: str | None = None) -> str:
         deadlines: list[Deadline] = []
         for message_id in sorted(self.deadline_service.database.message_ids()):
             deadlines.extend(self.deadline_service.deadlines(message_id))
@@ -27,11 +27,16 @@ class DeadlineIcsService:
             "X-WR-CALNAME:WorkInBox Deadlines",
         ]
         for deadline in deadlines:
-            lines.extend(self._vtodo_lines(deadline))
+            lines.extend(self._vtodo_lines(deadline, source_base_url=source_base_url))
         lines.append("END:VCALENDAR")
         return "\r\n".join(lines) + "\r\n"
 
-    def _vtodo_lines(self, deadline: Deadline) -> list[str]:
+    def _vtodo_lines(
+        self,
+        deadline: Deadline,
+        *,
+        source_base_url: str | None,
+    ) -> list[str]:
         updated = self._utc_timestamp(deadline.updated_at)
         lines = [
             "BEGIN:VTODO",
@@ -46,6 +51,11 @@ class DeadlineIcsService:
             f"X-WORKINBOX-MESSAGE-ID:{_escape_text(deadline.source_message_id)}",
             f"X-WORKINBOX-CREATED-BY:{deadline.created_by.value}",
         ]
+        if source_base_url:
+            base_url = source_base_url.rstrip("/")
+            lines.append(
+                f"URL:{base_url}/deadlines/{deadline.id}/source-message"
+            )
         if deadline.description:
             lines.append(f"DESCRIPTION:{_escape_text(deadline.description)}")
         lines.append("END:VTODO")

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}締切の元メール - WorkInBox{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2>締切の元メール</h2>
+    <div class="muted">Thunderbird内では元メールを自動で開きます。</div>
+  </div>
+</div>
+
+{% if not deadline %}
+<div class="notice error">
+  指定された締切は見つかりませんでした。締切一覧を更新してから、もう一度お試しください。
+</div>
+{% else %}
+<section class="deadline-card">
+  <h3>{{ deadline.title }}</h3>
+  <div class="deadline-meta muted">
+    <span>締切: {{ deadline.due_at }}</span>
+  </div>
+
+  {% if email %}
+  <dl>
+    <dt><strong>元メールの件名</strong></dt>
+    <dd>{{ email.subject or "(件名なし)" }}</dd>
+    <dt><strong>差出人</strong></dt>
+    <dd>{{ email.sender }}</dd>
+    <dt><strong>受信日時</strong></dt>
+    <dd>{{ email.received_at or "-" }}</dd>
+  </dl>
+  {% else %}
+  <div class="notice error">
+    WIBのデータベースに元メールの詳細がありません。Message-IDは保持されているため、Thunderbird内での検索は試行できます。
+  </div>
+  {% endif %}
+
+  <button
+    type="button"
+    class="primary"
+    data-wib-open-message-id="{{ deadline.source_message_id }}"
+    data-wib-auto-open-message-id="{{ deadline.source_message_id }}"
+    title="Thunderbirdで元メールを開く"
+  >Thunderbirdで元メールを開く</button>
+
+  <p class="muted">
+    外部ブラウザで表示している場合、このボタンからThunderbirdを直接操作することはできません。Thunderbird内でToDoのリンクを開いてください。
+  </p>
+</section>
+{% endif %}
+{% endblock %}

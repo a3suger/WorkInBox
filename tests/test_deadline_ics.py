@@ -62,7 +62,9 @@ class DeadlineIcsTest(unittest.TestCase):
                 description="確認;して返信",
             )
 
-            content = DeadlineIcsService(service).render()
+            content = DeadlineIcsService(service).render(
+                source_base_url="http://localhost:8000/",
+            )
 
             self.assertIn("BEGIN:VCALENDAR\r\n", content)
             self.assertIn("BEGIN:VTODO\r\n", content)
@@ -79,6 +81,14 @@ class DeadlineIcsTest(unittest.TestCase):
             self.assertIn("DUE:20260821T083000Z", content)
             self.assertIn("DESCRIPTION:確認\\;して返信", content)
             self.assertIn("X-WORKINBOX-CREATED-BY:user", content)
+            self.assertIn(
+                f"URL:http://localhost:8000/deadlines/{date_deadline.id}/source-message",
+                content,
+            )
+            self.assertIn(
+                f"URL:http://localhost:8000/deadlines/{time_deadline.id}/source-message",
+                content,
+            )
             self.assertTrue(content.endswith("END:VCALENDAR\r\n"))
 
     def test_naive_datetime_uses_stored_timezone(self) -> None:

@@ -2,7 +2,7 @@
 
 ## 状態
 
-作業中断（実運用テスト継続）
+作業中（締切確認導線を最優先で改善）
 
 ## 現在の対象
 
@@ -64,6 +64,15 @@ daf237a Use progress runtime for legacy web entry point
 - ローカル自動テスト: `125 tests OK`（既知の subtest を含む）
 
 ## 最新の「作業再開」以降に完了した作業
+
+### 0-8. VTODOから締切の元メールを開く導線
+
+- 実運用で最も困っている締切確認を優先し、VTODOへ締切IDベースの元メールURLを追加した。
+- Thunderbird内でURLを開くと既存BridgeがMessage-IDを自動送信し、追加クリックなしで元メールを表示する。
+- 外部ブラウザまたはBridge未接続時は、締切・件名・差出人・受信日時をWIBページに表示する。
+- Extensionバージョンを `0.2.11` に更新した。
+- ローカル自動テストは `131 tests OK`。
+- 次にThunderbird 153実機でVTODOのURL表示場所・リンク動作・元メール自動表示を確認する。
 
 ### 0-7. #22 Thunderbird通常終了ボタン
 

@@ -4,6 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from starlette.requests import Request
+
+from workinbox.application import DeadlineService
 from workinbox.application import TrackingQueryService
 from workinbox.config import AppConfig, DatabaseConfig, ImapConfig
 from workinbox.database import EmailDatabase
@@ -68,6 +71,7 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/schedules"])
         self.assertIn("GET", routes["/api/thunderbird/imap-target"])
         self.assertIn("GET", routes["/deadlines.ics"])
+        self.assertIn("GET", routes["/deadlines/{deadline_id}/source-message"])
         self.assertIn("POST", routes["/normal-workflow/complete"])
         self.assertIn("POST", routes["/normal-workflow/record"])
         self.assertIn("POST", routes["/deadlines/add"])
@@ -98,7 +102,7 @@ class WebFoundationTest(unittest.TestCase):
     def test_templates_are_loadable(self) -> None:
         for name in (
             "base.html", "dashboard.html", "emails.html", "pending.html", "deadlines.html",
-            "schedules.html", "records.html",
+            "schedules.html", "records.html", "deadline_source_message.html",
         ):
             self.assertIsNotNone(_TEMPLATES.get_template(name))
 
@@ -135,6 +139,55 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("/deadlines/no-deadline", source)
         self.assertIn("このメールには締切なしとして終了", source)
         self.assertIn("未確定の候補をすべて登録しない状態", source)
+
+    def test_deadline_source_page_contains_mail_fallback_and_auto_open(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self._config(path)
+            database = EmailDatabase(path)
+            database.initialize()
+            database.synchronize([
+                EmailMessage(
+                    "<source@example>",
+                    "sender@example.com",
+                    "me@example.com",
+                    "Source subject",
+                    "2026-08-25T09:00:00+09:00",
+                    "Body",
+                )
+            ])
+            service = DeadlineService(config, database=database)
+            candidate = service.add_candidate(
+                "<source@example>",
+                "回答期限",
+                due_at="2026-08-30",
+            )
+            deadline = service.register_candidate(candidate.id)
+            app = create_app(config, deadline_service=service)
+            route = next(
+                route
+                for route in app.routes
+                if route.path == "/deadlines/{deadline_id}/source-message"
+            )
+            request = Request({
+                "type": "http",
+                "method": "GET",
+                "scheme": "http",
+                "server": ("localhost", 8000),
+                "path": f"/deadlines/{deadline.id}/source-message",
+                "root_path": "",
+                "query_string": b"",
+                "headers": [],
+            })
+
+            response = route.endpoint(request, deadline.id)
+            body = response.body.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("回答期限", body)
+        self.assertIn("Source subject", body)
+        self.assertIn("sender@example.com", body)
+        self.assertIn('data-wib-auto-open-message-id="&lt;source@example&gt;"', body)
 
     def test_schedule_template_contains_support_request_bridge(self) -> None:
         source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "schedules.html")

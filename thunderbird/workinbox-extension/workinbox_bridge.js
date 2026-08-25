@@ -142,3 +142,10 @@ document.addEventListener("submit", (event) => {
   event.preventDefault();
   void handleSupportRequest(form);
 });
+
+const autoOpenMessageButton = document.querySelector(
+  "[data-wib-auto-open-message-id]",
+);
+if (autoOpenMessageButton) {
+  void handleOpenMessage(autoOpenMessageButton);
+}

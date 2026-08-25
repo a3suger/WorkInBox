@@ -439,6 +439,10 @@ class DeadlineService:
         self.database.initialize()
         return self.database.deadlines(message_id)
 
+    def deadline(self, deadline_id: int) -> Deadline | None:
+        self.database.initialize()
+        return self.database.deadline(deadline_id)
+
     def add_candidate(
         self,
         message_id: str,

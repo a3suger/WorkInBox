@@ -93,6 +93,8 @@ AND 通常ワークフローなし
 
 元メールは INBOX にない可能性があるため、Thunderbird Bridge 側では `docs/design.md` の Message-ID 検索規則に従う。
 
+各VTODOには `/deadlines/{deadline_id}/source-message` のWIB URLを付ける。Thunderbird内でこのURLを開くと、WIBページが既存Bridgeへ `deadline.source_message_id` を自動で渡して元メールを表示する。外部ブラウザまたはBridge未接続時は、同じページに締切・件名・差出人・受信日時を表示する。
+
 概念上の検索順:
 
 ```text
@@ -109,6 +111,7 @@ AND 通常ワークフローなし
 - `src/workinbox/deadline_workflow.py`: 候補判断後の完了判定と共通終了遷移
 - `src/workinbox/deadline_ics.py`: read-only `.ics` / VTODO
 - `src/workinbox/templates/deadlines.html`: WIB 締切登録支援 UI
+- `src/workinbox/templates/deadline_source_message.html`: VTODOから開く元メール案内とBridge自動接続
 
 ## 履歴
 

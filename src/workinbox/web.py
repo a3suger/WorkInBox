@@ -269,15 +269,44 @@ def create_app(
         }
 
     @app.get("/deadlines.ics", response_class=PlainTextResponse)
-    def deadline_calendar() -> PlainTextResponse:
+    def deadline_calendar(request: Request) -> PlainTextResponse:
         try:
-            content = deadline_calendar_service.render()
+            content = deadline_calendar_service.render(
+                source_base_url=str(request.base_url),
+            )
         except (RuntimeError, ValueError, sqlite3.Error) as exc:
             return PlainTextResponse(str(exc), status_code=500)
         return PlainTextResponse(
             content,
             media_type="text/calendar; charset=utf-8",
             headers={"Content-Disposition": 'inline; filename="deadlines.ics"'},
+        )
+
+    @app.get("/deadlines/{deadline_id}/source-message")
+    def deadline_source_message(request: Request, deadline_id: int):
+        deadline = deadline_data_service.deadline(deadline_id)
+        if deadline is None:
+            return _TEMPLATES.TemplateResponse(
+                request=request,
+                name="deadline_source_message.html",
+                context={
+                    "deadline": None,
+                    "email": None,
+                    **common_view_flags(deadlines=True),
+                },
+                status_code=404,
+            )
+        email = deadline_data_service.database.email_message(
+            deadline.source_message_id,
+        )
+        return _TEMPLATES.TemplateResponse(
+            request=request,
+            name="deadline_source_message.html",
+            context={
+                "deadline": deadline,
+                "email": email,
+                **common_view_flags(deadlines=True),
+            },
         )
 
     @app.post("/normal-workflow/complete")
