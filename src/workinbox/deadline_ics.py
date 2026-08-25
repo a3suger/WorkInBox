@@ -50,14 +50,18 @@ class DeadlineIcsService:
             f"X-WORKINBOX-DEADLINE-ID:{deadline.id}",
             f"X-WORKINBOX-MESSAGE-ID:{_escape_text(deadline.source_message_id)}",
             f"X-WORKINBOX-CREATED-BY:{deadline.created_by.value}",
+            f"URL:mid:{_mid_value(deadline.source_message_id)}",
         ]
+        description_parts: list[str] = []
+        if deadline.description:
+            description_parts.append(deadline.description)
         if source_base_url:
             base_url = source_base_url.rstrip("/")
-            lines.append(
-                f"URL:{base_url}/deadlines/{deadline.id}/source-message"
+            description_parts.append(
+                f"元メール情報: {base_url}/deadlines/{deadline.id}/source-message"
             )
-        if deadline.description:
-            lines.append(f"DESCRIPTION:{_escape_text(deadline.description)}")
+        if description_parts:
+            lines.append(f"DESCRIPTION:{_escape_text(chr(10).join(description_parts))}")
         lines.append("END:VTODO")
         return lines
 
@@ -108,3 +112,10 @@ def _escape_text(value: str) -> str:
         .replace(";", "\\;")
         .replace(",", "\\,")
     )
+
+
+def _mid_value(message_id: str) -> str:
+    value = message_id.strip()
+    if value.startswith("<") and value.endswith(">"):
+        return value[1:-1]
+    return value

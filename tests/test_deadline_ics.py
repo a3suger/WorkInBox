@@ -82,11 +82,20 @@ class DeadlineIcsTest(unittest.TestCase):
             self.assertIn("DESCRIPTION:確認\\;して返信", content)
             self.assertIn("X-WORKINBOX-CREATED-BY:user", content)
             self.assertIn(
-                f"URL:http://localhost:8000/deadlines/{date_deadline.id}/source-message",
+                "URL:mid:date@example",
                 content,
             )
             self.assertIn(
-                f"URL:http://localhost:8000/deadlines/{time_deadline.id}/source-message",
+                "URL:mid:time@example",
+                content,
+            )
+            self.assertIn(
+                f"元メール情報: http://localhost:8000/deadlines/{date_deadline.id}/source-message",
+                content,
+            )
+            self.assertIn(
+                "DESCRIPTION:確認\\;して返信\\n元メール情報: "
+                f"http://localhost:8000/deadlines/{time_deadline.id}/source-message",
                 content,
             )
             self.assertTrue(content.endswith("END:VCALENDAR\r\n"))

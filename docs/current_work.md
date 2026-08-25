@@ -67,9 +67,9 @@ daf237a Use progress runtime for legacy web entry point
 
 ### 0-8. VTODOから締切の元メールを開く導線
 
-- 実運用で最も困っている締切確認を優先し、VTODOへ締切IDベースの元メールURLを追加した。
-- Thunderbird内でURLを開くと既存BridgeがMessage-IDを自動送信し、追加クリックなしで元メールを表示する。
-- 外部ブラウザまたはBridge未接続時は、締切・件名・差出人・受信日時をWIBページに表示する。
+- 実運用で最も困っている締切確認を優先し、VTODOへThunderbird標準の `mid:` 元メールURLを追加した。
+- Thunderbirdのカレンダー／ToDo画面で主URLを開くと、Message-IDから追加クリックなしで元メールを直接表示する。
+- 説明欄には締切IDベースのWIB案内URLも追加し、外部ブラウザまたはBridge未接続時は締切・件名・差出人・受信日時をWIBページに表示する。
 - Extensionバージョンを `0.2.11` に更新した。
 - ローカル自動テストは `131 tests OK`。
 - 次にThunderbird 153実機でVTODOのURL表示場所・リンク動作・元メール自動表示を確認する。

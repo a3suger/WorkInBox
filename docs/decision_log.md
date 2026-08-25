@@ -167,7 +167,7 @@ Decision 009 の「候補0件の場合だけ許可する」という制限を、
 
 ### Decision 015: VTODOから締切の元メールへ1クリックで戻る
 
-- WIBが生成する各VTODOに、Message-IDではなく締切IDを含むWIBの元メール案内URLを付ける。
-- Thunderbird内でURLを開いた場合は、既存のThunderbird BridgeへMessage-IDを自動で渡して元メールを表示する。
-- 外部ブラウザで開いた場合やBridge連携に失敗した場合は、締切・件名・差出人・受信日時の最低限の情報をWIBで表示する。
+- WIBが生成する各VTODOの主URLに、Thunderbirdが標準対応する `mid:` URIを付け、Message-IDから元メールを直接表示する。
+- VTODOの説明欄には、締切IDを含むWIBの元メール案内URLも付ける。
+- 案内URLを外部ブラウザで開いた場合やBridge連携に失敗した場合は、締切・件名・差出人・受信日時の最低限の情報をWIBで表示する。
 - SQLiteを締切の正本、VTODOを読み取り専用の派生表現とする現行設計は変更しない。

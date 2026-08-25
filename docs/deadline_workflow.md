@@ -93,7 +93,7 @@ AND 通常ワークフローなし
 
 元メールは INBOX にない可能性があるため、Thunderbird Bridge 側では `docs/design.md` の Message-ID 検索規則に従う。
 
-各VTODOには `/deadlines/{deadline_id}/source-message` のWIB URLを付ける。Thunderbird内でこのURLを開くと、WIBページが既存Bridgeへ `deadline.source_message_id` を自動で渡して元メールを表示する。外部ブラウザまたはBridge未接続時は、同じページに締切・件名・差出人・受信日時を表示する。
+各VTODOの主URLには `mid:{Message-ID}` を付ける。Thunderbirdのカレンダー／ToDo画面は `mid:` を内部処理し、元メールを直接表示する。説明欄には `/deadlines/{deadline_id}/source-message` のWIB案内URLも付け、外部ブラウザまたはBridge未接続時は締切・件名・差出人・受信日時を表示する。
 
 概念上の検索順:
 
