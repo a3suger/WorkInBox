@@ -140,6 +140,46 @@ class DeadlineSupportTest(unittest.TestCase):
                 "2026-09-29",
             )
 
+    def test_registered_deadline_can_be_revised(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            database.initialize()
+            self.seed_message(database)
+            service = DeadlineService(self.make_config(path), database=database)
+
+            candidate = service.add_candidate(
+                "<mail@example>",
+                "提出締切",
+                due_at="2026-08-20",
+            )
+            original = service.register_candidate(
+                candidate.id,
+                timezone_name="Asia/Tokyo",
+                description="元のメモ",
+            )
+
+            revised = service.revise_deadline(
+                original.id,
+                title="最終提出締切",
+                due_at="2026-09-29 火曜日",
+                description="更新したメモ",
+            )
+
+            self.assertEqual(revised.title, "最終提出締切")
+            self.assertEqual(revised.due_at, "2026-09-29")
+            self.assertEqual(revised.description, "更新したメモ")
+            self.assertEqual(revised.timezone, "Asia/Tokyo")
+            self.assertNotEqual(revised.updated_at, original.updated_at)
+
+            with self.assertRaises(ValueError):
+                service.revise_deadline(
+                    9999,
+                    title="存在しない締切",
+                    due_at="2026-09-30",
+                    description=None,
+                )
+
     def test_candidate_without_due_at_cannot_be_registered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
