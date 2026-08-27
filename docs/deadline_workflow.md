@@ -93,7 +93,7 @@ AND 通常ワークフローなし
 
 元メールは INBOX にない可能性があるため、Thunderbird Bridge 側では `docs/design.md` の Message-ID 検索規則に従う。
 
-各VTODOの主URLには `mid:{Message-ID}` を付ける。Thunderbirdのカレンダー／ToDo画面は `mid:` を内部処理し、元メールを直接表示する。説明欄には `/deadlines/{deadline_id}/source-message` のWIB案内URLも付け、外部ブラウザまたはBridge未接続時は締切・件名・差出人・受信日時を表示する。
+各VTODOの主URLには `mid:{Message-ID}` を付ける。Thunderbirdのカレンダー／ToDo画面は `mid:` を内部処理し、元メールを直接表示する。説明欄には `/deadlines/{deadline_id}` の「締切の確認・修正」URLも付け、WIB側で正式締切のタイトル・期限・メモを修正できるようにする。SQLiteを正本として保存した修正内容は、次に `.ics` / VTODOを取得した際に反映される。従来の `/deadlines/{deadline_id}/source-message` は既存VTODOとの互換用に維持する。
 
 概念上の検索順:
 
@@ -111,6 +111,7 @@ AND 通常ワークフローなし
 - `src/workinbox/deadline_workflow.py`: 候補判断後の完了判定と共通終了遷移
 - `src/workinbox/deadline_ics.py`: read-only `.ics` / VTODO
 - `src/workinbox/templates/deadlines.html`: WIB 締切登録支援 UI
+- `src/workinbox/templates/deadline_detail.html`: 正式締切の確認・修正 UI
 - `src/workinbox/templates/deadline_source_message.html`: VTODOから開く元メール案内とBridge自動接続
 
 ## 履歴
