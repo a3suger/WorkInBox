@@ -58,7 +58,7 @@ class DeadlineIcsService:
         if source_base_url:
             base_url = source_base_url.rstrip("/")
             description_parts.append(
-                f"元メール情報: {base_url}/deadlines/{deadline.id}/source-message"
+                f"締切の確認・修正: {base_url}/deadlines/{deadline.id}"
             )
         if description_parts:
             lines.append(f"DESCRIPTION:{_escape_text(chr(10).join(description_parts))}")
