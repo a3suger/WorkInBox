@@ -40,9 +40,11 @@ Extension は Thunderbird 内の IMAP アカウントから host / port / userna
 
 WIB の元メール参照は Message-ID を正式な識別子とする。
 
-WIB Web 側の `data-wib-open-message-id` から Extension の `workinbox-open-message` へ Message-ID を渡し、Thunderbird 側で対象メールを検索してタブで開く。
+WIB Web の元メール導線は、Message-IDの前後の`< >`を除いた`mid:` URIを主導線とする。Thunderbird内でクリックした場合はThunderbird標準のMessage-ID処理で直接開くため、Extensionによる全メール検索を通常操作には使わない。
 
-通常の active メールは INBOX を基本対象とする。Record / 締切の元メールは `docs/design.md` の検索原則に従い、INBOX、次に元メール送信年月に対応する Archive を対象とする。
+Thunderbird内では、`mid:`で見つからない場合の予備操作として「見つからない場合は検索」も表示する。このボタンは従来どおり`data-wib-open-message-id`からExtensionの`workinbox-open-message`へMessage-IDを渡し、対象メールを検索してタブで開く。検索失敗時の理由はボタン上に表示する。Extensionが存在しない通常ブラウザでは予備ボタンを表示せず、OSに登録された`mid:`の処理へ委ねる。
+
+予備検索では、通常の active メールは INBOX を基本対象とする。Record / 締切の元メールは `docs/design.md` の検索原則に従い、INBOX、次に元メール送信年月に対応する Archive を対象とする。
 
 ---
 

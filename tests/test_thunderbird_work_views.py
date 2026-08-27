@@ -62,6 +62,32 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn('"[data-wib-auto-open-message-id]"', bridge)
         self.assertIn("void handleOpenMessage(autoOpenMessageButton)", bridge)
 
+    def test_source_message_links_use_mid_with_search_fallback(self) -> None:
+        message_link = (
+            ROOT / "src" / "workinbox" / "templates" / "_message_link.html"
+        ).read_text(encoding="utf-8")
+        bridge = (EXTENSION / "workinbox_bridge.js").read_text(encoding="utf-8")
+
+        self.assertIn('href="mid:{{ message_id | mid_value }}"', message_link)
+        self.assertIn('data-wib-open-message-id="{{ message_id }}"', message_link)
+        self.assertIn("見つからない場合は検索", message_link)
+        self.assertIn('querySelectorAll(".wib-message-search-fallback")', bridge)
+        self.assertIn("button.hidden = false", bridge)
+
+        for template_name in (
+            "deadlines.html",
+            "schedules.html",
+            "emails.html",
+            "pending.html",
+            "deadline_detail.html",
+            "deadline_source_message.html",
+            "records.html",
+        ):
+            template = (
+                ROOT / "src" / "workinbox" / "templates" / template_name
+            ).read_text(encoding="utf-8")
+            self.assertIn("source_message_link(", template, template_name)
+
     def test_manifest_registers_mail_views_experiment(self) -> None:
         manifest = json.loads((EXTENSION / "manifest.json").read_text(encoding="utf-8"))
         experiment = manifest["experiment_apis"]["mailViews"]

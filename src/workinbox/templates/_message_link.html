@@ -1,0 +1,15 @@
+{% macro source_message_link(message_id, label="Thunderbirdで元メールを開く", auto_open=false, primary=false) -%}
+<a
+  class="button-link{% if primary %} primary{% endif %}"
+  href="mid:{{ message_id | mid_value }}"
+  title="Thunderbird標準のMessage-IDリンクで元メールを開く"
+>{{ label }}</a>
+<button
+  type="button"
+  class="wib-message-search-fallback"
+  data-wib-open-message-id="{{ message_id }}"
+  {% if auto_open %}data-wib-auto-open-message-id="{{ message_id }}"{% endif %}
+  title="midリンクで開けない場合にThunderbird内を検索する"
+  hidden
+>見つからない場合は検索</button>
+{%- endmacro %}

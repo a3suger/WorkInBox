@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_message_link.html" import source_message_link %}
 
 {% block title %}{% if active_view %}Active{% else %}Inactive{% endif %} - WorkInBox{% endblock %}
 
@@ -138,11 +139,7 @@
         {% endif %}
       </td>
       <td>
-        <button
-          type="button"
-          data-wib-open-message-id="{{ email.message_id }}"
-          title="Thunderbird で元メールを開く"
-        >Thunderbirdで開く</button>
+        {{ source_message_link(email.message_id, label="Thunderbirdで開く") }}
       </td>
       <td>{{ email.status_changed_at or "-" }}</td>
     </tr>

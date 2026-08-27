@@ -4,6 +4,10 @@ function setButtonStatus(button, text) {
   button.textContent = text;
 }
 
+document.querySelectorAll(".wib-message-search-fallback").forEach((button) => {
+  button.hidden = false;
+});
+
 async function loadImapTarget() {
   // In a Thunderbird content script, a root-relative fetch can be resolved
   // against the moz-extension origin. Build the URL explicitly from the WIB

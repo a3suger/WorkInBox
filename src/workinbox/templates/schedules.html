@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_message_link.html" import source_message_link %}
 
 {% block title %}スケジュール調整 - WorkInBox{% endblock %}
 
@@ -39,11 +40,7 @@
     </div>
 
     <div style="margin: 10px 0;">
-      <button
-        type="button"
-        data-wib-open-message-id="{{ email.message_id }}"
-        title="Thunderbird で元メールを開く"
-      >Thunderbirdで元メールを開く</button>
+      {{ source_message_link(email.message_id) }}
     </div>
 
     <details class="message-preview">

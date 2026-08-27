@@ -40,7 +40,7 @@
       margin-bottom: 18px;
     }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    button {
+    button, .button-link {
       border: 1px solid #cbd5e1;
       background: white;
       border-radius: 7px;
@@ -48,7 +48,8 @@
       cursor: pointer;
       font-size: 0.95rem;
     }
-    button.primary { background: #1d4ed8; border-color: #1d4ed8; color: white; }
+    .button-link { color: inherit; display: inline-block; text-decoration: none; }
+    button.primary, .button-link.primary { background: #1d4ed8; border-color: #1d4ed8; color: white; }
     button:disabled { cursor: not-allowed; opacity: 0.55; }
     table { width: 100%; border-collapse: collapse; background: white; }
     th, td {

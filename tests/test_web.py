@@ -11,10 +11,14 @@ from workinbox.application import TrackingQueryService
 from workinbox.config import AppConfig, DatabaseConfig, ImapConfig
 from workinbox.database import EmailDatabase
 from workinbox.models import EmailMessage, TrackingStatus
-from workinbox.web import _TEMPLATES, create_app
+from workinbox.web import _TEMPLATES, _mid_value, create_app
 
 
 class WebFoundationTest(unittest.TestCase):
+    def test_mid_value_removes_only_surrounding_angle_brackets(self) -> None:
+        self.assertEqual(_mid_value(" <message@example.com> "), "message@example.com")
+        self.assertEqual(_mid_value("message@example.com"), "message@example.com")
+
     def _config(self, path: Path) -> AppConfig:
         return AppConfig(
             ImapConfig(

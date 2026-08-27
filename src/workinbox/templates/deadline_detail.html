@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_message_link.html" import source_message_link %}
 
 {% block title %}締切の確認・修正 - WorkInBox{% endblock %}
 
@@ -50,11 +51,7 @@
     </label>
     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
       <button type="submit" class="primary">修正内容を保存</button>
-      <button
-        type="button"
-        data-wib-open-message-id="{{ deadline.source_message_id }}"
-        title="Thunderbirdで元メールを開く"
-      >Thunderbirdで元メールを開く</button>
+      {{ source_message_link(deadline.source_message_id) }}
       <a href="/deadlines">締切登録支援へ戻る</a>
     </div>
   </form>

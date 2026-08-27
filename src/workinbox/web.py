@@ -33,6 +33,16 @@ from .work_tags import WORK_TAGS
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).with_name("templates")))
 
 
+def _mid_value(message_id: str) -> str:
+    value = message_id.strip()
+    if value.startswith("<") and value.endswith(">"):
+        return value[1:-1]
+    return value
+
+
+_TEMPLATES.env.filters["mid_value"] = _mid_value
+
+
 def create_app(
     config: AppConfig,
     *,
