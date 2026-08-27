@@ -173,6 +173,32 @@ def create_app(
             },
         )
 
+    def render_deadline_detail(
+        request: Request,
+        deadline_id: int,
+        *,
+        action_message: str | None = None,
+        action_failure: str | None = None,
+    ):
+        deadline = deadline_data_service.deadline(deadline_id)
+        email = None
+        if deadline is not None:
+            email = deadline_data_service.database.email_message(
+                deadline.source_message_id,
+            )
+        return _TEMPLATES.TemplateResponse(
+            request=request,
+            name="deadline_detail.html",
+            context={
+                "deadline": deadline,
+                "email": email,
+                "action_message": action_message,
+                "action_failure": action_failure,
+                **common_view_flags(deadlines=True),
+            },
+            status_code=404 if deadline is None else 200,
+        )
+
     def render_schedules(
         request: Request,
         *,
@@ -307,6 +333,32 @@ def create_app(
                 "email": email,
                 **common_view_flags(deadlines=True),
             },
+        )
+
+    @app.get("/deadlines/{deadline_id}")
+    def deadline_detail(request: Request, deadline_id: int):
+        return render_deadline_detail(request, deadline_id)
+
+    @app.post("/deadlines/{deadline_id}")
+    async def revise_registered_deadline(request: Request, deadline_id: int):
+        try:
+            form = await read_urlencoded_form(request)
+            deadline_data_service.revise_deadline(
+                deadline_id,
+                title=form.get("title", ""),
+                due_at=form.get("due_at", ""),
+                description=form.get("description", ""),
+            )
+        except (OSError, RuntimeError, ValueError, sqlite3.Error, UnicodeDecodeError) as exc:
+            return render_deadline_detail(
+                request,
+                deadline_id,
+                action_failure=str(exc),
+            )
+        return render_deadline_detail(
+            request,
+            deadline_id,
+            action_message="締切を更新しました。ThunderbirdのToDoにも次回の再読み込みで反映されます。",
         )
 
     @app.post("/normal-workflow/complete")
