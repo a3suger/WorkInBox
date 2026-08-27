@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}締切の確認・修正 - WorkInBox{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2>締切の確認・修正</h2>
+    <div class="muted">WIBで保存した内容がThunderbirdのToDoへ反映されます。</div>
+  </div>
+</div>
+
+{% if action_message %}
+<div class="notice">{{ action_message }}</div>
+{% endif %}
+
+{% if action_failure %}
+<div class="notice error">
+  <strong>締切の更新に失敗しました。</strong><br>
+  {{ action_failure }}
+</div>
+{% endif %}
+
+{% if not deadline %}
+<div class="notice error">
+  指定された締切は見つかりませんでした。ThunderbirdのToDoを再読み込みしてから、もう一度お試しください。
+</div>
+{% else %}
+<section class="deadline-card">
+  {% if email %}
+  <h3>{{ email.subject or "(件名なし)" }}</h3>
+  <div class="deadline-meta muted">
+    <span>差出人: {{ email.sender }}</span>
+    <span>受信日時: {{ email.received_at or "-" }}</span>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/deadlines/{{ deadline.id }}" style="display: grid; gap: 10px; margin-top: 16px; max-width: 760px;">
+    <label>
+      タイトル
+      <input type="text" name="title" value="{{ deadline.title }}" required style="width: 100%; box-sizing: border-box; padding: 7px 8px;">
+    </label>
+    <label>
+      締切日時
+      <input type="text" name="due_at" value="{{ deadline.due_at }}" required placeholder="YYYY-MM-DD または ISO 8601" style="width: 100%; box-sizing: border-box; padding: 7px 8px;">
+    </label>
+    <label>
+      メモ
+      <textarea name="description" rows="4" style="width: 100%; box-sizing: border-box; padding: 7px 8px;">{{ deadline.description or "" }}</textarea>
+    </label>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <button type="submit" class="primary">修正内容を保存</button>
+      <button
+        type="button"
+        data-wib-open-message-id="{{ deadline.source_message_id }}"
+        title="Thunderbirdで元メールを開く"
+      >Thunderbirdで元メールを開く</button>
+      <a href="/deadlines">締切登録支援へ戻る</a>
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
