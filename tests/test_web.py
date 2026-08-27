@@ -60,7 +60,9 @@ class WebFoundationTest(unittest.TestCase):
     def test_web_app_has_expected_routes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             app = create_app(self._config(Path(directory) / "workinbox.db"))
-            routes = {route.path: set(route.methods or ()) for route in app.routes}
+            routes: dict[str, set[str]] = {}
+            for route in app.routes:
+                routes.setdefault(route.path, set()).update(route.methods or ())
 
         self.assertIn("GET", routes["/"])
         self.assertIn("GET", routes["/active"])
@@ -72,6 +74,8 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/api/thunderbird/imap-target"])
         self.assertIn("GET", routes["/deadlines.ics"])
         self.assertIn("GET", routes["/deadlines/{deadline_id}/source-message"])
+        self.assertIn("GET", routes["/deadlines/{deadline_id}"])
+        self.assertIn("POST", routes["/deadlines/{deadline_id}"])
         self.assertIn("POST", routes["/normal-workflow/complete"])
         self.assertIn("POST", routes["/normal-workflow/record"])
         self.assertIn("POST", routes["/deadlines/add"])
@@ -103,6 +107,7 @@ class WebFoundationTest(unittest.TestCase):
         for name in (
             "base.html", "dashboard.html", "emails.html", "pending.html", "deadlines.html",
             "schedules.html", "records.html", "deadline_source_message.html",
+            "deadline_detail.html",
         ):
             self.assertIsNotNone(_TEMPLATES.get_template(name))
 
@@ -188,6 +193,60 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("Source subject", body)
         self.assertIn("sender@example.com", body)
         self.assertIn('data-wib-auto-open-message-id="&lt;source@example&gt;"', body)
+
+    def test_deadline_detail_page_contains_edit_form_and_source_mail_link(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self._config(path)
+            database = EmailDatabase(path)
+            database.initialize()
+            database.synchronize([
+                EmailMessage(
+                    "<source@example>",
+                    "sender@example.com",
+                    "me@example.com",
+                    "Source subject",
+                    "2026-08-25T09:00:00+09:00",
+                    "Body",
+                )
+            ])
+            service = DeadlineService(config, database=database)
+            candidate = service.add_candidate(
+                "<source@example>",
+                "回答期限",
+                due_at="2026-08-30",
+            )
+            deadline = service.register_candidate(
+                candidate.id,
+                description="返信内容を確認",
+            )
+            app = create_app(config, deadline_service=service)
+            route = next(
+                route
+                for route in app.routes
+                if route.path == "/deadlines/{deadline_id}" and "GET" in route.methods
+            )
+            request = Request({
+                "type": "http",
+                "method": "GET",
+                "scheme": "http",
+                "server": ("localhost", 8000),
+                "path": f"/deadlines/{deadline.id}",
+                "root_path": "",
+                "query_string": b"",
+                "headers": [],
+            })
+
+            response = route.endpoint(request, deadline.id)
+            body = response.body.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("締切の確認・修正", body)
+        self.assertIn(f'action="/deadlines/{deadline.id}"', body)
+        self.assertIn('name="title" value="回答期限"', body)
+        self.assertIn('name="due_at" value="2026-08-30"', body)
+        self.assertIn("返信内容を確認", body)
+        self.assertIn('data-wib-open-message-id="&lt;source@example&gt;"', body)
 
     def test_schedule_template_contains_support_request_bridge(self) -> None:
         source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "schedules.html")
