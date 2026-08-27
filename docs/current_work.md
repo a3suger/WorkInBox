@@ -2,15 +2,15 @@
 
 ## 状態
 
-作業中断（#26 実装済み・実機確認待ち）
+作業中（#26 完了、次は #27）
 
 ## 現在の対象
 
 - 親 Issue: #5 `docs/design.md 追従実装`
 - #6〜#16 の実装 Issue: すべて Closed
 - 残っている実機確認: #18〜#22・#24・#25
-- 追加実装Issue: #26〜#29
-- 現在位置: #26 の実装・自動テスト・GitHub Actionsまで完了。次回はdesktopとThunderbirdで実機確認する
+- 追加実装Issue: #26 Closed、#27〜#29 Open
+- 現在位置: #26 の実装と実機確認が完了。次は #27 の設計・実装へ進む
 
 ## GitHub / git の現在状態
 
@@ -20,10 +20,11 @@
 - 実装 Issue #6〜#16: Closed
 - 実機確認 Issue #17・#23: Closed
 - 実機確認 Issue #18〜#22・#24・#25: Open
-- 追加実装 Issue #26〜#29: Open
+- 追加実装 Issue #26: Closed
+- 追加実装 Issue #27〜#29: Open
 - #16 `Thunderbird Bridge / Quick Filter を docs/design.md に合わせる`: Closed
 - 2026-08-26 に実運用で見つかった改善を #26〜#29 として作成した。
-- #26 は Open。実装済みだがThunderbird実機確認が残っている。
+- #26 は実装・自動テスト・実機確認を完了しClosed。
 - 最新確認済みActionsは run `33034122741`（tests #183）success、対象commitは `ffed629`。
 
 ### ローカル git
@@ -31,6 +32,8 @@
 2026-08-27 の #26 実装は、このCodexタスクで `.git` が読み取り専用だったためGitHubのWeb編集画面から `main` へ直接反映した。GitHub上の実装commitは `910a9bf`〜`ffed629`。最終Actions run `33034122741`（tests #183）はsuccess。ローカル自動テストは `134 tests OK`。
 
 note側 `/Users/akira/PycharmProjects/WorkInBox` のローカルHEADと`origin/main`参照は `70d3754` のままで、#26と同内容の変更10ファイルが未commit状態で残っている。この状態では直ちに `git pull` しない。再開時にGitHub `main` を正として、安全にローカルを同期する。desktop側がcleanなら通常の `git pull` でよい。
+
+2026-08-27 再開時、note側は退避stashとGitHub最新版の内容が同一であることを確認し、stashを削除した。ローカル`main`と`origin/main`は`a0fc065`で一致し、作業ツリーはclean。desktop側も`70d3754..a0fc065`をpullしてWIBを再起動済み。
 
 2026-08-26 作業再開時、ローカル `main` と `origin/main` は `e8daea8` で一致し、未 push commit、未 commit 変更はなかった。
 GitHub Actions run `32859425927`（tests #172）は `e8daea8` に対してsuccess。
@@ -89,7 +92,10 @@ daf237a Use progress runtime for legacy web entry point
 - ローカル自動テストは `134 tests OK`。
 - GitHub Web編集の都合で、実装は `910a9bf`〜`ffed629` の10commitに分かれている。
 - 最終GitHub Actions run `33034122741`（tests #183）はsuccess。
-- Thunderbird実機でのリンク表示、編集保存、VTODO再反映、`mid:` リンク維持は未確認のため #26 はOpenのまま。
+- Thunderbird実機で、ToDoの「締切の確認・修正」リンクがnoteの外部ブラウザでWIB画面を開くことを確認した。
+- WIBでの保存とToDoへの再反映を確認した。
+- 同じToDoの`mid:`関連リンクから元メールが引き続き素早く開くことを確認した。
+- #26 の完了条件を満たしたためClosed。
 
 ### 0-8. VTODOから締切の元メールを開く導線
 
@@ -227,16 +233,15 @@ Thunderbird 実機確認は #25 に分離済み。
 
 実装 Issue #6〜#16 はすべて完了している。
 
-実機確認 #17・#23 は完了しClosed。実機確認 #18〜#22・#24・#25と、追加実装 #26〜#29が残っている。
+実機確認 #17・#23 と追加実装 #26 は完了しClosed。実機確認 #18〜#22・#24・#25と、追加実装 #27〜#29が残っている。
 
 ### 追加実装Issue
 
-1. #26 `VTODOからWIB締切詳細を開いて締切を編集できるようにする`
-2. #27 `WIB内の元メール導線をmidリンクで高速化する`
-3. #28 `スケジュール調整支援に「スケジュール調整は不要」を追加する`
-4. #29 `Activeメール一覧をタグで絞り込めるようにする`
+1. #27 `WIB内の元メール導線をmidリンクで高速化する`
+2. #28 `スケジュール調整支援に「スケジュール調整は不要」を追加する`
+3. #29 `Activeメール一覧をタグで絞り込めるようにする`
 
-実運用で締切確認が最も困っているため、次回は #26 の実機確認を先に行う。確認後は #27 を元メール導線の共通化として続けて検討し、#28・#29はその後に進める。
+#26 は完了。次は #27 を元メール導線の共通化として検討し、#28・#29はその後に進める。
 
 ### 実機確認の進め方
 
@@ -270,17 +275,15 @@ Thunderbird 実機確認は #25 に分離済み。
 - 追従 Issue がすべて Close
 - `docs/design.md` と詳細設計・実装の既知差分が解消
 
-現時点で #6〜#17・#23 はCloseしているが、#18〜#22・#24〜#29がOpenのため、
+現時点で #6〜#17・#23・#26 はCloseしているが、#18〜#22・#24・#25・#27〜#29がOpenのため、
 #5 は Open のまま維持されている。
 
 実機確認の結果、設計・実装上の修正が必要になった場合は新しい実装 Issue を作成し、
 修正・自動テスト・Actions を完了してから再度実機確認する。
 
-## 中断理由
+## 現在の作業状況
 
-#26 の実装・自動テスト・GitHub Actionsが完了し、利用者の指示により実機確認前に作業を一旦中断する。
-
-#26 の実機確認では、desktopで最新`main`を取得してWIBを再起動し、ThunderbirdのToDo詳細にある「締切の確認・修正」リンクからWIB画面を開く。タイトル・期限・メモを変更して保存後、ThunderbirdのToDoを再読み込みし、変更反映と既存の`mid:`関連リンクによる元メール表示を確認する。Extensionは変更していないため再読み込み不要。
+#26 は実装・自動テスト・Actions・実機確認を完了した。ToDoのWIBリンクはnoteの外部ブラウザで開く現行動作を完了条件として扱う。Thunderbird内部表示は可能性があるが、VTODO内の通常HTTPリンクをExtensionで確実に横取りする追加設計が必要なため、#26には含めない。
 
 #22 は通常終了の主要遷移を確認済み。次回は、通常タグがないメールで終了ボタンが何も変更しないことと、Record保存終了の3項目を確認する。#24・#25および#18〜#21の実運用確認も残っている。
 
@@ -290,22 +293,14 @@ Thunderbird 実機確認は #25 に分離済み。
 
 VTODOの `mid:` 関連リンクで高速な元メール表示を確認できたため、WIB内の「Thunderbirdで開く」導線にも `mid:` を展開する案を次回検討する。Thunderbird内でWIBを表示している場合は `mid:` で直接開き、外部ブラウザ等では現在のExtension経由をフォールバックとして残す構成が候補。
 
-VTODOは読み取り専用のためThunderbird上で締切を修正できない。ToDo詳細から該当するWIBの締切詳細ページへ移動し、WIB側でタイトル・期限・メモを修正して、再生成されたVTODOへ反映できる導線を追加する案を次回検討する。SQLiteを正本とする現行設計は維持し、Thunderbirdからの双方向編集は行わない。元メールを直接開く `mid:` の「関連リンク」と、WIB締切詳細を開くリンクの表示場所を区別する必要がある。
-
 新しい設計判断待ちによる中断ではない。
 
-## 再開時に最初に行うこと
+## 次に行うこと
 
-1. `docs/development_working_agreement.md` を読む。
-2. この `docs/current_work.md` を読む。
-3. `git status -sb` でローカル `main` と `origin/main` の差を確認する。
-4. ローカル `main` と `origin/main` が一致し、未 push commit がないことを確認する。
-5. GitHub #5、実機確認 #18〜#22・#24・#25、追加実装 #26〜#29 の状態を確認する。
-6. 中断時の最新commitまでのGitHub Actions結果を確認する。
-7. note側ローカルにはGitHubと同内容の未commit差分があるため、通常の`git pull`を実行せず、GitHub `main`を正としてローカル状態を安全に同期する。
-8. desktop側がcleanなら`git pull`し、WIBを再起動する。Thunderbird Extensionの再読み込みは不要。
-9. #26 の実機確認として、VTODOの「締切の確認・修正」リンク、WIBでの保存、ToDo再反映、既存`mid:`リンクを確認する。
-10. #26 の完了条件を満たしたらIssueをCloseし、#27へ進む。
+1. #26 をGitHubでCloseする。
+2. `docs/current_work.md` の完了記録をGitHubへ反映し、Actionsを確認する。
+3. #27 の設計・完了条件と現行のThunderbird Bridge実装を確認する。
+4. 新しい設計判断が不要なら、WIB内の元メール導線を`mid:`で高速化する実装へ進む。
 
 ## 設計判断待ち
 
