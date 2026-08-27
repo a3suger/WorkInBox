@@ -90,12 +90,12 @@ class DeadlineIcsTest(unittest.TestCase):
                 content,
             )
             self.assertIn(
-                f"元メール情報: http://localhost:8000/deadlines/{date_deadline.id}/source-message",
+                f"締切の確認・修正: http://localhost:8000/deadlines/{date_deadline.id}",
                 content,
             )
             self.assertIn(
-                "DESCRIPTION:確認\\;して返信\\n元メール情報: "
-                f"http://localhost:8000/deadlines/{time_deadline.id}/source-message",
+                "DESCRIPTION:確認\\;して返信\\n締切の確認・修正: "
+                f"http://localhost:8000/deadlines/{time_deadline.id}",
                 content,
             )
             self.assertTrue(content.endswith("END:VCALENDAR\r\n"))
@@ -117,6 +117,36 @@ class DeadlineIcsTest(unittest.TestCase):
 
             content = DeadlineIcsService(service).render()
             self.assertIn("DUE:20260822T000000Z", content)
+
+    def test_revised_deadline_is_reflected_in_vtodo(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            database.initialize()
+            self.seed_message(database, "<revised@example>")
+            service = DeadlineService(self.make_config(path), database=database)
+
+            candidate = service.add_candidate(
+                "<revised@example>",
+                "元の締切",
+                due_at="2026-08-22",
+            )
+            deadline = service.register_candidate(candidate.id)
+            service.revise_deadline(
+                deadline.id,
+                title="更新後の締切",
+                due_at="2026-08-31",
+                description="更新後のメモ",
+            )
+
+            content = DeadlineIcsService(service).render(
+                source_base_url="http://localhost:8000/",
+            )
+
+            self.assertIn("SUMMARY:更新後の締切", content)
+            self.assertIn("DUE;VALUE=DATE:20260831", content)
+            self.assertIn("DESCRIPTION:更新後のメモ\\n締切の確認・修正: ", content)
+            self.assertNotIn("SUMMARY:元の締切", content)
 
     def test_legacy_registered_weekday_value_is_rendered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
