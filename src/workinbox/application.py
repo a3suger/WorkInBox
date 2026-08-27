@@ -443,6 +443,27 @@ class DeadlineService:
         self.database.initialize()
         return self.database.deadline(deadline_id)
 
+    def revise_deadline(
+        self,
+        deadline_id: int,
+        *,
+        title: str,
+        due_at: str,
+        description: str | None,
+    ) -> Deadline:
+        self.database.initialize()
+        normalized_title = title.strip()
+        if not normalized_title:
+            raise ValueError("deadline title must not be empty")
+        normalized_due_at = normalize_due_at(due_at)
+        normalized_description = description.strip() if description else None
+        return self.database.update_deadline(
+            deadline_id,
+            title=normalized_title,
+            due_at=normalized_due_at,
+            description=normalized_description,
+        )
+
     def add_candidate(
         self,
         message_id: str,
