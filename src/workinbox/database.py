@@ -567,6 +567,31 @@ class EmailDatabase:
             ).fetchone()
         return self._deadline_from_row(row)
 
+    def update_deadline(
+        self,
+        deadline_id: int,
+        *,
+        title: str,
+        due_at: str,
+        description: str | None,
+    ) -> Deadline:
+        now = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE deadlines
+                SET title = ?, due_at = ?, description = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (title, due_at, description, now, deadline_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("deadline does not exist")
+        deadline = self.deadline(deadline_id)
+        if deadline is None:
+            raise RuntimeError("failed to read updated deadline")
+        return deadline
+
     def deadlines(self, source_message_id: str) -> list[Deadline]:
         with sqlite3.connect(self.path) as connection:
             rows = connection.execute(
