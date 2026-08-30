@@ -118,6 +118,12 @@ WIB と Thunderbird Extension のブリッジ設計。
 
 Message-ID で対象メールを解決する共通基盤を扱う。
 
+### [extension_dashboard_proposal.md](extension_dashboard_proposal.md)
+
+WIBサーバーへ接続できない場合もThunderbird上で通常メール作業を継続するための、Extension内ダッシュボード検討メモ。
+
+Thunderbird由来の現在値、WIBの接続状態、オフライン時に利用可能な操作、APIとキャッシュの候補仕様を整理する。確定済みの正式設計ではなく、実装前に `design.md` と `thunderbird_bridge.md` へ統合する。
+
 ### [design_notes_tags_and_external_intake.md](design_notes_tags_and_external_intake.md)
 
 Thunderbird タグ、Extension、自分宛て備忘メール、ICS、将来の外部形式等に関する補足設計。
