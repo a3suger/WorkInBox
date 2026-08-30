@@ -2,6 +2,7 @@ const WORKINBOX_URL = "http://127.0.0.1:8000/";
 const WORKINBOX_IMAP_TARGET_URL = `${WORKINBOX_URL}api/thunderbird/imap-target`;
 
 const openWorkInBoxButton = document.querySelector("#open-workinbox");
+const openExtensionDashboardButton = document.querySelector("#open-extension-dashboard");
 const workViewKindSelect = document.querySelector("#work-view-kind");
 const openWorkViewButton = document.querySelector("#open-work-view");
 
@@ -26,6 +27,21 @@ async function loadWorkInBoxImapTarget() {
   }
   return target;
 }
+
+openExtensionDashboardButton.addEventListener("click", async () => {
+  try {
+    const response = await messenger.runtime.sendMessage({
+      type: "workinbox-open-dashboard",
+    });
+    if (!response?.ok) {
+      throw new Error(response?.error || "Extensionダッシュボードを開けませんでした。");
+    }
+    window.close();
+  } catch (error) {
+    console.error("[WorkInBox dashboard]", error);
+    setStatus(`ERROR: ${error.message || error}`);
+  }
+});
 
 openWorkInBoxButton.addEventListener("click", async () => {
   try {

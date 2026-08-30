@@ -190,3 +190,19 @@ Extension 変更後は note 側で repository を更新し、Thunderbird の Ext
 7. 通常ワークフローのメールで終了ボタンを押すと、元タグを残して `一括処理` が付き、スターが外れる。
 
 人工的なメールを多数作る必要はなく、実際の受信箱で代表ケースを確認する。
+
+---
+
+## 10. Extension内ダッシュボードとオフライン動作
+
+Extensionは専用ダッシュボードタブを持ち、WIB Webとは別にThunderbirdの対象mailboxから次を集計する。
+
+- 未着眼・未読 / 未着眼・既読
+- `返信必要` / `見る・検討` / `注目`
+- 専用タグ、判定保留、待機タグの作業件数
+
+未着眼2件数だけにWIB設定の`new_mail_lookback_days`を適用し、他の件数はmailbox全体を対象にする。集計はメッセージヘッダーだけをページ単位で読み、本文をキャッシュしない。
+
+ExtensionはWIBの`/api/health`、`/api/extension/bootstrap`、既存`/api/sync-status`を使って接続状態と設定を確認する。取得済みのIMAP対象設定、lookback日数、直近集計結果はExtensionローカルストレージへ保存し、WIB停止中にも再利用する。password等のcredentialはAPI応答にもキャッシュにも含めない。
+
+WIB停止中も作業ビュー、メール閲覧・返信、スター・タグ操作、通常終了は利用可能とする。AI、SQLite、relation、Record、専用ワークフロー更新はオンライン時だけWIB Webで行う。

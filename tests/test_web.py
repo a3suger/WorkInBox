@@ -76,6 +76,8 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/deadlines"])
         self.assertIn("GET", routes["/schedules"])
         self.assertIn("GET", routes["/api/thunderbird/imap-target"])
+        self.assertIn("GET", routes["/api/health"])
+        self.assertIn("GET", routes["/api/extension/bootstrap"])
         self.assertIn("GET", routes["/deadlines.ics"])
         self.assertIn("GET", routes["/deadlines/{deadline_id}/source-message"])
         self.assertIn("GET", routes["/deadlines/{deadline_id}"])
@@ -106,6 +108,39 @@ class WebFoundationTest(unittest.TestCase):
             "mailbox": "INBOX",
         })
         self.assertNotIn("password", payload)
+
+    def test_extension_bootstrap_exposes_only_safe_connection_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = create_app(self._config(Path(directory) / "workinbox.db"))
+            route = next(route for route in app.routes if route.path == "/api/extension/bootstrap")
+            payload = route.endpoint()
+
+        self.assertEqual(payload["api_version"], 1)
+        self.assertEqual(payload["new_mail_lookback_days"], 7)
+        self.assertEqual(payload["imap_target"]["mailbox"], "INBOX")
+        self.assertNotIn("password", payload["imap_target"])
+
+    def test_health_reports_database_and_latest_synchronization(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            EmailDatabase(path).initialize()
+            app = create_app(self._config(path))
+            route = next(route for route in app.routes if route.path == "/api/health")
+            payload = route.endpoint()
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["database"], "ok")
+        self.assertEqual(payload["api_version"], 1)
+        self.assertIsNone(payload["last_sync_at"])
+
+    def test_health_is_degraded_when_database_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = create_app(self._config(Path(directory) / "missing.db"))
+            route = next(route for route in app.routes if route.path == "/api/health")
+            payload = route.endpoint()
+
+        self.assertEqual(payload["status"], "degraded")
+        self.assertEqual(payload["database"], "unavailable")
 
     def test_templates_are_loadable(self) -> None:
         for name in (

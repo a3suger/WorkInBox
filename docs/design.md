@@ -124,13 +124,17 @@ TriageBox
 
 主な役割:
 
-- ダッシュボードを仕事の出発点として提供する。
+- WIB Web と Thunderbird Extension 内ダッシュボードを仕事の出発点として提供する。
 - 締切・スケジュール調整などの専用ワークフローを進める。
 - 専用ワークフローに属するメールを閲覧し、必要なメール作成・送信を Thunderbird へ接続する。
 - `判定保留` を利用者が WIB 上で確定する。
 - `返信待ち` の優先順位を確認し、催促・終了などの対応を進める。
 - 通常ワークフロー終了時に必要な情報を Record として保存し、後から検索・利用できるようにする。
 - WIB から Thunderbird の対象メールや Quick Filter 作業ビューを開く。
+
+Extension 内ダッシュボードは、Thunderbirdが保持する既読・スター・タグから通常作業の件数を計算する。WIBサーバーへ接続できない場合も、Thunderbirdの作業ビュー、メール閲覧・返信、スター・タグ操作、通常ワークフロー終了を継続できる。
+
+AI判定、SQLite、relation、Record、専用ワークフローの状態更新はWIB接続中だけ利用する。ExtensionはWIBの接続状態と最終接続成功日時を表示するが、SQLiteの複製やWIB更新操作のオフラインキューは持たない。
 
 ### TrackingBox
 
@@ -424,7 +428,7 @@ Record は `source_message_id`、締切は `deadline -> source_message_id` を�
 
 ## 利用者フロー: WIB を仕事の出発点にする
 
-利用者は原則として WIB ダッシュボードから仕事を始める。
+利用者は原則として WIB Web または Thunderbird Extension 内のダッシュボードから仕事を始める。
 
 ```text
 WIB ダッシュボード
@@ -439,6 +443,8 @@ WIB ダッシュボードで全体を確認
   ↓
 仕事の種類に応じて WIB または Thunderbird で処理
 ```
+
+WIBサーバーへ接続できない場合、Extension内ダッシュボードはThunderbird現在値を表示し、通常のメール整理を継続する。専用ワークフロー等のWIB必須機能は理由付きで無効化し、接続復旧後に再び利用可能にする。
 
 ### 着眼判断
 
@@ -485,6 +491,7 @@ Thunderbird は次を担当する。
 - WIB 専用 Quick Filter 作業ビュー
 - Archive 等の任意フォルダに対する Quick Filter
 - WorkInBox が提供する締切情報の閲覧
+- Extension内ダッシュボードでの通常作業件数の集計と作業ビューへの入口
 
 WIB から Thunderbird のメールを開く表示形式（タブ / 独立ウィンドウ等）は実装時に決める。
 

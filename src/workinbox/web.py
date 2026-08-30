@@ -28,6 +28,7 @@ from .models import DeadlineCreatedBy
 from .normal_workflow import NormalWorkflowCompletionService
 from .record_store import RecordStore
 from .work_tags import WORK_TAGS
+from . import __version__
 
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).with_name("templates")))
@@ -302,6 +303,38 @@ def create_app(
             "port": config.imap.port,
             "username": config.imap.username,
             "mailbox": config.imap.mailbox,
+        }
+
+    def database_health() -> tuple[str, str | None]:
+        try:
+            database_uri = f"{config.database.path.resolve().as_uri()}?mode=ro"
+            with sqlite3.connect(database_uri, uri=True) as connection:
+                row = connection.execute(
+                    "SELECT MAX(synchronized_at) FROM emails"
+                ).fetchone()
+        except (OSError, sqlite3.Error) as exc:
+            logging.warning("WorkInBox health check could not access the database: %s", exc)
+            return "unavailable", None
+        return "ok", row[0] if row and row[0] else None
+
+    @app.get("/api/health")
+    def health() -> dict[str, object]:
+        database_status, last_sync_at = database_health()
+        return {
+            "status": "ok" if database_status == "ok" else "degraded",
+            "version": __version__,
+            "api_version": 1,
+            "database": database_status,
+            "last_sync_at": last_sync_at,
+        }
+
+    @app.get("/api/extension/bootstrap")
+    def extension_bootstrap() -> dict[str, object]:
+        return {
+            "api_version": 1,
+            "version": __version__,
+            "new_mail_lookback_days": config.imap.new_mail_lookback_days,
+            "imap_target": thunderbird_imap_target(),
         }
 
     @app.get("/deadlines.ics", response_class=PlainTextResponse)

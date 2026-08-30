@@ -2,7 +2,7 @@
 
 WorkInBox の Thunderbird 側 UI を担当する MailExtension の初期実装です。
 
-現段階では、タグ導入前バックアップ・12タグ登録・タグ定義の復元に加えて、WorkInBox Web UI との Message-ID Bridge、Archive indexing policy、WIB Quick Filter 作業ビューの PoC を扱います。
+現段階では、タグ導入前バックアップ・13タグ登録・タグ定義の復元に加えて、Extension内ダッシュボード、WorkInBox Web UI との Message-ID Bridge、Archive indexing policy、WIB Quick Filter 作業ビューを扱います。
 
 業務ロジックは持ちません。IMAP メール本文や WorkInBox の SQLite を正本として管理する機能もありません。
 
@@ -17,6 +17,7 @@ WorkInBox の Thunderbird 側 UI を担当する MailExtension の初期実装�
 - `messages.tags.update()`
 - `messages.tags.delete()`
 - `messages.query({ headerMessageId })`
+- `messages.query({ folderId })` / `messages.continueList()`
 - `messageDisplay.open()`
 - `accounts.list()` / `accounts.get()`
 - `folders.query()` / `folders.get()`
@@ -49,6 +50,16 @@ manifest / Experiment API を変更した場合は、単なる popup の再表�
 Extension の `WorkInBox を開く` から `http://127.0.0.1:8000/` を Thunderbird タブで開きます。
 
 WorkInBox Web UI の `Thunderbirdで開く` は Message-ID を content script から background へ渡し、Thunderbird の `messages.query({ headerMessageId })` で該当メッセージを解決して通常の message display で開きます。
+
+## Extension内ダッシュボード
+
+popupの`ダッシュボードを開く`からThunderbird内の専用タブを開きます。専用タブは1枚だけ作成して再利用します。
+
+ダッシュボードはWIBの`/api/health`、`/api/extension/bootstrap`、`/api/sync-status`で接続状態を確認します。WIBへ接続できた設定とThunderbird集計結果は`storage.local`へ保存し、WIB停止中やSSH tunnel切断中も対象mailboxを特定できるようにします。IMAP password、credential、メール本文は保存しません。
+
+件数はThunderbirdのメッセージヘッダーからページ単位で集計します。未着眼・未読 / 未着眼・既読だけに`new_mail_lookback_days`を適用し、通常ワークフロー、専用タグ、判定保留、待機状態はmailbox全体の`対象タグ + スター付き`を数えます。
+
+WIB停止中も各カードからThunderbird作業ビューを開けます。WIB Webが必要なAI、SQLite、専用ワークフロー、Record等の導線は接続不可時に無効になります。
 
 ## WIB Quick Filter 作業ビュー PoC
 
@@ -89,16 +100,21 @@ Extension は Thunderbird の IMAP アカウントを列挙し、`imapAccounts` 
 
 ### 作業ビューの切り替え
 
-popup の `作業ビュー` から次の 6 種類を選択できます。
+popup とExtension内ダッシュボードから次の作業ビューを選択できます。
 
 | 表示名 | Quick Filter 条件 | タブ名 |
 | --- | --- | --- |
-| 回答必要 | `wib-answer` AND スター付き | `WIB:回答必要` |
+| 未着眼・未読 | スターなし AND 一括処理なし + 未読 | `WIB:未着眼・未読` |
+| 未着眼・既読 | スターなし AND 一括処理なし | `WIB:未着眼・既読` |
+| 返信必要 | `wib-answer` AND スター付き | `WIB:返信必要` |
 | 締切あり | `wib-deadline` AND スター付き | `WIB:締切あり` |
 | スケジュール調整 | `wib-schedule` AND スター付き | `WIB:スケジュール調整` |
-| 読む・検討 | `wib-review` AND スター付き | `WIB:読む・検討` |
+| 見る・検討 | `wib-review` AND スター付き | `WIB:見る・検討` |
+| 注目 | `wib-watch` AND スター付き | `WIB:注目` |
+| 判定保留 | `wib-pending` AND スター付き | `WIB:判定保留` |
 | 返信待ち | `wib-waiting-reply` AND スター付き | `WIB:返信待ち` |
 | 対応待ち | `wib-waiting-action` AND スター付き | `WIB:対応待ち` |
+| 対応あり | `wib-action-ready` AND スター付き | `WIB:対応あり` |
 
 `作業ビューを開く` を押すと、次の処理を行います。
 
@@ -119,7 +135,7 @@ popup の `作業ビュー` から次の 6 種類を選択できます。
 
 標準 Quick Filter API では WIB が必要とする Thunderbird の「返信済み」状態を直接条件に含めないため、WIB タグに加えてスターを現在注目対象の条件として使います。
 
-たとえば `wib-answer` が履歴として残っていても、同期側でスターが外れれば `回答必要` 作業ビューには表示されません。
+たとえば `wib-answer` が履歴として残っていても、同期側でスターが外れれば `返信必要` 作業ビューには表示されません。
 
 Quick Filter の条件定義は `background.js` の WIB プリセットに閉じ込め、FastAPI 側から Thunderbird API の具体的な引数を渡しません。
 
@@ -220,26 +236,27 @@ Extension を削除しても復元材料が残るよう、この JSON は通常�
 
 必要であれば Thunderbird プロファイル全体も別途バックアップしてください。
 
-## 12個の WIB タグを登録する
+## 13個の WIB タグを登録する
 
-導入前スナップショットが存在する場合だけ、`12個のWIBタグを登録` が有効になります。
+導入前スナップショットが存在する場合だけ、`13個のWIBタグを登録` が有効になります。
 
 登録するタグ:
 
 | key | 表示名 | 色 |
 | --- | --- | --- |
-| `wib-important` | `重要` | `#7B1FA2` |
 | `wib-deadline` | `締切あり` | `#D32F2F` |
 | `wib-schedule` | `スケジュール調整` | `#F57C00` |
-| `wib-answer` | `回答必要` | `#1976D2` |
-| `wib-review` | `読む・検討` | `#039BE5` |
+| `wib-answer` | `返信必要` | `#1976D2` |
+| `wib-review` | `見る・検討` | `#039BE5` |
+| `wib-watch` | `注目` | `#7B1FA2` |
+| `wib-bulk` | `一括処理` | `#424242` |
 | `wib-pending` | `判定保留` | `#757575` |
 | `wib-deadline-done` | `締切登録済み` | `#8E2424` |
 | `wib-schedule-done` | `スケジュール対応済み` | `#A65300` |
 | `wib-waiting-reply` | `返信待ち` | `#388E3C` |
 | `wib-waiting-action` | `対応待ち` | `#7CB342` |
+| `wib-action-ready` | `対応あり` | `#558B2F` |
 | `wib-requested` | `依頼済み` | `#795548` |
-| `wib-batch` | `一括処理` | `#424242` |
 
 同じ key がすでに存在する場合は重複作成せず、表示名と色を WIB 定義へ合わせます。
 
@@ -259,7 +276,7 @@ Extension を削除しても復元材料が残るよう、この JSON は通常�
 
 復元処理は次を行います。
 
-1. 現在存在する12個の既知 WIB タグ定義を削除する。
+1. 現在存在するWIBタグ定義（旧`wib-important` / `wib-batch`を含む）を削除する。
 2. バックアップに記録されているタグを、同じ key / 表示名 / 色 / ordinal へ戻す。
 3. バックアップ後に利用者が新しく作った WorkInBox 管理外タグは削除しない。
 

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WorkInBox ダッシュボード</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>WorkInBox ダッシュボード</h1>
+      <p>Thunderbird 現在値から通常作業を確認します。</p>
+    </div>
+    <div class="header-actions">
+      <button id="refresh" type="button">状態と件数を更新</button>
+      <button id="open-wib" type="button">WIB Webを開く</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="connection" class="connection checking">
+      <div class="connection-heading">
+        <span id="connection-dot" class="connection-dot" aria-hidden="true"></span>
+        <strong id="connection-label">WIB接続を確認中</strong>
+      </div>
+      <div id="connection-detail">確認しています…</div>
+      <dl>
+        <div><dt>最終接続成功</dt><dd id="last-connected">-</dd></div>
+        <div><dt>WIBバージョン</dt><dd id="wib-version">-</dd></div>
+        <div><dt>最終WIB同期</dt><dd id="last-sync">-</dd></div>
+        <div><dt>同期状態</dt><dd id="sync-state">-</dd></div>
+      </dl>
+    </section>
+
+    <section class="summary">
+      <div>
+        <h2>Thunderbird 現在値</h2>
+        <p id="count-source">対象mailboxを確認しています…</p>
+      </div>
+      <div id="count-progress" class="progress" hidden></div>
+    </section>
+
+    <section class="group">
+      <h2>着眼判断</h2>
+      <p id="lookback-note">未着眼件数の対象期間を確認しています。</p>
+      <div class="grid">
+        <article class="card">
+          <span class="count" data-count="unattendedUnread">-</span>
+          <h3>未着眼・未読</h3>
+          <button type="button" data-work-view="unattended-unread">Thunderbirdで開く</button>
+        </article>
+        <article class="card">
+          <span class="count" data-count="unattendedRead">-</span>
+          <h3>未着眼・既読</h3>
+          <button type="button" data-work-view="unattended-read">Thunderbirdで開く</button>
+        </article>
+      </div>
+      <p class="note">件数は直近期間、Thunderbird作業ビューはmailbox全体を表示するため一致しない場合があります。</p>
+    </section>
+
+    <section class="group">
+      <h2>通常ワークフロー</h2>
+      <div class="grid">
+        <article class="card"><span class="count" data-count="answer">-</span><h3>返信必要</h3><button type="button" data-work-view="answer">Thunderbirdで開く</button></article>
+        <article class="card"><span class="count" data-count="review">-</span><h3>見る・検討</h3><button type="button" data-work-view="review">Thunderbirdで開く</button></article>
+        <article class="card"><span class="count" data-count="watch">-</span><h3>注目</h3><button type="button" data-work-view="watch">Thunderbirdで開く</button></article>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>専用・判定保留</h2>
+      <div class="grid">
+        <article class="card"><span class="count" data-count="deadline">-</span><h3>締切あり</h3><button type="button" data-work-view="deadline">Thunderbirdで開く</button></article>
+        <article class="card"><span class="count" data-count="schedule">-</span><h3>スケジュール調整</h3><button type="button" data-work-view="schedule">Thunderbirdで開く</button></article>
+        <article class="card"><span class="count" data-count="pending">-</span><h3>判定保留</h3><button type="button" data-work-view="pending">Thunderbirdで開く</button></article>
+      </div>
+      <p class="note">専用ワークフローの判断・更新はWIB接続中にWIB Webで行います。</p>
+    </section>
+
+    <section class="group">
+      <h2>待機状態</h2>
+      <div class="grid">
+        <article class="card"><span class="count" data-count="waitingReply">-</span><h3>返信待ち</h3><button type="button" data-work-view="waitingReply">Thunderbirdで開く</button></article>
+        <article class="card"><span class="count" data-count="waitingAction">-</span><h3>対応待ち</h3><button type="button" data-work-view="waitingAction">Thunderbirdで開く</button></article>
+        <article class="card"><span class="count" data-count="actionReady">-</span><h3>対応あり</h3><button type="button" data-work-view="actionReady">Thunderbirdで開く</button></article>
+      </div>
+    </section>
+
+    <section class="wib-only">
+      <h2>WIBが必要な機能</h2>
+      <p id="wib-only-note">WIB接続を確認しています。</p>
+      <div class="wib-links">
+        <button type="button" data-wib-path="/active">Activeメール</button>
+        <button type="button" data-wib-path="/deadlines">締切登録支援</button>
+        <button type="button" data-wib-path="/schedules">スケジュール調整支援</button>
+        <button type="button" data-wib-path="/pending">判定保留</button>
+        <button type="button" data-wib-path="/records">Records</button>
+      </div>
+    </section>
+
+    <p id="error" class="error" hidden></p>
+  </main>
+  <script src="dashboard.js"></script>
+</body>
+</html>

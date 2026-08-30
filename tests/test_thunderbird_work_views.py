@@ -130,6 +130,50 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertNotIn("回答必要", popup)
         self.assertNotIn("読む・検討", popup)
 
+    def test_extension_dashboard_is_registered_and_opened_in_a_reused_tab(self) -> None:
+        manifest = json.loads((EXTENSION / "manifest.json").read_text(encoding="utf-8"))
+        popup = (EXTENSION / "popup.html").read_text(encoding="utf-8")
+        popup_bridge = (EXTENSION / "popup_bridge.js").read_text(encoding="utf-8")
+        background = (EXTENSION / "background.js").read_text(encoding="utf-8")
+
+        self.assertEqual(manifest["version"], "0.3.0")
+        self.assertTrue((EXTENSION / "dashboard.html").is_file())
+        self.assertTrue((EXTENSION / "dashboard.js").is_file())
+        self.assertTrue((EXTENSION / "dashboard.css").is_file())
+        self.assertIn('id="open-extension-dashboard"', popup)
+        self.assertIn('type: "workinbox-open-dashboard"', popup_bridge)
+        self.assertIn('messenger.runtime.getURL("dashboard.html")', background)
+        self.assertIn("getExistingDashboardTab()", background)
+
+    def test_extension_dashboard_counts_thunderbird_message_state(self) -> None:
+        dashboard = (EXTENSION / "dashboard.html").read_text(encoding="utf-8")
+        dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")
+        background = (EXTENSION / "background.js").read_text(encoding="utf-8")
+
+        for count_name in (
+            "unattendedUnread",
+            "unattendedRead",
+            "answer",
+            "review",
+            "watch",
+            "deadline",
+            "schedule",
+            "pending",
+            "waitingReply",
+            "waitingAction",
+            "actionReady",
+        ):
+            self.assertIn(f'data-count="{count_name}"', dashboard)
+        self.assertIn('type: "workinbox-dashboard-counts"', dashboard_script)
+        self.assertIn('fetchJson("/api/health")', dashboard_script)
+        self.assertIn('fetchJson("/api/extension/bootstrap")', dashboard_script)
+        self.assertIn("workinboxExtensionDashboardCache", dashboard_script)
+        self.assertIn("messenger.messages.query({", background)
+        self.assertIn("messenger.messages.continueList(page.id)", background)
+        self.assertIn("tags.has(BULK_TAG) || tags.has(LEGACY_BULK_TAG)", background)
+        self.assertIn("received >= since", background)
+        self.assertIn('type: "workinbox-dashboard-invalidated"', background)
+
 
 if __name__ == "__main__":
     unittest.main()

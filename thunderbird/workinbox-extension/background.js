@@ -15,6 +15,7 @@ const WORK_VIEWS = {
   answer: { tagKey: "wib-answer", label: "返信必要" },
   deadline: { tagKey: "wib-deadline", label: "締切あり" },
   schedule: { tagKey: "wib-schedule", label: "スケジュール調整" },
+  pending: { tagKey: "wib-pending", label: "判定保留" },
   review: { tagKey: "wib-review", label: "見る・検討" },
   watch: { tagKey: "wib-watch", label: "注目" },
   waitingReply: { tagKey: "wib-waiting-reply", label: "返信待ち" },
@@ -23,7 +24,21 @@ const WORK_VIEWS = {
 };
 
 let workViewTabId = null;
+let dashboardTabId = null;
 const pendingSupportRequests = new Map();
+
+const DASHBOARD_TAG_COUNTS = Object.freeze({
+  answer: "wib-answer",
+  review: "wib-review",
+  watch: "wib-watch",
+  deadline: "wib-deadline",
+  schedule: "wib-schedule",
+  pending: "wib-pending",
+  waitingReply: "wib-waiting-reply",
+  waitingAction: "wib-waiting-action",
+  actionReady: "wib-action-ready",
+});
+const DASHBOARD_CACHE_KEY = "workinboxExtensionDashboardCache";
 
 function messageIdCandidates(value) {
   const raw = String(value || "").trim();
@@ -316,6 +331,145 @@ async function openWorkView(viewName, imapTarget) {
   };
 }
 
+async function getExistingDashboardTab() {
+  if (dashboardTabId === null) {
+    return null;
+  }
+  try {
+    return await messenger.tabs.get(dashboardTabId);
+  } catch (_error) {
+    dashboardTabId = null;
+    return null;
+  }
+}
+
+async function openDashboard() {
+  const existing = await getExistingDashboardTab();
+  if (existing) {
+    await messenger.tabs.update(existing.id, { active: true });
+    return { ok: true, tabId: existing.id, reused: true };
+  }
+
+  const created = await messenger.tabs.create({
+    url: messenger.runtime.getURL("dashboard.html"),
+    active: true,
+  });
+  dashboardTabId = created.id;
+  return { ok: true, tabId: created.id, reused: false };
+}
+
+function emptyDashboardCounts() {
+  return {
+    unattendedUnread: 0,
+    unattendedRead: 0,
+    answer: 0,
+    review: 0,
+    watch: 0,
+    deadline: 0,
+    schedule: 0,
+    pending: 0,
+    waitingReply: 0,
+    waitingAction: 0,
+    actionReady: 0,
+  };
+}
+
+function dashboardSince(lookbackDays) {
+  const since = new Date();
+  since.setHours(0, 0, 0, 0);
+  since.setDate(since.getDate() - (lookbackDays - 1));
+  return since;
+}
+
+function countDashboardMessage(counts, message, since) {
+  const tags = new Set(message.tags || []);
+  const flagged = Boolean(message.flagged);
+  const read = Boolean(message.read);
+  const received = message.date instanceof Date ? message.date : new Date(message.date);
+  const recent = !Number.isNaN(received.getTime()) && received >= since;
+  const bulk = tags.has(BULK_TAG) || tags.has(LEGACY_BULK_TAG);
+
+  if (recent && !flagged && !bulk) {
+    counts[read ? "unattendedRead" : "unattendedUnread"] += 1;
+  }
+
+  if (!flagged) {
+    return;
+  }
+  for (const [countName, tagKey] of Object.entries(DASHBOARD_TAG_COUNTS)) {
+    const completed = (
+      (countName === "deadline" && tags.has("wib-deadline-done"))
+      || (countName === "schedule" && tags.has("wib-schedule-done"))
+    );
+    if (tags.has(tagKey) && !completed) {
+      counts[countName] += 1;
+    }
+  }
+}
+
+async function dashboardCounts(imapTarget, rawLookbackDays) {
+  const lookbackDays = Number(rawLookbackDays);
+  if (!Number.isInteger(lookbackDays) || lookbackDays < 1) {
+    throw new Error("WIBのnew_mail_lookback_daysが不正です。");
+  }
+
+  const { account, mailbox } = await resolveWorkViewMailbox(imapTarget);
+  const counts = emptyDashboardCounts();
+  const since = dashboardSince(lookbackDays);
+  let page = await messenger.messages.query({
+    folderId: mailbox.id,
+    messagesPerPage: 100,
+  });
+  let processed = 0;
+
+  while (page) {
+    for (const message of page.messages || []) {
+      countDashboardMessage(counts, message, since);
+      processed += 1;
+    }
+    void messenger.runtime.sendMessage({
+      type: "workinbox-dashboard-progress",
+      current: processed,
+    }).catch(() => undefined);
+    if (!page.id) {
+      break;
+    }
+    page = await messenger.messages.continueList(page.id);
+  }
+
+  const result = {
+    ok: true,
+    counts,
+    lookbackDays,
+    countedAt: new Date().toISOString(),
+    accountName: account.name || account.id,
+    folderName: mailbox.name || imapTarget.mailbox,
+    processed,
+  };
+  const stored = await messenger.storage.local.get(DASHBOARD_CACHE_KEY);
+  await messenger.storage.local.set({
+    [DASHBOARD_CACHE_KEY]: {
+      ...(stored[DASHBOARD_CACHE_KEY] || {}),
+      config: { imapTarget, lookbackDays },
+      counts: result,
+    },
+  });
+  return result;
+}
+
+function notifyDashboardInvalidated() {
+  void messenger.runtime.sendMessage({
+    type: "workinbox-dashboard-invalidated",
+  }).catch(() => undefined);
+}
+
+for (const eventName of ["onUpdated", "onNewMailReceived", "onMoved", "onCopied", "onDeleted"]) {
+  const event = messenger.messages[eventName];
+  if (event?.addListener) {
+    event.addListener(notifyDashboardInvalidated);
+  }
+}
+
 function requestCopy(requestKind) {
   if (requestKind === "schedule_entry") {
     return {
@@ -570,6 +724,9 @@ messenger.tabs.onRemoved.addListener((tabId) => {
   if (tabId === workViewTabId) {
     workViewTabId = null;
   }
+  if (tabId === dashboardTabId) {
+    dashboardTabId = null;
+  }
 });
 
 messenger.runtime.onMessage.addListener((request) => {
@@ -584,6 +741,10 @@ messenger.runtime.onMessage.addListener((request) => {
     operation = openWorkView(request.view, request.imapTarget);
   } else if (request.type === "workinbox-compose-support-request") {
     operation = beginSupportRequest(request);
+  } else if (request.type === "workinbox-open-dashboard") {
+    operation = openDashboard();
+  } else if (request.type === "workinbox-dashboard-counts") {
+    operation = dashboardCounts(request.imapTarget, request.lookbackDays);
   } else {
     return undefined;
   }

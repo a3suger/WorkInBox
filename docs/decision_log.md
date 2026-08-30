@@ -171,3 +171,19 @@ Decision 009 の「候補0件の場合だけ許可する」という制限を、
 - VTODOの説明欄には、締切IDを含むWIBの元メール案内URLも付ける。
 - 案内URLを外部ブラウザで開いた場合やBridge連携に失敗した場合は、締切・件名・差出人・受信日時の最低限の情報をWIBで表示する。
 - SQLiteを締切の正本、VTODOを読み取り専用の派生表現とする現行設計は変更しない。
+
+---
+
+## 2026-08-30
+
+### Decision 016: Thunderbird通常作業はWIB停止中も継続できる
+
+- Thunderbird Extension内に専用ダッシュボードタブを設ける。
+- 未着眼、通常ワークフロー、専用タグ、待機タグの作業件数はThunderbirdが保持するメッセージの既読・スター・タグから計算する。
+- `new_mail_lookback_days` は既存設計どおり未着眼・未読 / 未着眼・既読の件数だけに適用する。
+- WIB停止中もThunderbirdの作業ビュー、閲覧、返信、スター、タグ、通常終了を利用できる。
+- AI、SQLite、relation、Record、専用ワークフローの状態更新はWIB接続中だけ利用できる。
+- ExtensionはWIBのhealth APIで接続状態を表示し、接続設定と直近の集計結果だけをローカル保存する。credentialとメール本文は保存しない。
+- 現在のWIB Web UIは維持し、全画面移植やオフライン更新キューは初回実装に含めない。
+
+統合先: `docs/design.md` の「システム構成」「利用者フロー」「Thunderbirdの役割」。詳細は `docs/thunderbird_bridge.md` と `docs/extension_dashboard_proposal.md`。

@@ -2,7 +2,7 @@
 
 ## 状態
 
-作業中（#31 Extension内ダッシュボード仕様案を作成）
+作業中（#31 初回実装完了、commit・実機確認待ち）
 
 ## 現在の対象
 
@@ -10,7 +10,7 @@
 - #6〜#16 の実装 Issue: すべて Closed
 - 残っている実機確認: #18〜#22・#24・#25
 - 追加実装Issue: #26・#27 Closed、#28〜#31 Open
-- 現在位置: #31 を作成し、`docs/extension_dashboard_proposal.md` に初回実装の仕様案を記録。実装はまだ開始していない
+- 現在位置: #31 のhealth/bootstrap API、Extension内ダッシュボード、Thunderbird件数集計を実装。自動テスト141件成功。commit、Actions、実機確認が残っている
 
 ## GitHub / git の現在状態
 
@@ -246,7 +246,7 @@ Thunderbird 実機確認は #25 に分離済み。
 3. #30 `元メールをタブまたは新しいウィンドウで開く設定を追加する`
 4. #31 `WIB接続なしでも通常作業を継続できるExtension内ダッシュボードを追加する`
 
-#31 は仕様案作成まで完了し、実装は未着手。利用者と初回実装範囲を確認してから設計へ統合し、実装する。#28〜#30もOpenのまま維持する。
+#31 は初回実装と自動テストまで完了し、commit、Actions、実機確認待ち。#28〜#30もOpenのまま維持する。
 
 ### 実機確認の進め方
 
@@ -288,7 +288,9 @@ Thunderbird 実機確認は #25 に分離済み。
 
 ## 現在の作業状況
 
-#31 はGitHub Issueを作成し、Extension内ダッシュボードの目的、Thunderbird由来の集計、WIBヘルスチェック、オンライン・オフラインの責務境界、キャッシュ、性能、API候補、完了条件を `docs/extension_dashboard_proposal.md` に整理した。既存WIB Web UIは維持し、初回実装では全面移植やオフライン更新キューを対象外とする。実装はまだ開始していない。
+#31 はGitHub Issueを作成し、Extension内ダッシュボードの目的、Thunderbird由来の集計、WIBヘルスチェック、オンライン・オフラインの責務境界、キャッシュ、性能、API候補、完了条件を `docs/extension_dashboard_proposal.md` に整理した。既存WIB Web UIは維持し、初回実装では全面移植やオフライン更新キューを対象外とする。
+
+初回実装ではWIBへ`/api/health`と`/api/extension/bootstrap`を追加し、Extension `0.3.0`へ専用ダッシュボードタブを追加した。Thunderbirdの対象mailboxをメッセージヘッダーだけでページ集計し、未着眼2件数には`new_mail_lookback_days`、その他には`対象タグ + ★`を適用する。接続設定と直近集計をExtension内へ保存し、WIB停止中も作業ビューを開ける。30秒間隔ではhealthだけを確認し、件数再集計は初回、手動更新、メール状態変更時に限定した。ローカル自動テスト141件とJavaScript構文検査は成功。commit、Actions、Thunderbird実機確認は未実施。
 
 #26 は実装・自動テスト・Actions・実機確認を完了した。ToDoのWIBリンクはnoteの外部ブラウザで開く現行動作を完了条件として扱う。Thunderbird内部表示は可能性があるが、VTODO内の通常HTTPリンクをExtensionで確実に横取りする追加設計が必要なため、#26には含めない。
 
@@ -304,10 +306,11 @@ Thunderbird 実機確認は #25 に分離済み。
 
 ## 次に行うこと
 
-1. #31 の仕様案と初回実装範囲を利用者と確認する。
-2. 確定した責務境界を `docs/design.md` と `docs/thunderbird_bridge.md` へ統合する。
-3. #31 を小さな実装単位へ分け、Extension内ダッシュボードの実装へ進む。
-4. #28〜#30もOpenのまま維持し、#31との優先順を必要に応じて確認する。
+1. #31 の実装差分をcommitしてGitHubへpushする。
+2. GitHub Actionsの結果を確認する。
+3. desktopでWIBを更新・再起動し、noteでExtension `0.3.0`を再読み込みする。
+4. `docs/manual_test_runbook.md` の #31 オンライン、WIB停止、SSH切断、復旧を実機確認する。
+5. 問題を修正し、完了条件を満たしたら #31 をCloseする。
 
 ## 設計判断待ち
 
