@@ -407,6 +407,28 @@ function countDashboardMessage(counts, message, since) {
   }
 }
 
+async function scanDashboardQuery(queryInfo, onMessage, progress) {
+  let page = await messenger.messages.query({
+    ...queryInfo,
+    messagesPerPage: 100,
+  });
+
+  while (page) {
+    for (const message of page.messages || []) {
+      onMessage(message);
+      progress.current += 1;
+    }
+    void messenger.runtime.sendMessage({
+      type: "workinbox-dashboard-progress",
+      current: progress.current,
+    }).catch(() => undefined);
+    if (!page.id) {
+      break;
+    }
+    page = await messenger.messages.continueList(page.id);
+  }
+}
+
 async function dashboardCounts(imapTarget, rawLookbackDays) {
   const lookbackDays = Number(rawLookbackDays);
   if (!Number.isInteger(lookbackDays) || lookbackDays < 1) {
@@ -416,26 +438,29 @@ async function dashboardCounts(imapTarget, rawLookbackDays) {
   const { account, mailbox } = await resolveWorkViewMailbox(imapTarget);
   const counts = emptyDashboardCounts();
   const since = dashboardSince(lookbackDays);
-  let page = await messenger.messages.query({
-    folderId: mailbox.id,
-    messagesPerPage: 100,
-  });
-  let processed = 0;
+  const progress = { current: 0 };
+  const countMessage = (message) => countDashboardMessage(counts, message, since);
 
-  while (page) {
-    for (const message of page.messages || []) {
-      countDashboardMessage(counts, message, since);
-      processed += 1;
-    }
-    void messenger.runtime.sendMessage({
-      type: "workinbox-dashboard-progress",
-      current: processed,
-    }).catch(() => undefined);
-    if (!page.id) {
-      break;
-    }
-    page = await messenger.messages.continueList(page.id);
-  }
+  // The lookback applies only to unattended counts. Let Thunderbird filter by
+  // date and star state before returning messages to the extension.
+  await scanDashboardQuery({
+    folderId: mailbox.id,
+    fromDate: since,
+    flagged: false,
+  }, countMessage, progress);
+
+  // Workflow counts cover the entire mailbox, but Thunderbird returns only
+  // starred messages carrying at least one dashboard tag.
+  await scanDashboardQuery({
+    folderId: mailbox.id,
+    flagged: true,
+    tags: {
+      mode: "any",
+      tags: Object.fromEntries(
+        Object.values(DASHBOARD_TAG_COUNTS).map((tagKey) => [tagKey, true]),
+      ),
+    },
+  }, countMessage, progress);
 
   const result = {
     ok: true,
@@ -444,7 +469,7 @@ async function dashboardCounts(imapTarget, rawLookbackDays) {
     countedAt: new Date().toISOString(),
     accountName: account.name || account.id,
     folderName: mailbox.name || imapTarget.mailbox,
-    processed,
+    processed: progress.current,
   };
   const stored = await messenger.storage.local.get(DASHBOARD_CACHE_KEY);
   await messenger.storage.local.set({
