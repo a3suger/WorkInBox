@@ -398,11 +398,7 @@ function countDashboardMessage(counts, message, since) {
     return;
   }
   for (const [countName, tagKey] of Object.entries(DASHBOARD_TAG_COUNTS)) {
-    const completed = (
-      (countName === "deadline" && tags.has("wib-deadline-done"))
-      || (countName === "schedule" && tags.has("wib-schedule-done"))
-    );
-    if (tags.has(tagKey) && !completed) {
+    if (tags.has(tagKey)) {
       counts[countName] += 1;
     }
   }

@@ -294,6 +294,8 @@ Thunderbird 実機確認は #25 に分離済み。
 
 実機確認を受け、Extension `0.3.1`ではThunderbird検索APIへ日付・スター・タグ条件を先に渡し、INBOX全件をExtensionへ読み込まないよう集計を高速化した。さらに`0.3.2`では、ダッシュボードの未着眼2カードから開くcustom Mail Viewにも`new_mail_lookback_days`を渡し、件数と一覧の対象期間を一致させた。#31はこの追加調整の実機確認までCloseしない。
 
+Extension `0.3.3`では、締切あり・スケジュール調整の件数だけが完了タグ付きメールを除外してThunderbird作業ビューと不一致になっていた問題を修正した。Extensionダッシュボードの全作業件数を、表示一覧と同じ`対象タグ + ★`に統一した。
+
 #26 は実装・自動テスト・Actions・実機確認を完了した。ToDoのWIBリンクはnoteの外部ブラウザで開く現行動作を完了条件として扱う。Thunderbird内部表示は可能性があるが、VTODO内の通常HTTPリンクをExtensionで確実に横取りする追加設計が必要なため、#26には含めない。
 
 #27 はcommit `1666fd2`でWIB内の元メール導線を`mid:`優先へ変更し、従来のExtension検索を「見つからない場合は検索」として維持した。自動テスト136件とActions tests #186が成功。Active、締切、スケジュール調整、判定保留、締切詳細、Records等の実機確認で、元メールが外部ブラウザを経由せず素早く正しく開き、予備検索も機能することを確認してClosedした。現在は新しいウィンドウで開くため、タブとの選択設定を追加する要望を #30へ分離した。
@@ -308,7 +310,7 @@ Thunderbird 実機確認は #25 に分離済み。
 
 ## 次に行うこと
 
-1. Extension `0.3.2`の追加調整をcommitしてGitHubへpushする。
+1. Extension `0.3.3`の追加調整をcommitしてGitHubへpushする。
 2. GitHub Actionsの結果を確認する。
 3. noteでExtensionを再読み込みする。
 4. 未着眼2カードから開く一覧だけが`new_mail_lookback_days`の対象になることを実機確認する。

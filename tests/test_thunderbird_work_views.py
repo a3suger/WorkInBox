@@ -139,7 +139,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         popup_bridge = (EXTENSION / "popup_bridge.js").read_text(encoding="utf-8")
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.2")
+        self.assertEqual(manifest["version"], "0.3.3")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
@@ -181,6 +181,8 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("tags.has(BULK_TAG) || tags.has(LEGACY_BULK_TAG)", background)
         self.assertIn("received >= since", background)
         self.assertIn('type: "workinbox-dashboard-invalidated"', background)
+        self.assertNotIn('tags.has("wib-deadline-done")', background)
+        self.assertNotIn('tags.has("wib-schedule-done")', background)
 
     def test_unattended_dashboard_view_uses_lookback_days(self) -> None:
         dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")
