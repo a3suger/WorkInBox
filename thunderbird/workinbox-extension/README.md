@@ -59,6 +59,8 @@ popupの`ダッシュボードを開く`からThunderbird内の専用タブを�
 
 件数はThunderbirdのメッセージヘッダーからページ単位で集計します。未着眼・未読 / 未着眼・既読だけに`new_mail_lookback_days`を適用し、通常ワークフロー、専用タグ、判定保留、待機状態はmailbox全体の`対象タグ + スター付き`を数えます。
 
+ダッシュボードの未着眼2カードから開くThunderbird作業ビューにも`new_mail_lookback_days`を適用します。ほかの作業ビューはmailbox全体を対象にします。
+
 WIB停止中も各カードからThunderbird作業ビューを開けます。WIB Webが必要なAI、SQLite、専用ワークフロー、Record等の導線は接続不可時に無効になります。
 
 ## WIB Quick Filter 作業ビュー PoC

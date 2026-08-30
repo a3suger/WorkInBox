@@ -23,7 +23,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("Ci.nsMsgSearchOp.DoesntContain", implementation)
         self.assertIn('const VIEW_NAME = "WIB 未着眼";', implementation)
         self.assertIn(
-            "threePaneWindow.gViewWrapper.setMailView(VIEW_NAME, null, true)",
+            "threePaneWindow.gViewWrapper.setMailView(name, null, true)",
             implementation,
         )
         self.assertIn(
@@ -37,7 +37,10 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
 
         self.assertIn('"unattended-unread": { label: "未着眼・未読", unattended: true, unread: true }', background)
         self.assertIn('"unattended-read": { label: "未着眼・既読", unattended: true, unread: false }', background)
-        self.assertIn("messenger.mailViews.ensureUnattendedView(mailTab.id)", background)
+        self.assertIn(
+            "messenger.mailViews.ensureUnattendedView(mailTab.id, lookbackDays)",
+            background,
+        )
         self.assertIn("unread: true", background)
         self.assertIn("messenger.mailViews.resetView(mailTab.id)", background)
         self.assertIn("flagged: true", background)
@@ -136,7 +139,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         popup_bridge = (EXTENSION / "popup_bridge.js").read_text(encoding="utf-8")
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.1")
+        self.assertEqual(manifest["version"], "0.3.2")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
@@ -165,6 +168,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         ):
             self.assertIn(f'data-count="{count_name}"', dashboard)
         self.assertIn('type: "workinbox-dashboard-counts"', dashboard_script)
+        self.assertIn("currentConfig.lookbackDays", dashboard_script)
         self.assertIn('fetchJson("/api/health")', dashboard_script)
         self.assertIn('fetchJson("/api/extension/bootstrap")', dashboard_script)
         self.assertIn("workinboxExtensionDashboardCache", dashboard_script)
@@ -177,6 +181,27 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("tags.has(BULK_TAG) || tags.has(LEGACY_BULK_TAG)", background)
         self.assertIn("received >= since", background)
         self.assertIn('type: "workinbox-dashboard-invalidated"', background)
+
+    def test_unattended_dashboard_view_uses_lookback_days(self) -> None:
+        dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")
+        background = (EXTENSION / "background.js").read_text(encoding="utf-8")
+        experiment = (
+            EXTENSION / "experiments" / "mail_views" / "implementation.js"
+        ).read_text(encoding="utf-8")
+        schema = json.loads(
+            (EXTENSION / "experiments" / "mail_views" / "schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertIn('startsWith("unattended-")', dashboard_script)
+        self.assertIn("request.lookbackDays", background)
+        self.assertIn("Ci.nsMsgSearchAttrib.AgeInDays", experiment)
+        self.assertIn("Ci.nsMsgSearchOp.IsLessThan", experiment)
+        self.assertIn("value.age = lookbackDays", experiment)
+        parameters = schema[0]["functions"][0]["parameters"]
+        self.assertEqual(parameters[1]["name"], "lookbackDays")
+        self.assertTrue(parameters[1]["optional"])
 
 
 if __name__ == "__main__":

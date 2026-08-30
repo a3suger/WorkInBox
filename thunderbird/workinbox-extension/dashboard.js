@@ -165,6 +165,9 @@ async function openWorkView(button) {
       type: "workinbox-open-work-view",
       view: button.dataset.workView,
       imapTarget: currentConfig.imapTarget,
+      lookbackDays: button.dataset.workView.startsWith("unattended-")
+        ? currentConfig.lookbackDays
+        : null,
     });
     if (!response?.ok) throw new Error(response?.error || "作業ビューを開けませんでした。");
   } finally {

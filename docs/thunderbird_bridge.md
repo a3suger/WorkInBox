@@ -201,7 +201,7 @@ Extensionは専用ダッシュボードタブを持ち、WIB Webとは別にThun
 - `返信必要` / `見る・検討` / `注目`
 - 専用タグ、判定保留、待機タグの作業件数
 
-未着眼2件数だけにWIB設定の`new_mail_lookback_days`を適用し、他の件数はmailbox全体を対象にする。集計はメッセージヘッダーだけをページ単位で読み、本文をキャッシュしない。
+未着眼2件数だけにWIB設定の`new_mail_lookback_days`を適用し、他の件数はmailbox全体を対象にする。集計はメッセージヘッダーだけをページ単位で読み、本文をキャッシュしない。ダッシュボードの未着眼2カードから作業ビューを開く場合は、Extensionのcustom Mail Viewにも同じ日数条件を渡す。通常ワークフロー等の作業ビューに期間制限は追加しない。
 
 ExtensionはWIBの`/api/health`、`/api/extension/bootstrap`、既存`/api/sync-status`を使って接続状態と設定を確認する。取得済みのIMAP対象設定、lookback日数、直近集計結果はExtensionローカルストレージへ保存し、WIB停止中にも再利用する。password等のcredentialはAPI応答にもキャッシュにも含めない。
 

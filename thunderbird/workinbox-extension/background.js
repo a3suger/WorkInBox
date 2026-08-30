@@ -276,7 +276,7 @@ async function resolveDedicatedWorkViewTab(mailbox) {
   return created;
 }
 
-async function openWorkView(viewName, imapTarget) {
+async function openWorkView(viewName, imapTarget, lookbackDays = null) {
   const view = WORK_VIEWS[viewName];
   if (!view) {
     throw new Error(`Unknown WorkInBox work view: ${viewName}`);
@@ -287,7 +287,7 @@ async function openWorkView(viewName, imapTarget) {
 
   if (view.unattended) {
     await messenger.mailTabs.setQuickFilter(mailTab.id, { show: false });
-    await messenger.mailViews.ensureUnattendedView(mailTab.id);
+    await messenger.mailViews.ensureUnattendedView(mailTab.id, lookbackDays);
     if (view.unread) {
       await messenger.mailTabs.setQuickFilter(mailTab.id, {
         show: true,
@@ -327,6 +327,7 @@ async function openWorkView(viewName, imapTarget) {
     tabId: mailTab.id,
     dedicatedTab: true,
     unattended: Boolean(view.unattended),
+    lookbackDays: view.unattended ? lookbackDays : null,
     unreadQuickFilter: Boolean(view.unattended && view.unread),
   };
 }
@@ -763,7 +764,7 @@ messenger.runtime.onMessage.addListener((request) => {
   if (request.type === "workinbox-open-message") {
     operation = openMessageByHeaderMessageId(request.messageId);
   } else if (request.type === "workinbox-open-work-view") {
-    operation = openWorkView(request.view, request.imapTarget);
+    operation = openWorkView(request.view, request.imapTarget, request.lookbackDays);
   } else if (request.type === "workinbox-compose-support-request") {
     operation = beginSupportRequest(request);
   } else if (request.type === "workinbox-open-dashboard") {

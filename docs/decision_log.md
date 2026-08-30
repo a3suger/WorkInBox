@@ -187,3 +187,11 @@ Decision 009 の「候補0件の場合だけ許可する」という制限を、
 - 現在のWIB Web UIは維持し、全画面移植やオフライン更新キューは初回実装に含めない。
 
 統合先: `docs/design.md` の「システム構成」「利用者フロー」「Thunderbirdの役割」。詳細は `docs/thunderbird_bridge.md` と `docs/extension_dashboard_proposal.md`。
+
+### Decision 017: ダッシュボードの未着眼作業ビューも直近期間に限定する
+
+- ダッシュボードの `未着眼・未読` / `未着眼・既読` から開くThunderbird作業ビューには、件数と同じ `imap.new_mail_lookback_days` を適用する。
+- 通常ワークフロー、専用ワークフロー、判定保留、待機状態の作業ビューはmailbox全体を対象とする。
+- WIB Web側など保存済み日数を持たない導線から未着眼ビューを開く場合は、従来どおりmailbox全体を対象にする。
+
+Decision 011 の「未着眼custom Mail Viewには期間条件を追加しない」という判断を、実機確認で判明した使いにくさに基づいてこのDecisionで置き換える。

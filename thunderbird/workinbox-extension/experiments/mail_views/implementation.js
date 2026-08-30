@@ -14,12 +14,16 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
       return term;
     }
 
-    function createUnattendedView(mailViewList) {
+    function unattendedViewName(lookbackDays) {
+      return lookbackDays ? `${VIEW_NAME}（直近${lookbackDays}日）` : VIEW_NAME;
+    }
+
+    function createUnattendedView(mailViewList, name, lookbackDays) {
       const searchSession = Cc["@mozilla.org/messenger/searchSession;1"].createInstance(
         Ci.nsIMsgSearchSession,
       );
       const view = mailViewList.createMailView();
-      view.mailViewName = VIEW_NAME;
+      view.mailViewName = name;
 
       view.appendTerm(
         createSearchTerm(
@@ -43,23 +47,40 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
           ),
         );
       }
+      if (lookbackDays) {
+        view.appendTerm(
+          createSearchTerm(
+            searchSession,
+            Ci.nsMsgSearchAttrib.AgeInDays,
+            Ci.nsMsgSearchOp.IsLessThan,
+            (value) => {
+              value.age = lookbackDays;
+            },
+          ),
+        );
+      }
 
       mailViewList.addMailView(view);
       mailViewList.save();
       return view;
     }
 
-    function findOrCreateUnattendedView() {
+    function findOrCreateUnattendedView(lookbackDays) {
       const mailViewList = Cc["@mozilla.org/messenger/mailviewlist;1"].getService(
         Ci.nsIMsgMailViewList,
       );
+      const name = unattendedViewName(lookbackDays);
       for (let index = 0; index < mailViewList.mailViewCount; index += 1) {
         const view = mailViewList.getMailViewAt(index);
-        if (view.mailViewName === VIEW_NAME) {
-          return { view, created: false };
+        if (view.mailViewName === name) {
+          return { view, name, created: false };
         }
       }
-      return { view: createUnattendedView(mailViewList), created: true };
+      return {
+        view: createUnattendedView(mailViewList, name, lookbackDays),
+        name,
+        created: true,
+      };
     }
 
     function resolveThreePaneWindow(tabId) {
@@ -78,18 +99,25 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
 
     return {
       mailViews: {
-        async ensureUnattendedView(tabId) {
-          const { created } = findOrCreateUnattendedView();
+        async ensureUnattendedView(tabId, lookbackDays) {
+          const normalizedLookbackDays = Number.isInteger(lookbackDays) && lookbackDays > 0
+            ? lookbackDays
+            : null;
+          const { name, created } = findOrCreateUnattendedView(normalizedLookbackDays);
           const threePaneWindow = resolveThreePaneWindow(tabId);
           // Thunderbird 153's DBViewWrapper accepts the custom mail-view name
           // as the first argument. Passing 0 selects the built-in "all mail"
           // view and ignores the custom terms.
-          threePaneWindow.gViewWrapper.setMailView(VIEW_NAME, null, true);
-          return {
-            name: VIEW_NAME,
+          threePaneWindow.gViewWrapper.setMailView(name, null, true);
+          const result = {
+            name,
             created,
             applied: true,
           };
+          if (normalizedLookbackDays) {
+            result.lookbackDays = normalizedLookbackDays;
+          }
+          return result;
         },
 
         async resetView(tabId) {

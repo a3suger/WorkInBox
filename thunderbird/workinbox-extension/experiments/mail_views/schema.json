@@ -8,14 +8,16 @@
         "type": "function",
         "async": true,
         "parameters": [
-          { "name": "tabId", "type": "integer" }
+          { "name": "tabId", "type": "integer" },
+          { "name": "lookbackDays", "type": "integer", "minimum": 1, "optional": true }
         ],
         "returns": {
           "type": "object",
           "properties": {
             "name": { "type": "string" },
             "created": { "type": "boolean" },
-            "applied": { "type": "boolean" }
+            "applied": { "type": "boolean" },
+            "lookbackDays": { "type": "integer", "minimum": 1, "optional": true }
           }
         }
       },
