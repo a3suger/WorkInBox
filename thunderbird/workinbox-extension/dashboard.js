@@ -7,6 +7,7 @@ let currentConfig = null;
 let online = false;
 let refreshing = false;
 let invalidationTimer = null;
+let syncPollTimer = null;
 
 function element(selector) {
   return document.querySelector(selector);
@@ -18,13 +19,14 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("ja-JP");
 }
 
-async function fetchJson(path) {
+async function fetchJson(path, options = {}) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(new URL(path, WIB_URL).href, {
       cache: "no-store",
       signal: controller.signal,
+      ...options,
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
@@ -61,8 +63,10 @@ function setConnection(state, detail, health = {}, syncStatus = {}) {
   element("#sync-state").textContent = syncStatus.running ? "同期実行中" : (state === "offline" ? "確認できません" : "停止中");
 }
 
-function setOnlineControls(isOnline) {
+function setOnlineControls(isOnline, syncRunning = false) {
   element("#open-wib").disabled = !isOnline;
+  element("#normal-sync").disabled = !isOnline || syncRunning;
+  element("#normal-sync").textContent = syncRunning ? "通常同期を実行中…" : "通常同期";
   document.querySelectorAll("[data-wib-path]").forEach((button) => {
     button.disabled = !isOnline;
   });
@@ -141,7 +145,8 @@ async function refreshAll(refreshMessageCounts = true) {
     setConnection("offline", `保存済み設定でThunderbird通常作業を継続します。${error.message ? ` (${error.message})` : ""}`, health, {});
   }
 
-  setOnlineControls(online);
+  const syncRunning = Boolean(syncStatus.running);
+  setOnlineControls(online, syncRunning);
   if (refreshMessageCounts) {
     try {
       await refreshCounts(currentConfig, cache);
@@ -153,6 +158,26 @@ async function refreshAll(refreshMessageCounts = true) {
   element("#count-progress").hidden = true;
   element("#refresh").disabled = false;
   refreshing = false;
+  window.clearTimeout(syncPollTimer);
+  if (online && syncRunning) {
+    syncPollTimer = window.setTimeout(() => void refreshAll(false), 2000);
+  }
+}
+
+async function startNormalSync() {
+  if (!online) throw new Error("WIBへ接続できないため通常同期を開始できません。");
+  element("#normal-sync").disabled = true;
+  element("#normal-sync").textContent = "通常同期を開始中…";
+  try {
+    const response = await fetchJson("/api/sync", { method: "POST" });
+    if (!response.ok) {
+      throw new Error(response.error || "通常同期を開始できませんでした。");
+    }
+    await refreshAll(false);
+  } catch (error) {
+    setOnlineControls(online, false);
+    throw error;
+  }
 }
 
 async function openWorkView(button) {
@@ -165,7 +190,7 @@ async function openWorkView(button) {
       type: "workinbox-open-work-view",
       view: button.dataset.workView,
       imapTarget: currentConfig.imapTarget,
-      lookbackDays: button.dataset.workView.startsWith("unattended-")
+      lookbackDays: button.dataset.workView.startsWith("unattended")
         ? currentConfig.lookbackDays
         : null,
     });
@@ -191,6 +216,7 @@ document.addEventListener("click", (event) => {
   if (workView) operation = openWorkView(workView);
   else if (wibPath) operation = openWib(wibPath.dataset.wibPath);
   else if (event.target.closest("#open-wib")) operation = openWib();
+  else if (event.target.closest("#normal-sync")) operation = startNormalSync();
   else if (event.target.closest("#refresh")) operation = refreshAll();
   if (operation) {
     void operation.catch((error) => {

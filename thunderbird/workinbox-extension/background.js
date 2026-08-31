@@ -10,6 +10,7 @@ const BULK_TAG_DEFINITION = {
 const NORMAL_WORKFLOW_TAGS = new Set(["wib-answer", "wib-review", "wib-watch"]);
 
 const WORK_VIEWS = {
+  unattended: { label: "未着眼", unattended: true, unread: false },
   "unattended-unread": { label: "未着眼・未読", unattended: true, unread: true },
   "unattended-read": { label: "未着眼・既読", unattended: true, unread: false },
   answer: { tagKey: "wib-answer", label: "返信必要" },
@@ -361,6 +362,7 @@ async function openDashboard() {
 
 function emptyDashboardCounts() {
   return {
+    unattendedTotal: 0,
     unattendedUnread: 0,
     unattendedRead: 0,
     answer: 0,
@@ -391,6 +393,7 @@ function countDashboardMessage(counts, message, since) {
   const bulk = tags.has(BULK_TAG) || tags.has(LEGACY_BULK_TAG);
 
   if (recent && !flagged && !bulk) {
+    counts.unattendedTotal += 1;
     counts[read ? "unattendedRead" : "unattendedUnread"] += 1;
   }
 

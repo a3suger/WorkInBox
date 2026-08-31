@@ -152,13 +152,12 @@ class WebFoundationTest(unittest.TestCase):
 
     def test_dashboard_template_contains_required_starting_points(self) -> None:
         source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "dashboard.html")
-        self.assertIn("未着眼・未読", source)
-        self.assertIn("未着眼・既読", source)
-        self.assertIn("スターなし AND 未読 AND 一括処理なし", source)
-        self.assertIn("スターなし AND 既読 AND 一括処理なし", source)
+        self.assertIn("<h4>未着眼</h4>", source)
+        self.assertIn("うち未読", source)
+        self.assertIn("/ 既読", source)
+        self.assertIn("スターなし AND 一括処理なし", source)
         self.assertNotIn("WIB作業タグなし", source)
-        self.assertIn('data-wib-open-work-view="unattended-unread"', source)
-        self.assertIn('data-wib-open-work-view="unattended-read"', source)
+        self.assertIn('data-wib-open-work-view="unattended"', source)
         self.assertIn('data-wib-open-work-view="answer"', source)
         self.assertIn('data-wib-open-work-view="review"', source)
         self.assertIn('data-wib-open-work-view="watch"', source)

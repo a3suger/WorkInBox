@@ -8,16 +8,20 @@ document.querySelectorAll(".wib-message-search-fallback").forEach((button) => {
   button.hidden = false;
 });
 
-async function loadImapTarget() {
+async function loadWorkViewConfig() {
   // In a Thunderbird content script, a root-relative fetch can be resolved
   // against the moz-extension origin. Build the URL explicitly from the WIB
   // page so the request always goes to the running WIB Web server.
-  const targetUrl = new URL("/api/thunderbird/imap-target", window.location.href);
+  const targetUrl = new URL("/api/extension/bootstrap", window.location.href);
   const response = await fetch(targetUrl.href, { cache: "no-store" });
   if (!response.ok) {
-    throw new Error(`WIB Web の IMAP 設定を取得できませんでした: HTTP ${response.status}`);
+    throw new Error(`WIB Web のExtension設定を取得できませんでした: HTTP ${response.status}`);
   }
-  return response.json();
+  const bootstrap = await response.json();
+  return {
+    imapTarget: bootstrap.imap_target,
+    lookbackDays: bootstrap.new_mail_lookback_days,
+  };
 }
 
 async function handleOpenMessage(button) {
@@ -62,11 +66,12 @@ async function handleOpenWorkView(button) {
   setButtonStatus(button, "Thunderbirdで準備中…");
 
   try {
-    const imapTarget = await loadImapTarget();
+    const config = await loadWorkViewConfig();
     const response = await messenger.runtime.sendMessage({
       type: "workinbox-open-work-view",
       view,
-      imapTarget,
+      imapTarget: config.imapTarget,
+      lookbackDays: view.startsWith("unattended") ? config.lookbackDays : null,
     });
     if (!response?.ok) {
       throw new Error(response?.error || "Thunderbird の作業ビューを開けませんでした。");

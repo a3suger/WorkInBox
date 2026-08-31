@@ -116,6 +116,27 @@ class WebRuntimeTest(unittest.TestCase):
             self.assertEqual(response.headers["location"], "/active?sync_started=1")
             self.assertEqual(manager.starts, [False])
 
+    def test_api_normal_sync_starts_process_without_redirect(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = FakeSyncProcessManager()
+            app = create_app(
+                self.make_config(Path(directory) / "workinbox.db"),
+                sync_process_manager=manager,
+            )
+            route = next(
+                route
+                for route in app.routes
+                if route.path == "/api/sync" and "POST" in (route.methods or set())
+            )
+
+            response = route.endpoint()
+
+            self.assertEqual(
+                response,
+                {"ok": True, "started": True, "running": True},
+            )
+            self.assertEqual(manager.starts, [False])
+
     def test_full_recheck_route_starts_full_recheck_process(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = FakeSyncProcessManager()

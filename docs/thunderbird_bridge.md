@@ -197,12 +197,14 @@ Extension 変更後は note 側で repository を更新し、Thunderbird の Ext
 
 Extensionは専用ダッシュボードタブを持ち、WIB Webとは別にThunderbirdの対象mailboxから次を集計する。
 
-- 未着眼・未読 / 未着眼・既読
+- 未着眼（合計と未読 / 既読の内訳）
 - `返信必要` / `見る・検討` / `注目`
 - 専用タグ、判定保留、待機タグの作業件数
 
-未着眼2件数だけにWIB設定の`new_mail_lookback_days`を適用し、他の件数はmailbox全体を対象にする。集計はメッセージヘッダーだけをページ単位で読み、本文をキャッシュしない。ダッシュボードの未着眼2カードから作業ビューを開く場合は、Extensionのcustom Mail Viewにも同じ日数条件を渡す。通常ワークフロー等の作業ビューに期間制限は追加しない。
+未着眼の合計と未読 / 既読の内訳だけにWIB設定の`new_mail_lookback_days`を適用し、他の件数はmailbox全体を対象にする。集計はメッセージヘッダーだけをページ単位で読み、本文をキャッシュしない。WIB WebまたはExtensionダッシュボードの未着眼カードから作業ビューを開く場合は、Extensionのcustom Mail Viewにも同じ日数条件を渡す。通常ワークフロー等の作業ビューに期間制限は追加しない。
 
 ExtensionはWIBの`/api/health`、`/api/extension/bootstrap`、既存`/api/sync-status`を使って接続状態と設定を確認する。取得済みのIMAP対象設定、lookback日数、直近集計結果はExtensionローカルストレージへ保存し、WIB停止中にも再利用する。password等のcredentialはAPI応答にもキャッシュにも含めない。
 
 WIB停止中も作業ビュー、メール閲覧・返信、スター・タグ操作、通常終了は利用可能とする。AI、SQLite、relation、Record、専用ワークフロー更新はオンライン時だけWIB Webで行う。
+
+Extensionダッシュボードの接続状態欄には通常同期ボタンを置く。`POST /api/sync`で既存のバックグラウンド同期を開始し、`/api/sync-status`で状態を追跡する。WIB接続不可時と同期実行中は押せないようにする。

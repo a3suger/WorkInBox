@@ -27,19 +27,13 @@
   <h3>まだ着眼判断していないメール（直近{{ snapshot.unattended_lookback_days }}日）</h3>
   <div class="dashboard-grid">
     <article class="dashboard-card">
-      <div class="dashboard-count">{{ snapshot.unattended_unread }}</div>
-      <h4>未着眼・未読</h4>
-      <p class="muted">直近{{ snapshot.unattended_lookback_days }}日 AND スターなし AND 未読 AND 一括処理なし</p>
-      <button type="button" data-wib-open-work-view="unattended-unread">Thunderbirdで確認</button>
-    </article>
-    <article class="dashboard-card">
-      <div class="dashboard-count">{{ snapshot.unattended_read }}</div>
-      <h4>未着眼・既読</h4>
-      <p class="muted">直近{{ snapshot.unattended_lookback_days }}日 AND スターなし AND 既読 AND 一括処理なし</p>
-      <button type="button" data-wib-open-work-view="unattended-read">Thunderbirdで確認</button>
+      <div class="dashboard-count">{{ snapshot.unattended_unread + snapshot.unattended_read }}</div>
+      <h4>未着眼</h4>
+      <p class="muted">うち未読 {{ snapshot.unattended_unread }}件 / 既読 {{ snapshot.unattended_read }}件</p>
+      <p class="muted">直近{{ snapshot.unattended_lookback_days }}日 AND スターなし AND 一括処理なし</p>
+      <button type="button" data-wib-open-work-view="unattended">Thunderbirdで確認</button>
     </article>
   </div>
-  <p class="muted">Thunderbirdで開く一覧は期間を限定しないため、ダッシュボード件数より多く表示される場合があります。</p>
 </section>
 
 <section style="margin-top: 24px;">

@@ -39,6 +39,7 @@ button:disabled { opacity: .5; cursor: default; }
 .connection.degraded { border-left-color: #d97706; }
 .connection.offline { border-left-color: #dc2626; }
 .connection-heading { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.connection-actions { margin-top: 10px; }
 .connection-dot { width: 10px; height: 10px; border-radius: 50%; background: #64748b; }
 .online .connection-dot { background: #16a34a; }
 .degraded .connection-dot { background: #d97706; }
@@ -63,6 +64,7 @@ dd { margin: 2px 0 0; }
 }
 .card h3 { margin: 4px 0 10px; font-size: .96rem; }
 .count { display: block; font-size: 1.8rem; font-weight: 700; }
+.breakdown { margin: 0 0 10px; font-size: .88rem; opacity: .8; }
 .note { margin-top: 9px; font-size: .86rem; opacity: .72; }
 .wib-links { margin-top: 10px; }
 .error { background: color-mix(in srgb, #dc2626 12%, Canvas); color: #b91c1c; padding: 10px 12px; border-radius: 6px; }

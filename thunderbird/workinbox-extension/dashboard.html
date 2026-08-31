@@ -25,6 +25,9 @@
         <strong id="connection-label">WIB接続を確認中</strong>
       </div>
       <div id="connection-detail">確認しています…</div>
+      <div class="connection-actions">
+        <button id="normal-sync" type="button" disabled>通常同期</button>
+      </div>
       <dl>
         <div><dt>最終接続成功</dt><dd id="last-connected">-</dd></div>
         <div><dt>WIBバージョン</dt><dd id="wib-version">-</dd></div>
@@ -46,17 +49,13 @@
       <p id="lookback-note">未着眼件数の対象期間を確認しています。</p>
       <div class="grid">
         <article class="card">
-          <span class="count" data-count="unattendedUnread">-</span>
-          <h3>未着眼・未読</h3>
-          <button type="button" data-work-view="unattended-unread">Thunderbirdで開く</button>
-        </article>
-        <article class="card">
-          <span class="count" data-count="unattendedRead">-</span>
-          <h3>未着眼・既読</h3>
-          <button type="button" data-work-view="unattended-read">Thunderbirdで開く</button>
+          <span class="count" data-count="unattendedTotal">-</span>
+          <h3>未着眼</h3>
+          <p class="breakdown">うち未読 <span data-count="unattendedUnread">-</span>件 / 既読 <span data-count="unattendedRead">-</span>件</p>
+          <button type="button" data-work-view="unattended">Thunderbirdで開く</button>
         </article>
       </div>
-      <p class="note">未着眼の件数とThunderbird作業ビューは、どちらも上記の直近期間を対象にします。</p>
+      <p class="note">未着眼の件数とThunderbird作業ビューは、未読・既読を合わせて上記の直近期間を対象にします。</p>
     </section>
 
     <section class="group">

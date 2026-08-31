@@ -2,7 +2,7 @@
 
 ## 状態
 
-作業中（#31 初回実装完了、commit・実機確認待ち）
+作業中（#31 追加調整`0.3.4`実装・自動テスト完了、commit・Actions・実機確認待ち）
 
 ## 現在の対象
 
@@ -10,7 +10,7 @@
 - #6〜#16 の実装 Issue: すべて Closed
 - 残っている実機確認: #18〜#22・#24・#25
 - 追加実装Issue: #26・#27 Closed、#28〜#31 Open
-- 現在位置: #31 のhealth/bootstrap API、Extension内ダッシュボード、Thunderbird件数集計を実装。自動テスト141件成功。commit、Actions、実機確認が残っている
+- 現在位置: #31 を再Openし、未着眼1カード化、WIB Web導線への期間設定、Extension通常同期ボタンを`0.3.4`として実装。自動テスト143件成功
 
 ## GitHub / git の現在状態
 
@@ -26,10 +26,12 @@
 - 2026-08-26 に実運用で見つかった改善を #26〜#29 として作成した。
 - #26 は実装・自動テスト・実機確認を完了しClosed。
 - #27 は実装・自動テスト・実機確認を完了しClosed。表示先をタブ／新しいウィンドウから選べるようにする追加要望は #30 として作成した。
-- 2026-08-30 に、WIB接続なしでも通常作業を継続するExtension内ダッシュボードを #31 として作成した。仕様案は `docs/extension_dashboard_proposal.md`。
-- 最新確認済みActionsは run `33089524024`（tests #186）success、対象commitは `1666fd2`。
+- 2026-08-30 に、WIB接続なしでも通常作業を継続するExtension内ダッシュボードを #31 として作成し、一度Closed。2026-08-31の追加要望を受けて再Openした。
+- 最新確認済みActionsは run `33306375397` success、対象commitは `13e968a`。
 
 ### ローカル git
+
+2026-08-30 中断処理開始時、note側のローカル`main`と`origin/main`は`13e968a`で一致し、作業ツリーはclean。#31の最終commitは`13e968a Align extension dashboard counts with work views`。ローカル自動テストは142件成功、GitHub Actions run `33306375397`もsuccess。
 
 2026-08-28 中断時、note側のローカル`main`と`origin/main`は`1666fd2`で一致し、作業ツリーは引き継ぎ文書更新前までclean。#27のローカル自動テストは136件成功、GitHub Actions tests #186もsuccess。#27は実機確認結果をコメントしてClosedし、追加要望 #30を作成した。この中断記録のみ未commit。
 
@@ -85,6 +87,19 @@ daf237a Use progress runtime for legacy web entry point
 - ローカル自動テスト: `125 tests OK`（既知の subtest を含む）
 
 ## 最新の「作業再開」以降に完了した作業
+
+### 0-10. #31 Extension内ダッシュボード
+
+- Thunderbird内にExtension専用ダッシュボードを追加し、WIBの接続状態とThunderbird由来の作業件数を表示した。
+- WIB停止中・SSH tunnel切断中も、保存済みIMAP対象設定を使って件数更新とThunderbird作業ビューを利用できるようにした。
+- WIBへ`/api/health`と`/api/extension/bootstrap`を追加し、credentialやメール本文をExtensionへ保存しない境界を確定した。
+- Thunderbird検索APIへ日付・スター・タグ条件を先に渡し、INBOX全件をExtensionへ読み込まないよう集計を高速化した。
+- 未着眼2件数と、その2カードから開くThunderbird作業ビューだけに`new_mail_lookback_days`を適用した。
+- 締切あり・スケジュール調整を含む全作業件数をThunderbird一覧と同じ`対象タグ + ★`へ統一した。
+- Extensionの最終バージョンは`0.3.3`。実機でオンライン、WIB停止、復旧、件数更新、作業ビュー、期間制限、件数一致を確認した。
+- commitは`09eb805`、`f27510c`、`943b4f7`、`13e968a`。各GitHub Actionsはsuccess、最終runは`33306375397`。
+- #31へ実機確認結果をコメントし、Closedした。
+- その後のdesktop実機確認と操作改善要望を受け、2026-08-31に#31を再Openした。`0.3.4`では未着眼を合計と未読 / 既読内訳の1カードへ統合し、WIB WebとExtensionのどちらからも期間付きの1作業ビューを開く。接続状態欄にはオンライン時だけ使える通常同期ボタンを追加した。ローカル自動テストは143件成功。
 
 ### 0-9. #26 VTODOからWIB締切詳細を開いて編集する
 
@@ -246,7 +261,7 @@ Thunderbird 実機確認は #25 に分離済み。
 3. #30 `元メールをタブまたは新しいウィンドウで開く設定を追加する`
 4. #31 `WIB接続なしでも通常作業を継続できるExtension内ダッシュボードを追加する`
 
-#31 は初回実装と自動テストまで完了し、commit、Actions、実機確認待ち。#28〜#30もOpenのまま維持する。
+#31 は追加調整`0.3.4`のcommit、Actions、実機確認待ち。#28〜#30もOpenのまま維持する。
 
 ### 実機確認の進め方
 
@@ -288,13 +303,15 @@ Thunderbird 実機確認は #25 に分離済み。
 
 ## 現在の作業状況
 
-#31 はGitHub Issueを作成し、Extension内ダッシュボードの目的、Thunderbird由来の集計、WIBヘルスチェック、オンライン・オフラインの責務境界、キャッシュ、性能、API候補、完了条件を `docs/extension_dashboard_proposal.md` に整理した。既存WIB Web UIは維持し、初回実装では全面移植やオフライン更新キューを対象外とする。
+#31 はExtension内ダッシュボードの目的、Thunderbird由来の集計、WIBヘルスチェック、オンライン・オフラインの責務境界、キャッシュ、性能、API、完了条件を `docs/extension_dashboard_proposal.md` に整理した。既存WIB Web UIは維持し、全面移植やオフライン更新キューは対象外とした。一度Closedしたが追加調整のため再Openしている。
 
-初回実装ではWIBへ`/api/health`と`/api/extension/bootstrap`を追加し、Extension `0.3.0`へ専用ダッシュボードタブを追加した。Thunderbirdの対象mailboxをメッセージヘッダーだけでページ集計し、未着眼2件数には`new_mail_lookback_days`、その他には`対象タグ + ★`を適用する。接続設定と直近集計をExtension内へ保存し、WIB停止中も作業ビューを開ける。30秒間隔ではhealthだけを確認し、件数再集計は初回、手動更新、メール状態変更時に限定した。ローカル自動テスト141件とJavaScript構文検査は成功。commit、Actions、Thunderbird実機確認は未実施。
+初回実装ではWIBへ`/api/health`と`/api/extension/bootstrap`を追加し、Extension `0.3.0`へ専用ダッシュボードタブを追加した。Thunderbirdの対象mailboxをメッセージヘッダーだけで集計し、未着眼2件数には`new_mail_lookback_days`、その他には`対象タグ + ★`を適用する。接続設定と直近集計をExtension内へ保存し、WIB停止中も作業ビューを開ける。30秒間隔ではhealthだけを確認し、件数再集計は初回、手動更新、メール状態変更時に限定した。
 
-実機確認を受け、Extension `0.3.1`ではThunderbird検索APIへ日付・スター・タグ条件を先に渡し、INBOX全件をExtensionへ読み込まないよう集計を高速化した。さらに`0.3.2`では、ダッシュボードの未着眼2カードから開くcustom Mail Viewにも`new_mail_lookback_days`を渡し、件数と一覧の対象期間を一致させた。#31はこの追加調整の実機確認までCloseしない。
+実機確認を受け、Extension `0.3.1`ではThunderbird検索APIへ日付・スター・タグ条件を先に渡し、INBOX全件をExtensionへ読み込まないよう集計を高速化した。さらに`0.3.2`では、ダッシュボードの未着眼2カードから開くcustom Mail Viewにも`new_mail_lookback_days`を渡し、件数と一覧の対象期間を一致させた。
 
 Extension `0.3.3`では、締切あり・スケジュール調整の件数だけが完了タグ付きメールを除外してThunderbird作業ビューと不一致になっていた問題を修正した。Extensionダッシュボードの全作業件数を、表示一覧と同じ`対象タグ + ★`に統一した。
+
+Extension `0.3.4`では、未着眼を合計と未読 / 既読内訳の1カード・1作業ビューに統合した。WIB Web側もbootstrapから`new_mail_lookback_days`を取得してExtensionへ渡すため、desktopのWIB Web導線にも期間制限がかかる。Extensionの接続状態欄へ通常同期ボタンと`POST /api/sync`を追加し、オンライン時だけ開始可能、実行中は2秒間隔で状態確認する。ローカル自動テスト143件成功。commit、Actions、実機確認は未実施。
 
 #26 は実装・自動テスト・Actions・実機確認を完了した。ToDoのWIBリンクはnoteの外部ブラウザで開く現行動作を完了条件として扱う。Thunderbird内部表示は可能性があるが、VTODO内の通常HTTPリンクをExtensionで確実に横取りする追加設計が必要なため、#26には含めない。
 
@@ -306,15 +323,16 @@ Extension `0.3.3`では、締切あり・スケジュール調整の件数だけ
 
 アクティブメール一覧では各メールに対して複数の操作ができるため、タグごとに表示を絞り込めるフィルタを追加する案も検討する。再開時に、通常ワークフロー・専用ワークフロー・待機状態のどのタグを対象にするか、複数タグ指定をAND/ORのどちらで扱うか、絞り込み状態を保持するかを整理してから実装する。
 
-新しい設計判断待ちによる中断ではない。
+新しい設計判断待ちではない。
 
 ## 次に行うこと
 
-1. Extension `0.3.3`の追加調整をcommitしてGitHubへpushする。
-2. GitHub Actionsの結果を確認する。
-3. noteでExtensionを再読み込みする。
-4. 未着眼2カードから開く一覧だけが`new_mail_lookback_days`の対象になることを実機確認する。
-5. 問題がなければ #31 をCloseする。
+1. #31の追加調整`0.3.4`をcommitしてGitHubへpushする。
+2. GitHub Actionsの成功を確認する。
+3. desktopでpull・WIB再起動、desktopとnoteでExtensionを再読み込みする。
+4. 両方のWIB Web / Extensionダッシュボードで未着眼1カード・内訳・期間付き一覧を確認する。
+5. Extensionダッシュボードから通常同期を開始し、実行中・完了・オフライン時無効を確認する。
+6. 問題がなければ結果を記録し、#31を再度Closeする。
 
 ## 設計判断待ち
 

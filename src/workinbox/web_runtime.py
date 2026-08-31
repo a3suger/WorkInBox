@@ -63,6 +63,26 @@ def create_app(
             "poll_interval_ms": 2000,
         }
 
+    @app.post("/api/sync")
+    def api_normal_sync() -> dict[str, object]:
+        try:
+            started = manager.start(full_recheck=False)
+        except OSError as exc:
+            logging.exception("Unable to start synchronization process")
+            return {
+                "ok": False,
+                "started": False,
+                "running": manager.is_running,
+                "error": str(exc),
+            }
+        if not started:
+            logging.warning("Synchronization request ignored because another sync is running")
+        return {
+            "ok": True,
+            "started": started,
+            "running": manager.is_running,
+        }
+
     def start_sync(*, full_recheck: bool) -> RedirectResponse | PlainTextResponse:
         try:
             started = manager.start(full_recheck=full_recheck)

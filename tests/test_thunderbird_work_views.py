@@ -37,6 +37,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
 
         self.assertIn('"unattended-unread": { label: "未着眼・未読", unattended: true, unread: true }', background)
         self.assertIn('"unattended-read": { label: "未着眼・既読", unattended: true, unread: false }', background)
+        self.assertIn('unattended: { label: "未着眼", unattended: true, unread: false }', background)
         self.assertIn(
             "messenger.mailViews.ensureUnattendedView(mailTab.id, lookbackDays)",
             background,
@@ -53,9 +54,11 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("[data-wib-open-work-view]", bridge)
         self.assertIn('type: "workinbox-open-work-view"', bridge)
         self.assertIn(
-            'new URL("/api/thunderbird/imap-target", window.location.href)',
+            'new URL("/api/extension/bootstrap", window.location.href)',
             bridge,
         )
+        self.assertIn("bootstrap.new_mail_lookback_days", bridge)
+        self.assertIn('view.startsWith("unattended")', bridge)
         self.assertIn("button.title = message", bridge)
         self.assertIn("}, 10000);", bridge)
 
@@ -139,7 +142,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         popup_bridge = (EXTENSION / "popup_bridge.js").read_text(encoding="utf-8")
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.3")
+        self.assertEqual(manifest["version"], "0.3.4")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
@@ -154,6 +157,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
         for count_name in (
+            "unattendedTotal",
             "unattendedUnread",
             "unattendedRead",
             "answer",
@@ -171,6 +175,9 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("currentConfig.lookbackDays", dashboard_script)
         self.assertIn('fetchJson("/api/health")', dashboard_script)
         self.assertIn('fetchJson("/api/extension/bootstrap")', dashboard_script)
+        self.assertIn('id="normal-sync"', dashboard)
+        self.assertIn('fetchJson("/api/sync", { method: "POST" })', dashboard_script)
+        self.assertIn("!isOnline || syncRunning", dashboard_script)
         self.assertIn("workinboxExtensionDashboardCache", dashboard_script)
         self.assertIn("messenger.messages.query({", background)
         self.assertIn("messenger.messages.continueList(page.id)", background)
@@ -196,7 +203,10 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
             )
         )
 
-        self.assertIn('startsWith("unattended-")', dashboard_script)
+        self.assertIn('startsWith("unattended")', dashboard_script)
+        self.assertIn('data-work-view="unattended"', (
+            EXTENSION / "dashboard.html"
+        ).read_text(encoding="utf-8"))
         self.assertIn("request.lookbackDays", background)
         self.assertIn("Ci.nsMsgSearchAttrib.AgeInDays", experiment)
         self.assertIn("Ci.nsMsgSearchOp.IsLessThan", experiment)
