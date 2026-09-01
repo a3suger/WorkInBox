@@ -353,7 +353,12 @@ class ImapClient:
                 flags=_parse_flags(fetched),
             )
 
-    def fetch_unread(self, checkpoint: tuple[int, int] | None = None) -> TriageFetchResult:
+    def fetch_unread(
+        self,
+        checkpoint: tuple[int, int] | None = None,
+        *,
+        reply_targets: tuple[str, ...] = (),
+    ) -> TriageFetchResult:
         with imaplib.IMAP4_SSL(
             self.config.host, self.config.port, timeout=self.config.timeout_seconds
         ) as client:
@@ -425,6 +430,28 @@ class ImapClient:
             uid_values.update(
                 support_data[0].split() if support_data and support_data[0] else ()
             )
+            for reply_target in reply_targets:
+                status, reply_data = client.uid(
+                    "search",
+                    None,
+                    "OR",
+                    "HEADER",
+                    "In-Reply-To",
+                    reply_target,
+                    "HEADER",
+                    "References",
+                    reply_target,
+                    "SINCE",
+                    since_text,
+                )
+                if status != "OK":
+                    raise RuntimeError(
+                        "IMAP WorkInBox support reply search failed for "
+                        f"{reply_target}"
+                    )
+                uid_values.update(
+                    reply_data[0].split() if reply_data and reply_data[0] else ()
+                )
             ordered_uid_values = sorted(uid_values, key=int)
             logging.info("TriageBox IMAP search returned %d candidate UIDs", len(uid_values))
             self._progress(

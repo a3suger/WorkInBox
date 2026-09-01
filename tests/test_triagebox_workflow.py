@@ -30,10 +30,17 @@ class FakeTriageImapClient:
         self.flagged_updates: list[tuple[int, bool]] = []
         self.received_references = []
         self.fetch_checkpoints: list[tuple[int, int] | None] = []
+        self.fetch_reply_targets: list[tuple[str, ...]] = []
         self.find_calls: list[str] = []
 
-    def fetch_unread(self, checkpoint: tuple[int, int] | None = None) -> TriageFetchResult:
+    def fetch_unread(
+        self,
+        checkpoint: tuple[int, int] | None = None,
+        *,
+        reply_targets: tuple[str, ...] = (),
+    ) -> TriageFetchResult:
         self.fetch_checkpoints.append(checkpoint)
+        self.fetch_reply_targets.append(reply_targets)
         last_uid = checkpoint[1] if checkpoint and checkpoint[0] == 10 else 0
         selected = [
             self.messages[message_id]
@@ -328,6 +335,48 @@ class TriageBoxWorkflowTest(unittest.TestCase):
 
             self.assertEqual(repeated.support_requests, 0)
             self.assertEqual(repeated.waiting_action_replies, 0)
+
+    def test_support_reply_uses_saved_request_uid_without_message_id_search(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            request = triage_message(
+                "<request@example>",
+                "me@example.com",
+                2,
+                flags=("\\Flagged", "wib-waiting-action"),
+                origin="<origin@example>",
+            )
+            reply = triage_message(
+                "<reply@example>",
+                "supporter@example.com",
+                3,
+                in_reply_to=("<request@example>",),
+            )
+            database = EmailDatabase(path)
+            database.initialize()
+            database.synchronize([request.email])
+            relations = TriageRelationStore(path)
+            relations.initialize()
+            relations.record(
+                "<request@example>",
+                "<origin@example>",
+                "schedule_support_request",
+            )
+            imap = FakeTriageImapClient([request, reply])
+            imap.unread_ids = ["<reply@example>"]
+
+            result = TriageService(
+                config,
+                imap,
+                relation_store=relations,
+                database=database,
+            ).run()
+
+            self.assertEqual(result.waiting_action_replies, 1)
+            self.assertEqual(imap.find_calls, [])
+            self.assertEqual(imap.fetch_reply_targets, [("<request@example>",)])
+            self.assertIn("wib-action-ready", imap.messages["<reply@example>"].flags)
 
     def test_action_ready_reply_is_not_sent_to_normal_ai_classification(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

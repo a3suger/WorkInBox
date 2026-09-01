@@ -32,6 +32,18 @@ READ_SUPPORT_MESSAGE = (
     b"Body"
 )
 
+READ_SUPPORT_REPLY = (
+    b"Message-ID: <reply@example>\r\n"
+    b"From: supporter@example.com\r\n"
+    b"To: me@example.com\r\n"
+    b"Subject: Re: Schedule support\r\n"
+    b"Date: Sat, 8 Aug 2026 10:00:00 +0000\r\n"
+    b"In-Reply-To: <support@example>\r\n"
+    b"References: <support@example>\r\n"
+    b"\r\n"
+    b"Reply"
+)
+
 
 class FakeImap:
     init_count: int = 0
@@ -132,6 +144,8 @@ class ReadSupportImap:
             ReadSupportImap.searches.append(args)
             if "X-WorkInBox-Origin-Message-ID" in args:
                 return "OK", [b"90"]
+            if "In-Reply-To" in args:
+                return "OK", [b"95"]
             return "OK", [b""]
         if command == "fetch" and args[0] == "90":
             metadata = (
@@ -139,6 +153,12 @@ class ReadSupportImap:
                 b'INTERNALDATE "08-Aug-2026 09:00:00 +0000")'
             )
             return "OK", [(metadata, READ_SUPPORT_MESSAGE), b")"]
+        if command == "fetch" and args[0] == "95":
+            metadata = (
+                b'2 (UID 95 FLAGS (\\Seen) '
+                b'INTERNALDATE "08-Aug-2026 10:00:00 +0000")'
+            )
+            return "OK", [(metadata, READ_SUPPORT_REPLY), b")"]
         raise AssertionError((command, args))
 
 
@@ -334,6 +354,39 @@ class ImapClientTest(unittest.TestCase):
                 "HEADER",
                 "X-WorkInBox-Origin-Message-ID",
                 '\"\"',
+                "SINCE",
+                "02-Aug-2026",
+            ),
+            ReadSupportImap.searches,
+        )
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", ReadSupportImap)
+    @patch("workinbox.imap_client.date")
+    def test_fetch_unread_recovers_read_reply_to_tracked_support_request(
+        self, mock_date
+    ) -> None:
+        mock_date.today.return_value = date(2026, 8, 8)
+        ReadSupportImap.searches = []
+
+        result = ImapClient(self.config).fetch_unread(
+            (55, 100),
+            reply_targets=("<support@example>",),
+        )
+
+        self.assertEqual(
+            [item.email.message_id for item in result.messages],
+            ["<support@example>", "<reply@example>"],
+        )
+        self.assertIn(
+            (
+                None,
+                "OR",
+                "HEADER",
+                "In-Reply-To",
+                "<support@example>",
+                "HEADER",
+                "References",
+                "<support@example>",
                 "SINCE",
                 "02-Aug-2026",
             ),

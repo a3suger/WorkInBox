@@ -20,7 +20,7 @@ class FakeFocusImapClient:
         self.messages[item.email.message_id] = item
         self.unread_ids.append(item.email.message_id)
 
-    def fetch_unread(self, checkpoint=None) -> TriageFetchResult:
+    def fetch_unread(self, checkpoint=None, *, reply_targets=()) -> TriageFetchResult:
         last_uid = checkpoint[1] if checkpoint and checkpoint[0] == 10 else 0
         selected = [
             self.messages[message_id]

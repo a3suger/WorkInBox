@@ -83,6 +83,8 @@ class TriageImapClient(Protocol):
     def fetch_unread(
         self,
         checkpoint: tuple[int, int] | None = None,
+        *,
+        reply_targets: tuple[str, ...] = (),
     ) -> TriageFetchResult: ...
 
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None: ...
@@ -220,7 +222,12 @@ class TriageService:
                 checkpoint[1],
             )
         try:
-            fetched = self.imap_client.fetch_unread(checkpoint)
+            fetched = self.imap_client.fetch_unread(
+                checkpoint,
+                reply_targets=self.relations.message_ids_for_relation_kind(
+                    _SUPPORT_REQUEST
+                ),
+            )
         except (OSError, RuntimeError, ValueError) as exc:
             logging.warning("TriageBox unread fetch failed: %s", exc)
             return TriageResult(errors=(TriageError("<mailbox>", str(exc)),))
@@ -485,10 +492,43 @@ class TriageService:
                 "TriageBox reply resolution: resolving tracked support request message_id=%s",
                 message_id,
             )
-            referenced = self.imap_client.find_message_by_message_id(message_id)
+            referenced = self._message_by_saved_uid_or_search(message_id)
             if referenced is not None and _WAITING_ACTION in referenced.flags:
                 return referenced
         return None
+
+    def _message_by_saved_uid_or_search(self, message_id: str) -> TriageMessage | None:
+        reference = self.database.imap_reference(message_id)
+        email = self.database.email_message(message_id)
+        if (
+            reference is not None
+            and reference.mailbox == self.config.imap.mailbox
+            and email is not None
+        ):
+            logging.info(
+                "TriageBox reply resolution: inspecting tracked request by saved UID=%d",
+                reference.uid,
+            )
+            snapshot = self.imap_client.inspect_flags(
+                reference.uid,
+                expected_uidvalidity=reference.uidvalidity,
+            )
+            return TriageMessage(
+                email=email,
+                headers=TriageHeaders(
+                    from_address=None,
+                    message_id=message_id,
+                    in_reply_to=(),
+                    references=(),
+                    origin_message_id=None,
+                ),
+                flags=snapshot.flags,
+            )
+
+        logging.info(
+            "TriageBox reply resolution: saved request UID unavailable; using Message-ID search"
+        )
+        return self.imap_client.find_message_by_message_id(message_id)
 
     def _set_keyword(self, item: TriageMessage, keyword: str, *, enabled: bool) -> None:
         if item.email.uid is None:

@@ -205,3 +205,16 @@ class TriageRelationStore:
                 (message_id,),
             ).fetchone()
         return str(row[0]) if row is not None else None
+
+    def message_ids_for_relation_kind(self, relation_kind: str) -> tuple[str, ...]:
+        with sqlite3.connect(self.path) as connection:
+            rows = connection.execute(
+                """
+                SELECT message_id
+                FROM triage_relations
+                WHERE relation_kind = ?
+                ORDER BY updated_at, message_id
+                """,
+                (relation_kind,),
+            ).fetchall()
+        return tuple(str(row[0]) for row in rows)
