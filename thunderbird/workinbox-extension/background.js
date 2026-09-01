@@ -14,8 +14,16 @@ const WORK_VIEWS = {
   "unattended-unread": { label: "未着眼・未読", unattended: true, unread: true },
   "unattended-read": { label: "未着眼・既読", unattended: true, unread: false },
   answer: { tagKey: "wib-answer", label: "返信必要" },
-  deadline: { tagKey: "wib-deadline", label: "締切あり" },
-  schedule: { tagKey: "wib-schedule", label: "スケジュール調整" },
+  deadline: {
+    tagKey: "wib-deadline",
+    label: "締切あり",
+    excludedTags: ["wib-deadline-done"],
+  },
+  schedule: {
+    tagKey: "wib-schedule",
+    label: "スケジュール調整",
+    excludedTags: [REQUESTED_TAG, "wib-schedule-done"],
+  },
   pending: { tagKey: "wib-pending", label: "判定保留" },
   review: { tagKey: "wib-review", label: "見る・検討" },
   watch: { tagKey: "wib-watch", label: "注目" },
@@ -295,6 +303,14 @@ async function openWorkView(viewName, imapTarget, lookbackDays = null) {
         unread: true,
       });
     }
+  } else if (view.excludedTags) {
+    await messenger.mailTabs.setQuickFilter(mailTab.id, { show: false });
+    await messenger.mailViews.ensureWorkflowView(
+      mailTab.id,
+      view.label,
+      view.tagKey,
+      view.excludedTags,
+    );
   } else {
     await messenger.mailViews.resetView(mailTab.id);
     await messenger.mailTabs.setQuickFilter(mailTab.id, {
@@ -401,7 +417,13 @@ function countDashboardMessage(counts, message, since) {
     return;
   }
   for (const [countName, tagKey] of Object.entries(DASHBOARD_TAG_COUNTS)) {
-    if (countName === "schedule" && tags.has(REQUESTED_TAG)) {
+    if (countName === "deadline" && tags.has("wib-deadline-done")) {
+      continue;
+    }
+    if (
+      countName === "schedule"
+      && (tags.has(REQUESTED_TAG) || tags.has("wib-schedule-done"))
+    ) {
       continue;
     }
     if (tags.has(tagKey)) {

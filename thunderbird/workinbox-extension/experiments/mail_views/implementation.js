@@ -83,6 +83,73 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
       };
     }
 
+    function workflowViewName(label) {
+      return `WIB ${label}（未処理）`;
+    }
+
+    function createWorkflowView(mailViewList, name, requiredTag, excludedTags) {
+      const searchSession = Cc["@mozilla.org/messenger/searchSession;1"].createInstance(
+        Ci.nsIMsgSearchSession,
+      );
+      const view = mailViewList.createMailView();
+      view.mailViewName = name;
+
+      view.appendTerm(
+        createSearchTerm(
+          searchSession,
+          Ci.nsMsgSearchAttrib.MsgStatus,
+          Ci.nsMsgSearchOp.Is,
+          (value) => {
+            value.status = Ci.nsMsgMessageFlags.Marked;
+          },
+        ),
+      );
+      view.appendTerm(
+        createSearchTerm(
+          searchSession,
+          Ci.nsMsgSearchAttrib.Keywords,
+          Ci.nsMsgSearchOp.Contains,
+          (value) => {
+            value.str = requiredTag;
+          },
+        ),
+      );
+      for (const keyword of excludedTags) {
+        view.appendTerm(
+          createSearchTerm(
+            searchSession,
+            Ci.nsMsgSearchAttrib.Keywords,
+            Ci.nsMsgSearchOp.DoesntContain,
+            (value) => {
+              value.str = keyword;
+            },
+          ),
+        );
+      }
+
+      mailViewList.addMailView(view);
+      mailViewList.save();
+      return view;
+    }
+
+    function findOrCreateWorkflowView(label, requiredTag, excludedTags) {
+      const mailViewList = Cc["@mozilla.org/messenger/mailviewlist;1"].getService(
+        Ci.nsIMsgMailViewList,
+      );
+      const name = workflowViewName(label);
+      for (let index = 0; index < mailViewList.mailViewCount; index += 1) {
+        const view = mailViewList.getMailViewAt(index);
+        if (view.mailViewName === name) {
+          return { view, name, created: false };
+        }
+      }
+      return {
+        view: createWorkflowView(mailViewList, name, requiredTag, excludedTags),
+        name,
+        created: true,
+      };
+    }
+
     function resolveThreePaneWindow(tabId) {
       const wrapper = context.extension.tabManager.get(tabId);
       if (!wrapper) {
@@ -118,6 +185,21 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
             result.lookbackDays = normalizedLookbackDays;
           }
           return result;
+        },
+
+        async ensureWorkflowView(tabId, label, requiredTag, excludedTags) {
+          const { name, created } = findOrCreateWorkflowView(
+            label,
+            requiredTag,
+            excludedTags,
+          );
+          const threePaneWindow = resolveThreePaneWindow(tabId);
+          threePaneWindow.gViewWrapper.setMailView(name, null, true);
+          return {
+            name,
+            created,
+            applied: true,
+          };
         },
 
         async resetView(tabId) {

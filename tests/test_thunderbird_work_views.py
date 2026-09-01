@@ -32,6 +32,27 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         )
         self.assertNotIn("setMailView(-1", implementation)
 
+    def test_dedicated_views_require_active_tag_and_exclude_completed_tags(self) -> None:
+        implementation = (
+            EXTENSION / "experiments" / "mail_views" / "implementation.js"
+        ).read_text(encoding="utf-8")
+        schema = json.loads(
+            (EXTENSION / "experiments" / "mail_views" / "schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertIn("function createWorkflowView", implementation)
+        self.assertIn("Ci.nsMsgSearchOp.Contains", implementation)
+        self.assertIn("for (const keyword of excludedTags)", implementation)
+        self.assertIn("Ci.nsMsgSearchOp.DoesntContain", implementation)
+        self.assertIn("Ci.nsMsgMessageFlags.Marked", implementation)
+        self.assertIn("async ensureWorkflowView", implementation)
+        self.assertIn(
+            "ensureWorkflowView",
+            [function["name"] for function in schema[0]["functions"]],
+        )
+
     def test_background_routes_unattended_and_normal_views_separately(self) -> None:
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
@@ -44,6 +65,12 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         )
         self.assertIn("unread: true", background)
         self.assertIn("messenger.mailViews.resetView(mailTab.id)", background)
+        self.assertIn("messenger.mailViews.ensureWorkflowView(", background)
+        self.assertIn('excludedTags: ["wib-deadline-done"]', background)
+        self.assertIn(
+            'excludedTags: [REQUESTED_TAG, "wib-schedule-done"]',
+            background,
+        )
         self.assertIn("flagged: true", background)
         self.assertIn('[view.tagKey]: true', background)
         self.assertIn('watch: { tagKey: "wib-watch", label: "注目" }', background)
@@ -142,7 +169,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         popup_bridge = (EXTENSION / "popup_bridge.js").read_text(encoding="utf-8")
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.6")
+        self.assertEqual(manifest["version"], "0.3.7")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
@@ -188,9 +215,9 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("tags.has(BULK_TAG) || tags.has(LEGACY_BULK_TAG)", background)
         self.assertIn("received >= since", background)
         self.assertIn('type: "workinbox-dashboard-invalidated"', background)
-        self.assertNotIn('tags.has("wib-deadline-done")', background)
-        self.assertNotIn('tags.has("wib-schedule-done")', background)
-        self.assertIn('countName === "schedule" && tags.has(REQUESTED_TAG)', background)
+        self.assertIn('countName === "deadline" && tags.has("wib-deadline-done")', background)
+        self.assertIn('tags.has("wib-schedule-done")', background)
+        self.assertIn('tags.has(REQUESTED_TAG) || tags.has("wib-schedule-done")', background)
 
     def test_unattended_dashboard_view_uses_lookback_days(self) -> None:
         dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")

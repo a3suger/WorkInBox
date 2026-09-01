@@ -22,6 +22,29 @@
         }
       },
       {
+        "name": "ensureWorkflowView",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "tabId", "type": "integer" },
+          { "name": "label", "type": "string" },
+          { "name": "requiredTag", "type": "string" },
+          {
+            "name": "excludedTags",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        ],
+        "returns": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "created": { "type": "boolean" },
+            "applied": { "type": "boolean" }
+          }
+        }
+      },
+      {
         "name": "resetView",
         "type": "function",
         "async": true,

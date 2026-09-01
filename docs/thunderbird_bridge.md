@@ -123,7 +123,7 @@ WIB Web のボタンに `data-wib-open-work-view` を付け、content script `wo
 1. `/api/thunderbird/imap-target` を取得する。
 2. Extension background へ `workinbox-open-work-view` を送る。
 3. background が対象 account / mailbox を解決する。
-4. 未着眼なら custom Mail View、その他は Quick Filter を適用する。
+4. 未着眼、締切あり、スケジュール調整は除外条件を含む custom Mail View、その他は Quick Filter を適用する。
 5. WIB 作業タブを前面にする。
 
 ダッシュボードの最低限の直接導線は次とする。
@@ -133,6 +133,8 @@ WIB Web のボタンに `data-wib-open-work-view` を付け、content script `wo
 - 返信必要
 - 見る・検討
 - 注目
+
+`締切あり`の作業ビューは`締切登録済み`を除外する。`スケジュール調整`の作業ビューは`依頼済み`と`スケジュール対応済み`を除外し、ダッシュボード件数およびWIB Web一覧と処理対象を一致させる。
 
 ---
 
