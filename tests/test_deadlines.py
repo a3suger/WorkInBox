@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 from workinbox.application import DeadlineService
@@ -179,6 +180,34 @@ class DeadlineSupportTest(unittest.TestCase):
                     due_at="2026-09-30",
                     description=None,
                 )
+
+    def test_summary_separates_overdue_and_next_seven_days(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            database.initialize()
+            service = DeadlineService(self.make_config(path), database=database)
+
+            for index, due_at in enumerate((
+                "2026-08-31",
+                "2026-09-01",
+                "2026-09-08",
+                "2026-09-09",
+                "2026-09-01T09:59:59+09:00",
+                "2026-09-01T10:00:00+09:00",
+            )):
+                message_id = f"<summary-{index}@example>"
+                self.seed_message(database, message_id)
+                candidate = service.add_candidate(message_id, f"締切{index}", due_at=due_at)
+                service.register_candidate(candidate.id, timezone_name="Asia/Tokyo")
+
+            summary = service.summary(
+                now=datetime.fromisoformat("2026-09-01T10:00:00+09:00"),
+            )
+
+            self.assertEqual(summary["overdue"], 2)
+            self.assertEqual(summary["due_within_7_days"], 3)
+            self.assertEqual(summary["generated_at"], "2026-09-01T10:00:00+09:00")
 
     def test_candidate_without_due_at_cannot_be_registered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

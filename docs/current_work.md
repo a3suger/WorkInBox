@@ -329,6 +329,8 @@ desktopのINFOログで、M2候補2件はいずれもTriageBoxへ到達した後
 
 M2への`対応待ち + ★`が成功した後、M2への返信M3に`対応あり + ★`が付かないことを確認した。対応待ちrelationを持つM2のMessage-IDを基準に、直近期間の`In-Reply-To` / `References`からM3を既読でも回収する。また、M3処理時のM2確認も保存済みUIDを使い、受信箱全体のMessage-ID検索によるタイムアウトを避けるよう修正した。
 
+#32の第1段階として、WIBのSQLiteにある正式締切を「期限超過」と「今後7日以内」に重複なく集計する`GET /api/deadlines/summary`を追加した。Extension `0.3.8`はこのWIB現在値を表示し、オフライン時は最終取得値と日時を区別して表示する。`ThunderbirdのToDoを開く`ボタンは既存ToDoタブを再利用し、存在しない場合は最小の`tasksSpace` ExperimentでThunderbird標準ToDoスペースを開く。限定CalDAVと完了状態の双方向同期は引き続き#32の残作業である。
+
 #26 は実装・自動テスト・Actions・実機確認を完了した。ToDoのWIBリンクはnoteの外部ブラウザで開く現行動作を完了条件として扱う。Thunderbird内部表示は可能性があるが、VTODO内の通常HTTPリンクをExtensionで確実に横取りする追加設計が必要なため、#26には含めない。
 
 #27 はcommit `1666fd2`でWIB内の元メール導線を`mid:`優先へ変更し、従来のExtension検索を「見つからない場合は検索」として維持した。自動テスト136件とActions tests #186が成功。Active、締切、スケジュール調整、判定保留、締切詳細、Records等の実機確認で、元メールが外部ブラウザを経由せず素早く正しく開き、予備検索も機能することを確認してClosedした。現在は新しいウィンドウで開くため、タブとの選択設定を追加する要望を #30へ分離した。

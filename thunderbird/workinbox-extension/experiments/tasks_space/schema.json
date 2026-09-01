@@ -1,0 +1,20 @@
+[
+  {
+    "namespace": "tasksSpace",
+    "description": "Minimal WorkInBox adapter for opening Thunderbird's Tasks space.",
+    "functions": [
+      {
+        "name": "open",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "returns": {
+          "type": "object",
+          "properties": {
+            "opened": { "type": "boolean" }
+          }
+        }
+      }
+    ]
+  }
+]

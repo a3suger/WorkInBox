@@ -67,4 +67,5 @@ dd { margin: 2px 0 0; }
 .breakdown { margin: 0 0 10px; font-size: .88rem; opacity: .8; }
 .note { margin-top: 9px; font-size: .86rem; opacity: .72; }
 .wib-links { margin-top: 10px; }
+.section-actions { margin-top: 10px; }
 .error { background: color-mix(in srgb, #dc2626 12%, Canvas); color: #b91c1c; padding: 10px 12px; border-radius: 6px; }

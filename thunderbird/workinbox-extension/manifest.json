@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "WorkInBox Thunderbird Connector",
   "description": "Provides Thunderbird-side UI and bridge functions for WorkInBox.",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "browser_specific_settings": {
     "gecko": {
       "id": "workinbox-connector@workinbox.local",
@@ -93,6 +93,14 @@
           ]
         ],
         "script": "experiments/mail_views/implementation.js"
+      }
+    },
+    "tasksSpace": {
+      "schema": "experiments/tasks_space/schema.json",
+      "parent": {
+        "scopes": ["addon_parent"],
+        "paths": [["tasksSpace"]],
+        "script": "experiments/tasks_space/implementation.js"
       }
     }
   },

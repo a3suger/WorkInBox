@@ -78,6 +78,7 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/api/thunderbird/imap-target"])
         self.assertIn("GET", routes["/api/health"])
         self.assertIn("GET", routes["/api/extension/bootstrap"])
+        self.assertIn("GET", routes["/api/deadlines/summary"])
         self.assertIn("GET", routes["/deadlines.ics"])
         self.assertIn("GET", routes["/deadlines/{deadline_id}/source-message"])
         self.assertIn("GET", routes["/deadlines/{deadline_id}"])

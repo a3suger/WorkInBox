@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 from time import perf_counter
 
@@ -442,6 +443,39 @@ class DeadlineService:
     def deadline(self, deadline_id: int) -> Deadline | None:
         self.database.initialize()
         return self.database.deadline(deadline_id)
+
+    def summary(self, *, now: datetime | None = None) -> dict[str, object]:
+        self.database.initialize()
+        current = now or datetime.now().astimezone()
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=datetime.now().astimezone().tzinfo)
+        end_date = current.date() + timedelta(days=7)
+        overdue = 0
+        due_within_7_days = 0
+
+        for deadline in self.database.all_deadlines():
+            due = normalize_due_at(deadline.due_at)
+            if "T" not in due and " " not in due:
+                due_date = date.fromisoformat(due)
+                if due_date < current.date():
+                    overdue += 1
+                elif due_date <= end_date:
+                    due_within_7_days += 1
+                continue
+
+            due_at = datetime.fromisoformat(due)
+            if due_at.tzinfo is None:
+                due_at = due_at.replace(tzinfo=current.tzinfo)
+            if due_at < current:
+                overdue += 1
+            elif due_at <= current + timedelta(days=7):
+                due_within_7_days += 1
+
+        return {
+            "overdue": overdue,
+            "due_within_7_days": due_within_7_days,
+            "generated_at": current.isoformat(),
+        }
 
     def revise_deadline(
         self,

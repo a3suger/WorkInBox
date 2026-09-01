@@ -376,6 +376,16 @@ async function openDashboard() {
   return { ok: true, tabId: created.id, reused: false };
 }
 
+async function openTasksSpace() {
+  const existing = await messenger.tabs.query({ type: "tasks" });
+  if (existing.length > 0) {
+    await messenger.tabs.update(existing[0].id, { active: true });
+    return { ok: true, tabId: existing[0].id, reused: true };
+  }
+  const result = await messenger.tasksSpace.open();
+  return { ok: Boolean(result?.opened), reused: false };
+}
+
 function emptyDashboardCounts() {
   return {
     unattendedTotal: 0,
@@ -800,6 +810,8 @@ messenger.runtime.onMessage.addListener((request) => {
     operation = openDashboard();
   } else if (request.type === "workinbox-dashboard-counts") {
     operation = dashboardCounts(request.imapTarget, request.lookbackDays);
+  } else if (request.type === "workinbox-open-tasks") {
+    operation = openTasksSpace();
   } else {
     return undefined;
   }

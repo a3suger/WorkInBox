@@ -24,6 +24,7 @@ WorkInBox の Thunderbird 側 UI を担当する MailExtension の初期実装�
 - `mailTabs.create()` / `mailTabs.get()` / `mailTabs.update()`
 - `mailTabs.setQuickFilter()`
 - `tabs.update()`
+- `tabs.query({ type: "tasks" })`
 - `storage.local`
 - `downloads.download()`
 
@@ -32,6 +33,7 @@ WorkInBox の Thunderbird 側 UI を担当する MailExtension の初期実装�
 - `glodaIndexing`: Archive の Gloda indexing ON / OFF
 - `tabTitle`: WIB 専用メールタブの表示タイトル変更
 - `imapAccounts`: 指定した Thunderbird account id の incoming server 情報読み取り
+- `tasksSpace`: 既存ToDoタブがない場合にThunderbirdのToDoスペースを開く
 
 Experiment 層に WorkInBox の業務ロジックを持たせません。
 
@@ -64,6 +66,8 @@ WIB WebとExtensionダッシュボードの未着眼カードから開くThunder
 WIB停止中も各カードからThunderbird作業ビューを開けます。WIB Webが必要なAI、SQLite、専用ワークフロー、Record等の導線は接続不可時に無効になります。
 
 接続状態欄の`通常同期`はWIB接続中だけ利用できます。同期開始後は実行中表示になり、`/api/sync-status`で完了まで確認します。
+
+正式締切の「期限超過」と「今後7日以内」は、WIBの`/api/deadlines/summary`がSQLiteから集計した値を表示します。`ThunderbirdのToDoを開く`は既存ToDoタブを再利用し、存在しない場合は`tasksSpace`でToDoスペースを開きます。
 
 ## WIB Quick Filter 作業ビュー PoC
 

@@ -86,6 +86,19 @@
       </div>
     </section>
 
+    <section class="group">
+      <h2>正式締切（WIB現在値）</h2>
+      <p id="deadline-summary-source">WIBの締切件数を確認しています…</p>
+      <div class="grid">
+        <article class="card"><span class="count" data-deadline-count="overdue">-</span><h3>期限超過</h3></article>
+        <article class="card"><span class="count" data-deadline-count="due_within_7_days">-</span><h3>今後7日以内</h3></article>
+      </div>
+      <div class="section-actions">
+        <button id="open-tasks" type="button">ThunderbirdのToDoを開く</button>
+      </div>
+      <p class="note">正式締切の正本であるWIBのSQLiteから集計します。期限超過は「今後7日以内」に含みません。</p>
+    </section>
+
     <section class="wib-only">
       <h2>WIBが必要な機能</h2>
       <p id="wib-only-note">WIB接続を確認しています。</p>

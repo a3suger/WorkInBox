@@ -341,6 +341,10 @@ def create_app(
             "imap_target": thunderbird_imap_target(),
         }
 
+    @app.get("/api/deadlines/summary")
+    def deadline_summary() -> dict[str, object]:
+        return deadline_data_service.summary()
+
     @app.get("/deadlines.ics", response_class=PlainTextResponse)
     def deadline_calendar(request: Request) -> PlainTextResponse:
         try:

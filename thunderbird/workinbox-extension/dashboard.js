@@ -67,12 +67,21 @@ function setOnlineControls(isOnline, syncRunning = false) {
   element("#open-wib").disabled = !isOnline;
   element("#normal-sync").disabled = !isOnline || syncRunning;
   element("#normal-sync").textContent = syncRunning ? "通常同期を実行中…" : "通常同期";
+  element("#open-tasks").disabled = false;
   document.querySelectorAll("[data-wib-path]").forEach((button) => {
     button.disabled = !isOnline;
   });
   element("#wib-only-note").textContent = isOnline
     ? "AI・SQLite・専用ワークフロー機能をWIB Webで利用できます。"
     : "WIBへ接続できないため、AI・SQLite・専用ワークフロー機能は利用できません。";
+}
+
+function renderDeadlineSummary(summary, cached = false) {
+  document.querySelectorAll("[data-deadline-count]").forEach((node) => {
+    const value = summary?.[node.dataset.deadlineCount];
+    node.textContent = Number.isInteger(value) ? String(value) : "-";
+  });
+  element("#deadline-summary-source").textContent = `${cached ? "WIB最終取得値" : "WIB現在値"}（${formatDate(summary?.generated_at)}）`;
 }
 
 function renderCounts(result, cached = false) {
@@ -120,10 +129,11 @@ async function refreshAll(refreshMessageCounts = true) {
   let health = {};
   let syncStatus = {};
   try {
-    const [healthResult, bootstrap, syncResult] = await Promise.all([
+    const [healthResult, bootstrap, syncResult, deadlineSummary] = await Promise.all([
       fetchJson("/api/health"),
       fetchJson("/api/extension/bootstrap"),
       fetchJson("/api/sync-status").catch(() => ({})),
+      fetchJson("/api/deadlines/summary"),
     ]);
     health = healthResult;
     syncStatus = syncResult;
@@ -134,13 +144,15 @@ async function refreshAll(refreshMessageCounts = true) {
     online = health.status === "ok";
     const state = online ? "online" : "degraded";
     const now = new Date().toISOString();
-    const updated = await updateStoredCache({ config: currentConfig, health, lastConnectedAt: now });
+    const updated = await updateStoredCache({ config: currentConfig, health, deadlineSummary, lastConnectedAt: now });
+    renderDeadlineSummary(deadlineSummary, false);
     element("#last-connected").textContent = formatDate(updated.lastConnectedAt);
     setConnection(state, online ? "WIB APIを利用できます。" : "WIBは応答していますが一部機能を利用できません。", health, syncStatus);
   } catch (error) {
     online = false;
     currentConfig = cache.config || null;
     health = cache.health || {};
+    if (cache.deadlineSummary) renderDeadlineSummary(cache.deadlineSummary, true);
     element("#last-connected").textContent = formatDate(cache.lastConnectedAt);
     setConnection("offline", `保存済み設定でThunderbird通常作業を継続します。${error.message ? ` (${error.message})` : ""}`, health, {});
   }
@@ -209,6 +221,11 @@ async function openWib(path = "/") {
   });
 }
 
+async function openTasks() {
+  const response = await messenger.runtime.sendMessage({ type: "workinbox-open-tasks" });
+  if (!response?.ok) throw new Error(response?.error || "ThunderbirdのToDoを開けませんでした。");
+}
+
 document.addEventListener("click", (event) => {
   const workView = event.target.closest("[data-work-view]");
   const wibPath = event.target.closest("[data-wib-path]");
@@ -217,6 +234,7 @@ document.addEventListener("click", (event) => {
   else if (wibPath) operation = openWib(wibPath.dataset.wibPath);
   else if (event.target.closest("#open-wib")) operation = openWib();
   else if (event.target.closest("#normal-sync")) operation = startNormalSync();
+  else if (event.target.closest("#open-tasks")) operation = openTasks();
   else if (event.target.closest("#refresh")) operation = refreshAll();
   if (operation) {
     void operation.catch((error) => {

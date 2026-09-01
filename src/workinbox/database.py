@@ -610,6 +610,22 @@ class EmailDatabase:
             if (deadline := self._deadline_from_row(row)) is not None
         ]
 
+    def all_deadlines(self) -> list[Deadline]:
+        with sqlite3.connect(self.path) as connection:
+            rows = connection.execute(
+                """
+                SELECT id, source_message_id, title, due_at, timezone,
+                       description, created_by, created_at, updated_at
+                FROM deadlines
+                ORDER BY due_at, id
+                """
+            ).fetchall()
+        return [
+            deadline
+            for row in rows
+            if (deadline := self._deadline_from_row(row)) is not None
+        ]
+
     def _set_deadline_candidate_status(
         self,
         candidate_id: int,

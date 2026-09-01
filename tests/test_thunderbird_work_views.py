@@ -169,7 +169,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         popup_bridge = (EXTENSION / "popup_bridge.js").read_text(encoding="utf-8")
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.7")
+        self.assertEqual(manifest["version"], "0.3.8")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
@@ -177,6 +177,9 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn('type: "workinbox-open-dashboard"', popup_bridge)
         self.assertIn('messenger.runtime.getURL("dashboard.html")', background)
         self.assertIn("getExistingDashboardTab()", background)
+        self.assertIn('type: "workinbox-open-tasks"', dashboard_script := (EXTENSION / "dashboard.js").read_text(encoding="utf-8"))
+        self.assertIn('messenger.tabs.query({ type: "tasks" })', background)
+        self.assertIn("tasksSpace", manifest["experiment_apis"])
 
     def test_extension_dashboard_counts_thunderbird_message_state(self) -> None:
         dashboard = (EXTENSION / "dashboard.html").read_text(encoding="utf-8")
@@ -202,6 +205,10 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("currentConfig.lookbackDays", dashboard_script)
         self.assertIn('fetchJson("/api/health")', dashboard_script)
         self.assertIn('fetchJson("/api/extension/bootstrap")', dashboard_script)
+        self.assertIn('fetchJson("/api/deadlines/summary")', dashboard_script)
+        self.assertIn('data-deadline-count="overdue"', dashboard)
+        self.assertIn('data-deadline-count="due_within_7_days"', dashboard)
+        self.assertIn('id="open-tasks"', dashboard)
         self.assertIn('id="normal-sync"', dashboard)
         self.assertIn('fetchJson("/api/sync", { method: "POST" })', dashboard_script)
         self.assertIn("!isOnline || syncRunning", dashboard_script)
