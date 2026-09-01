@@ -10,6 +10,7 @@ from typing import Protocol
 from .sync_progress import ProgressCallback
 
 from .config import AppConfig
+from .database import EmailDatabase
 from .models import EmailMessage, ImapFlagsSnapshot
 from .triage_store import TriageRelationStore
 
@@ -85,6 +86,13 @@ class TriageImapClient(Protocol):
     ) -> TriageFetchResult: ...
 
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None: ...
+
+    def inspect_flags(
+        self,
+        uid: int,
+        *,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot: ...
 
     def set_keyword(
         self,
@@ -169,11 +177,13 @@ class TriageService:
         imap_client: TriageImapClient,
         *,
         relation_store: TriageRelationStore | None = None,
+        database: EmailDatabase | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:
         self.config = config
         self.imap_client = imap_client
         self.relations = relation_store or TriageRelationStore(config.database.path)
+        self.database = database or EmailDatabase(config.database.path)
         self.progress_callback = progress_callback
 
     def _progress(self, **event: object) -> None:
@@ -199,6 +209,7 @@ class TriageService:
             self.config.imap.new_mail_lookback_days,
         )
         self.relations.initialize()
+        self.database.initialize()
         checkpoint = self.relations.checkpoint(self.config.imap.mailbox)
         if checkpoint is None:
             logging.info("TriageBox checkpoint: none")
@@ -333,11 +344,10 @@ class TriageService:
             "TriageBox self mail: resolving origin message_id=%s",
             origin_message_id,
         )
-        origin = self.imap_client.find_message_by_message_id(origin_message_id)
-        if origin is None:
+        origin_flags = self._origin_flags(origin_message_id)
+        if origin_flags is None:
             logging.info("TriageBox self mail: origin was not found")
             return False
-        origin_flags = set(origin.flags)
         if _SCHEDULE not in origin_flags:
             logging.info("TriageBox self mail: origin lacks required schedule state")
             return False
@@ -355,6 +365,23 @@ class TriageService:
             item.email.message_id,
         )
         return True
+
+    def _origin_flags(self, origin_message_id: str) -> set[str] | None:
+        reference = self.database.imap_reference(origin_message_id)
+        if reference is not None and reference.mailbox == self.config.imap.mailbox:
+            logging.info(
+                "TriageBox self mail: inspecting origin by saved UID=%d",
+                reference.uid,
+            )
+            snapshot = self.imap_client.inspect_flags(
+                reference.uid,
+                expected_uidvalidity=reference.uidvalidity,
+            )
+            return set(snapshot.flags)
+
+        logging.info("TriageBox self mail: saved origin UID unavailable; using Message-ID search")
+        origin = self.imap_client.find_message_by_message_id(origin_message_id)
+        return set(origin.flags) if origin is not None else None
 
     def _handle_waiting_action_reply(self, item: TriageMessage) -> bool:
         logging.info(

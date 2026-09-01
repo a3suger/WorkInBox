@@ -300,6 +300,8 @@ self-Ccで受信する支援依頼メールは、利用者が通常同期前に�
 
 支援依頼M2の判定では、Thunderbirdの送信Identityや別名アドレスが`identity`設定と一致しない場合に備え、Extensionだけが付与する`X-WorkInBox-Origin-Message-ID`を差出人の自己判定より優先する。
 
+M2からM1を確認するときは、WIBのSQLiteに保存済みのM1のUIDを優先してIMAPフラグを直接取得する。受信箱全体のMessage-ID検索は保存済みUIDがない場合のフォールバックに限定し、大きな受信箱でのタイムアウトを避ける。
+
 ### 整理タグ
 
 - `一括処理`

@@ -30,6 +30,7 @@ class FakeTriageImapClient:
         self.flagged_updates: list[tuple[int, bool]] = []
         self.received_references = []
         self.fetch_checkpoints: list[tuple[int, int] | None] = []
+        self.find_calls: list[str] = []
 
     def fetch_unread(self, checkpoint: tuple[int, int] | None = None) -> TriageFetchResult:
         self.fetch_checkpoints.append(checkpoint)
@@ -46,6 +47,7 @@ class FakeTriageImapClient:
         return TriageFetchResult(tuple(selected), 10, highest)
 
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None:
+        self.find_calls.append(message_id)
         return self.messages.get(message_id)
 
     def set_keyword(
@@ -233,6 +235,33 @@ class TriageBoxWorkflowTest(unittest.TestCase):
                 TriageRelationStore(path).origin_for("<request@example>"),
                 "<origin@example>",
             )
+
+    def test_support_request_uses_saved_origin_uid_without_message_id_search(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            origin = triage_message(
+                "<origin@example>",
+                "sender@example.com",
+                1,
+                flags=("\\Flagged", "wib-schedule", "wib-requested"),
+            )
+            request = triage_message(
+                "<request@example>",
+                "me@example.com",
+                2,
+                origin="<origin@example>",
+            )
+            database = EmailDatabase(path)
+            database.initialize()
+            database.synchronize([origin.email])
+            imap = FakeTriageImapClient([origin, request])
+
+            result = TriageService(config, imap, database=database).run()
+
+            self.assertEqual(result.support_requests, 1)
+            self.assertEqual(imap.find_calls, [])
+            self.assertIn("wib-waiting-action", imap.messages["<request@example>"].flags)
 
     def test_second_run_only_fetches_after_saved_checkpoint(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
