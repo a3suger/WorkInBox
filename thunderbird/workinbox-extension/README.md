@@ -59,7 +59,7 @@ popupの`ダッシュボードを開く`からThunderbird内の専用タブを�
 
 ダッシュボードはWIBの`/api/health`、`/api/extension/bootstrap`、`/api/sync-status`で接続状態を確認します。WIBへ接続できた設定とThunderbird集計結果は`storage.local`へ保存し、WIB停止中やSSH tunnel切断中も対象mailboxを特定できるようにします。IMAP password、credential、メール本文は保存しません。
 
-件数はThunderbirdのメッセージヘッダーからページ単位で集計します。未着眼は合計と未読 / 既読の内訳を表示して`new_mail_lookback_days`を適用し、通常ワークフロー、専用タグ、判定保留、待機状態はmailbox全体の`対象タグ + スター付き`を数えます。
+件数はThunderbirdのメッセージヘッダーからページ単位で集計します。未着眼は合計と未読 / 既読の内訳を表示して`new_mail_lookback_days`を適用し、通常ワークフロー、専用タグ、判定保留、待機状態はmailbox全体の`対象タグ + スター付き`を数えます。整理済みメールはmailbox全体の`一括処理（旧タグを含む）+ スターなし`を数え、アーカイブ待ちとして表示します。
 
 WIB WebとExtensionダッシュボードの未着眼カードから開くThunderbird作業ビューにも`new_mail_lookback_days`を適用し、未読・既読を一緒に表示します。ほかの作業ビューはmailbox全体を対象にします。
 

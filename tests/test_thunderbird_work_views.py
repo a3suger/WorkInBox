@@ -169,7 +169,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         popup_bridge = (EXTENSION / "popup_bridge.js").read_text(encoding="utf-8")
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.8")
+        self.assertEqual(manifest["version"], "0.3.9")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
@@ -199,6 +199,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
             "waitingReply",
             "waitingAction",
             "actionReady",
+            "bulkArchive",
         ):
             self.assertIn(f'data-count="{count_name}"', dashboard)
         self.assertIn('type: "workinbox-dashboard-counts"', dashboard_script)
@@ -225,6 +226,14 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn('countName === "deadline" && tags.has("wib-deadline-done")', background)
         self.assertIn('tags.has("wib-schedule-done")', background)
         self.assertIn('tags.has(REQUESTED_TAG) || tags.has("wib-schedule-done")', background)
+        self.assertIn('data-work-view="bulkArchive"', dashboard)
+        self.assertIn('bulkArchive: { label: "整理済み・アーカイブ待ち", bulkArchive: true }', background)
+        self.assertIn("counts.bulkArchive += 1", background)
+        self.assertIn("[LEGACY_BULK_TAG]: true", background)
+        self.assertIn("ensureBulkArchiveView", background)
+        self.assertIn("WIB 整理済み・アーカイブ待ち", (
+            EXTENSION / "experiments" / "mail_views" / "implementation.js"
+        ).read_text(encoding="utf-8"))
 
     def test_unattended_dashboard_view_uses_lookback_days(self) -> None:
         dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")

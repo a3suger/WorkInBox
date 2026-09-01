@@ -30,6 +30,7 @@ const WORK_VIEWS = {
   waitingReply: { tagKey: "wib-waiting-reply", label: "返信待ち" },
   waitingAction: { tagKey: "wib-waiting-action", label: "対応待ち" },
   actionReady: { tagKey: "wib-action-ready", label: "対応あり" },
+  bulkArchive: { label: "整理済み・アーカイブ待ち", bulkArchive: true },
 };
 
 let workViewTabId = null;
@@ -303,6 +304,18 @@ async function openWorkView(viewName, imapTarget, lookbackDays = null) {
         unread: true,
       });
     }
+  } else if (view.bulkArchive) {
+    await messenger.mailViews.ensureBulkArchiveView(mailTab.id);
+    await messenger.mailTabs.setQuickFilter(mailTab.id, {
+      show: true,
+      tags: {
+        mode: "any",
+        tags: {
+          [BULK_TAG]: true,
+          [LEGACY_BULK_TAG]: true,
+        },
+      },
+    });
   } else if (view.excludedTags) {
     await messenger.mailTabs.setQuickFilter(mailTab.id, { show: false });
     await messenger.mailViews.ensureWorkflowView(
@@ -400,6 +413,7 @@ function emptyDashboardCounts() {
     waitingReply: 0,
     waitingAction: 0,
     actionReady: 0,
+    bulkArchive: 0,
   };
 }
 
@@ -483,6 +497,22 @@ async function dashboardCounts(imapTarget, rawLookbackDays) {
     fromDate: since,
     flagged: false,
   }, countMessage, progress);
+
+  // Completed bulk-processing mail is periodically reviewed and archived.
+  // Keep this mailbox-wide and let Thunderbird filter before returning rows.
+  await scanDashboardQuery({
+    folderId: mailbox.id,
+    flagged: false,
+    tags: {
+      mode: "any",
+      tags: {
+        [BULK_TAG]: true,
+        [LEGACY_BULK_TAG]: true,
+      },
+    },
+  }, () => {
+    counts.bulkArchive += 1;
+  }, progress);
 
   // Workflow counts cover the entire mailbox, but Thunderbird returns only
   // starred messages carrying at least one dashboard tag.

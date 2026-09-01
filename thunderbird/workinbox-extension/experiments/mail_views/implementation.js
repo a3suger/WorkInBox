@@ -87,6 +87,38 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
       return `WIB ${label}（未処理）`;
     }
 
+    function findOrCreateBulkArchiveView() {
+      const mailViewList = Cc["@mozilla.org/messenger/mailviewlist;1"].getService(
+        Ci.nsIMsgMailViewList,
+      );
+      const name = "WIB 整理済み・アーカイブ待ち";
+      for (let index = 0; index < mailViewList.mailViewCount; index += 1) {
+        const existing = mailViewList.getMailViewAt(index);
+        if (existing.mailViewName === name) {
+          return { name, created: false };
+        }
+      }
+
+      const searchSession = Cc["@mozilla.org/messenger/searchSession;1"].createInstance(
+        Ci.nsIMsgSearchSession,
+      );
+      const view = mailViewList.createMailView();
+      view.mailViewName = name;
+      view.appendTerm(
+        createSearchTerm(
+          searchSession,
+          Ci.nsMsgSearchAttrib.MsgStatus,
+          Ci.nsMsgSearchOp.Isnt,
+          (value) => {
+            value.status = Ci.nsMsgMessageFlags.Marked;
+          },
+        ),
+      );
+      mailViewList.addMailView(view);
+      mailViewList.save();
+      return { name, created: true };
+    }
+
     function createWorkflowView(mailViewList, name, requiredTag, excludedTags) {
       const searchSession = Cc["@mozilla.org/messenger/searchSession;1"].createInstance(
         Ci.nsIMsgSearchSession,
@@ -200,6 +232,13 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
             created,
             applied: true,
           };
+        },
+
+        async ensureBulkArchiveView(tabId) {
+          const { name, created } = findOrCreateBulkArchiveView();
+          const threePaneWindow = resolveThreePaneWindow(tabId);
+          threePaneWindow.gViewWrapper.setMailView(name, null, true);
+          return { name, created, applied: true };
         },
 
         async resetView(tabId) {

@@ -45,6 +45,22 @@
         }
       },
       {
+        "name": "ensureBulkArchiveView",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "tabId", "type": "integer" }
+        ],
+        "returns": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "created": { "type": "boolean" },
+            "applied": { "type": "boolean" }
+          }
+        }
+      },
+      {
         "name": "resetView",
         "type": "function",
         "async": true,
