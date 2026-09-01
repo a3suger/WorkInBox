@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from html import escape
+from ipaddress import ip_address
 from pathlib import Path
 from threading import Lock
 from typing import Callable
 from urllib.parse import parse_qs
 
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from .application import (
@@ -23,6 +25,7 @@ from .dashboard import DashboardService
 from .deadline_application import DeadlineExtractionResult, DeadlineExtractionService
 from .deadline_dates import normalize_due_at
 from .deadline_ics import DeadlineIcsService
+from .caldav import DeadlineCalDavService
 from .deadline_workflow import DeadlineWorkflowService
 from .models import DeadlineCreatedBy
 from .normal_workflow import NormalWorkflowCompletionService
@@ -68,6 +71,7 @@ def create_app(
         tag_service,
     )
     deadline_calendar_service = deadline_ics_service or DeadlineIcsService(deadline_data_service)
+    caldav = DeadlineCalDavService(deadline_data_service)
     normal_completion_service = normal_workflow_service or NormalWorkflowCompletionService(config)
     records = record_store or RecordStore(config.database.path)
     dashboard = dashboard_service or DashboardService(config, record_store=records)
@@ -358,6 +362,98 @@ def create_app(
             media_type="text/calendar; charset=utf-8",
             headers={"Content-Disposition": 'inline; filename="deadlines.ics"'},
         )
+
+    def caldav_allowed(request: Request) -> bool:
+        host = request.client.host if request.client else ""
+        if host == "testclient":
+            return True
+        try:
+            return ip_address(host).is_loopback
+        except ValueError:
+            return False
+
+    def caldav_headers(**extra: str) -> dict[str, str]:
+        return {"DAV": "1, 2, calendar-access", **extra}
+
+    def resource_xml(deadline, *, include_data: bool) -> str:
+        data = ""
+        if include_data:
+            data = (
+                "<cal:calendar-data>"
+                f"{escape(caldav.render(deadline))}"
+                "</cal:calendar-data>"
+            )
+        return (
+            "<d:response>"
+            f"<d:href>/caldav/deadlines/{deadline.id}.ics</d:href>"
+            "<d:propstat><d:prop>"
+            f"<d:getetag>{escape(caldav.etag(deadline))}</d:getetag>"
+            "<d:getcontenttype>text/calendar; charset=utf-8</d:getcontenttype>"
+            f"{data}</d:prop><d:status>HTTP/1.1 200 OK</d:status>"
+            "</d:propstat></d:response>"
+        )
+
+    @app.get("/.well-known/caldav")
+    def caldav_discovery() -> RedirectResponse:
+        return RedirectResponse("/caldav/deadlines/", status_code=301)
+
+    @app.api_route("/caldav/deadlines/", methods=["OPTIONS", "PROPFIND", "REPORT", "DELETE", "MKCALENDAR"])
+    async def caldav_collection(request: Request) -> Response:
+        if not caldav_allowed(request):
+            return Response("CalDAV is available only through localhost", status_code=403)
+        if request.method in {"DELETE", "MKCALENDAR"}:
+            return Response(status_code=405, headers=caldav_headers(Allow="OPTIONS, PROPFIND, REPORT"))
+        if request.method == "OPTIONS":
+            return Response(headers=caldav_headers(Allow="OPTIONS, PROPFIND, REPORT"))
+        include_data = request.method == "REPORT"
+        collection = (
+            "<d:response><d:href>/caldav/deadlines/</d:href>"
+            "<d:propstat><d:prop><d:displayname>WorkInBox Deadlines</d:displayname>"
+            "<d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>"
+            "<cal:supported-calendar-component-set><cal:comp name=\"VTODO\"/>"
+            "</cal:supported-calendar-component-set>"
+            "</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"
+        )
+        include_resources = include_data or request.headers.get("depth", "0") != "0"
+        resources = "".join(resource_xml(item, include_data=include_data) for item in caldav.all()) if include_resources else ""
+        xml = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">'
+            f"{collection}{resources}</d:multistatus>"
+        )
+        return Response(xml, status_code=207, media_type="application/xml", headers=caldav_headers())
+
+    @app.api_route("/caldav/deadlines/{resource_name}", methods=["OPTIONS", "PROPFIND", "GET", "PUT", "DELETE"])
+    async def caldav_resource(request: Request, resource_name: str) -> Response:
+        if not caldav_allowed(request):
+            return Response("CalDAV is available only through localhost", status_code=403)
+        if request.method == "OPTIONS":
+            return Response(headers=caldav_headers(Allow="OPTIONS, PROPFIND, GET, PUT"))
+        if request.method == "DELETE":
+            return Response(status_code=405, headers=caldav_headers(Allow="OPTIONS, PROPFIND, GET, PUT"))
+        if not resource_name.endswith(".ics") or not resource_name[:-4].isdigit():
+            return Response(status_code=404)
+        deadline = caldav.get(int(resource_name[:-4]))
+        if deadline is None:
+            return Response(status_code=404)
+        if request.method == "GET":
+            return Response(caldav.render(deadline), media_type="text/calendar", headers=caldav_headers(ETag=caldav.etag(deadline)))
+        if request.method == "PROPFIND":
+            xml = ('<?xml version="1.0" encoding="utf-8"?>'
+                   '<d:multistatus xmlns:d="DAV:">' + resource_xml(deadline, include_data=False) + '</d:multistatus>')
+            return Response(xml, status_code=207, media_type="application/xml", headers=caldav_headers())
+        if_match = request.headers.get("if-match")
+        if if_match is None:
+            return Response("If-Match is required", status_code=428)
+        if if_match != caldav.etag(deadline):
+            return Response("The ToDo has changed; reload and edit again", status_code=412)
+        try:
+            updated = caldav.update(deadline, (await request.body()).decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            return Response(str(exc), status_code=400)
+        if updated is None:
+            return Response("The ToDo has changed; reload and edit again", status_code=412)
+        return Response(status_code=204, headers=caldav_headers(ETag=caldav.etag(updated)))
 
     @app.get("/deadlines/{deadline_id}/source-message")
     def deadline_source_message(request: Request, deadline_id: int):

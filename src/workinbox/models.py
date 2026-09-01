@@ -119,3 +119,9 @@ class Deadline:
     created_by: DeadlineCreatedBy
     created_at: str
     updated_at: str
+    start_at: str | None = None
+    status: str = "NEEDS-ACTION"
+    completed_at: str | None = None
+    percent_complete: int = 0
+    priority: int = 0
+    version: int = 1

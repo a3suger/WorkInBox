@@ -6,7 +6,7 @@
 
 この文書は、ThunderbirdのToDo画面からWorkInBox（WIB）の正式締切を編集するための限定CalDAVと、Extensionダッシュボードの締切サマリーを定義する詳細仕様である。
 
-現行実装はSQLiteから生成した読み取り専用`deadlines.ics`をThunderbirdで購読する方式である。#32が完了するまでは現行方式を使用し、この文書は実装予定の確定仕様として扱う。
+現行の読み取り専用`deadlines.ics`との移行期間を保ちながら、限定CalDAVを実装した。実機確認が完了するまでは両方のURLを提供するが、Thunderbirdには同時登録しない。
 
 2026-09-01時点で、第1段階の締切サマリーAPI、Extension件数表示、Thunderbird ToDo画面へのボタンは実装済みである。完了状態をSQLiteへ追加するまでは、現行の正式締切をすべて未完了として集計する。限定CalDAV導入後は同じAPIから完了済みを除外する。
 
@@ -153,10 +153,20 @@ ThunderbirdからWIBで作成済みの締切を取得・編集することを目
 - `mid:`リンクから元メールを引き続き素早く開ける。
 - 読み取り専用`deadlines.ics`から二重表示なく移行できる。
 
-## 11. 実装時に決めること
+## 11. 実装で確定した接続方式
 
-- CalDAVの認証方式とURL
-- Thunderbirdのアカウント登録・移行手順
-- ETagの具体的な生成方法
-- ExtensionからThunderbird ToDo画面を開くAPI差異と代替導線
-- CalDAV非対応クライアントから不正値を受けた場合の具体的なHTTPエラー応答
+- CalDAV URLは`http://localhost:8000/caldav/deadlines/`とする。
+- 書き込み可能なendpointはWIBから見てloopback接続だけを許可する。noteからのSSH LocalForwardはdesktop側でloopback接続になるため使用できる。LANやインターネットへ直接公開しない。
+- ETagは締切IDと更新世代から生成し、既存resourceのPUTでは`If-Match`を必須とする。欠落は428、競合は412で拒否する。
+- Thunderbirdからの新規作成、削除、collection作成は405で拒否する。
+- 不正なVTODO、不変IDの変更、未対応状態、範囲外の重要度は400で拒否する。
+
+## 12. Thunderbirdへの移行手順
+
+1. desktopで最新コードを取得し、WIBを再起動する。初回起動時にSQLite列が自動追加される。
+2. noteのThunderbirdで、従来の`deadlines.ics`購読を解除する。解除してもWIBのSQLiteデータは削除されない。
+3. Thunderbirdの「新しいカレンダー」から「ネットワーク上」を選び、形式をCalDAV、場所を`http://localhost:8000/caldav/deadlines/`として登録する。
+4. WorkInBoxのToDoが一重に表示されることを確認する。
+5. 既存ToDoのタイトル、着手日、期限、説明、重要度、完了状態を変更し、再表示後も保持されることを確認する。
+
+登録に失敗した場合は、旧`deadlines.ics`を再登録すれば読み取り専用運用へ戻せる。CalDAVと旧購読を同時登録すると同じUIDのToDoが二重表示される可能性があるため避ける。

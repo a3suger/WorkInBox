@@ -331,7 +331,7 @@ desktopのINFOログで、M2候補2件はいずれもTriageBoxへ到達した後
 
 M2への`対応待ち + ★`が成功した後、M2への返信M3に`対応あり + ★`が付かないことを確認した。対応待ちrelationを持つM2のMessage-IDを基準に、直近期間の`In-Reply-To` / `References`からM3を既読でも回収する。また、M3処理時のM2確認も保存済みUIDを使い、受信箱全体のMessage-ID検索によるタイムアウトを避けるよう修正した。
 
-#32の第1段階として、WIBのSQLiteにある正式締切を「期限超過」と「今後7日以内」に重複なく集計する`GET /api/deadlines/summary`を追加した。Extension `0.3.8`はこのWIB現在値を表示し、オフライン時は最終取得値と日時を区別して表示する。`ThunderbirdのToDoを開く`ボタンは既存ToDoタブを再利用し、存在しない場合は最小の`tasksSpace` ExperimentでThunderbird標準ToDoスペースを開く。限定CalDAVと完了状態の双方向同期は引き続き#32の残作業である。
+#32は第1段階の締切サマリーに加え、SQLiteへ着手日時・完了状態・重要度・更新世代を追加し、loopback限定の`/caldav/deadlines/`を実装した。既存ToDoの取得と編集、完了済みのサマリー除外、ETag競合拒否、Web編集時のCalDAV専用項目保持に対応した。旧`deadlines.ics`は移行確認用に残している。自動テスト後にcommit・Actionsを確認し、`docs/manual_test_runbook.md`の#32実機確認を行う。
 
 Extension `0.3.9`では、`一括処理`または旧互換タグが付きスターのないメールをmailbox全体から数え、ダッシュボードの「整理済みメール / アーカイブ待ち」に表示する。同じ条件のThunderbird作業ビューを開き、定期的な確認とアーカイブへ進める。ダッシュボード全体の情報設計・配置見直しは、実運用するカードが揃った段階の別作業として扱う。
 
@@ -351,12 +351,12 @@ Extension `0.3.9`までの#31完了条件は実機確認済み。WIB作業タブ
 
 ## 次に行うこと
 
-1. Extension `0.3.7`の専用作業ビュー除外対応をcommitしてGitHubへpushする。
+1. #32の限定CalDAV実装をcommitしてGitHubへpushする。
 2. GitHub Actionsの成功を確認する。
-3. desktopでWIBを再起動し、noteとdesktopでExtensionを再読み込みする。
-4. `締切登録済み`が締切件数・Web一覧・Thunderbird作業ビューから除外されることを確認する。
-5. `依頼済み`と`スケジュール対応済み`がスケジュール件数・Web一覧・Thunderbird作業ビューから除外されることを確認する。
-6. スケジュール支援依頼の本文内転送と送信後の状態遷移も確認する。
+3. desktopでpullしてWIBを再起動する。
+4. `docs/limited_caldav.md`の移行手順で、noteのThunderbirdを旧`deadlines.ics`購読から限定CalDAVへ切り替える。
+5. `docs/manual_test_runbook.md`の「限定CalDAV（#32）」を順に実機確認する。
+6. 実機確認がすべて成功したら#32をClosedする。
 
 ## 設計判断待ち
 

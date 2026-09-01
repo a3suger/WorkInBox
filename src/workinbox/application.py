@@ -454,6 +454,8 @@ class DeadlineService:
         due_within_7_days = 0
 
         for deadline in self.database.all_deadlines():
+            if deadline.status == "COMPLETED":
+                continue
             due = normalize_due_at(deadline.due_at)
             if "T" not in due and " " not in due:
                 due_date = date.fromisoformat(due)

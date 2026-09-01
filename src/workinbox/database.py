@@ -110,10 +110,30 @@ class EmailDatabase:
                     created_by TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
+                    start_at TEXT,
+                    status TEXT NOT NULL DEFAULT 'NEEDS-ACTION',
+                    completed_at TEXT,
+                    percent_complete INTEGER NOT NULL DEFAULT 0,
+                    priority INTEGER NOT NULL DEFAULT 0,
+                    version INTEGER NOT NULL DEFAULT 1,
                     FOREIGN KEY (source_message_id) REFERENCES emails(message_id)
                 )
                 """
             )
+            deadline_columns = {
+                str(row[1]) for row in connection.execute("PRAGMA table_info(deadlines)")
+            }
+            deadline_migrations = {
+                "start_at": "ALTER TABLE deadlines ADD COLUMN start_at TEXT",
+                "status": "ALTER TABLE deadlines ADD COLUMN status TEXT NOT NULL DEFAULT 'NEEDS-ACTION'",
+                "completed_at": "ALTER TABLE deadlines ADD COLUMN completed_at TEXT",
+                "percent_complete": "ALTER TABLE deadlines ADD COLUMN percent_complete INTEGER NOT NULL DEFAULT 0",
+                "priority": "ALTER TABLE deadlines ADD COLUMN priority INTEGER NOT NULL DEFAULT 0",
+                "version": "ALTER TABLE deadlines ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
+            }
+            for column, statement in deadline_migrations.items():
+                if column not in deadline_columns:
+                    connection.execute(statement)
             connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS deadlines_message
@@ -559,7 +579,9 @@ class EmailDatabase:
             row = connection.execute(
                 """
                 SELECT id, source_message_id, title, due_at, timezone,
-                       description, created_by, created_at, updated_at
+                       description, created_by, created_at, updated_at,
+                       start_at, status, completed_at, percent_complete,
+                       priority, version
                 FROM deadlines
                 WHERE id = ?
                 """,
@@ -580,7 +602,8 @@ class EmailDatabase:
             cursor = connection.execute(
                 """
                 UPDATE deadlines
-                SET title = ?, due_at = ?, description = ?, updated_at = ?
+                SET title = ?, due_at = ?, description = ?, updated_at = ?,
+                    version = version + 1
                 WHERE id = ?
                 """,
                 (title, due_at, description, now, deadline_id),
@@ -592,12 +615,48 @@ class EmailDatabase:
             raise RuntimeError("failed to read updated deadline")
         return deadline
 
+    def update_deadline_from_caldav(
+        self,
+        deadline_id: int,
+        *,
+        expected_version: int,
+        title: str,
+        start_at: str | None,
+        due_at: str,
+        timezone_name: str | None,
+        description: str | None,
+        status: str,
+        completed_at: str | None,
+        percent_complete: int,
+        priority: int,
+    ) -> Deadline | None:
+        now = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE deadlines
+                SET title = ?, start_at = ?, due_at = ?, timezone = ?,
+                    description = ?, status = ?, completed_at = ?,
+                    percent_complete = ?, priority = ?, updated_at = ?,
+                    version = version + 1
+                WHERE id = ? AND version = ?
+                """,
+                (title, start_at, due_at, timezone_name, description, status,
+                 completed_at, percent_complete, priority, now, deadline_id,
+                 expected_version),
+            )
+            if cursor.rowcount != 1:
+                return None
+        return self.deadline(deadline_id)
+
     def deadlines(self, source_message_id: str) -> list[Deadline]:
         with sqlite3.connect(self.path) as connection:
             rows = connection.execute(
                 """
                 SELECT id, source_message_id, title, due_at, timezone,
-                       description, created_by, created_at, updated_at
+                       description, created_by, created_at, updated_at,
+                       start_at, status, completed_at, percent_complete,
+                       priority, version
                 FROM deadlines
                 WHERE source_message_id = ?
                 ORDER BY due_at, id
@@ -615,7 +674,9 @@ class EmailDatabase:
             rows = connection.execute(
                 """
                 SELECT id, source_message_id, title, due_at, timezone,
-                       description, created_by, created_at, updated_at
+                       description, created_by, created_at, updated_at,
+                       start_at, status, completed_at, percent_complete,
+                       priority, version
                 FROM deadlines
                 ORDER BY due_at, id
                 """
@@ -684,4 +745,10 @@ class EmailDatabase:
             created_by=DeadlineCreatedBy(str(row[6])),
             created_at=str(row[7]),
             updated_at=str(row[8]),
+            start_at=str(row[9]) if row[9] is not None else None,
+            status=str(row[10]),
+            completed_at=str(row[11]) if row[11] is not None else None,
+            percent_complete=int(row[12]),
+            priority=int(row[13]),
+            version=int(row[14]),
         )
