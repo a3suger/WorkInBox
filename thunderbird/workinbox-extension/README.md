@@ -69,6 +69,8 @@ WIB停止中も各カードからThunderbird作業ビューを開けます。WIB
 
 正式締切の「期限超過」と「今後7日以内」は、WIBの`/api/deadlines/summary`がSQLiteから集計した値を表示します。`ThunderbirdのToDoを開く`は既存ToDoタブを再利用し、存在しない場合は`tasksSpace`でToDoスペースを開きます。
 
+Extension `0.3.10`では、メール閲覧画面のmessage display actionを「WIB操作メニュー」の構成確認用プレビューへ変更しています。「通常フロー」と「専用フロー（締切・スケジュール調整）」を開閉して項目を確認できますが、各項目はまだタグ、スター、WIB画面を変更しません。
+
 ## WIB Quick Filter 作業ビュー PoC
 
 WIB の現在作業を Thunderbird のメール一覧で処理するため、専用のメールタブを 1 枚だけ作成して再利用します。

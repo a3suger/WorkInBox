@@ -131,15 +131,25 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
             "experiments/mail_views/implementation.js",
         )
 
-    def test_message_display_action_completes_normal_workflow_in_one_click(self) -> None:
+    def test_message_display_action_opens_preview_menu(self) -> None:
         manifest = json.loads((EXTENSION / "manifest.json").read_text(encoding="utf-8"))
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
         self.assertEqual(
             manifest["message_display_action"]["default_title"],
-            "WIB: 通常ワークフローを終了",
+            "WIB操作メニュー",
         )
-        self.assertIn("messenger.messageDisplayAction.onClicked", background)
+        self.assertEqual(
+            manifest["message_display_action"]["default_popup"],
+            "message_menu.html",
+        )
+        menu = (EXTENSION / "message_menu.html").read_text(encoding="utf-8")
+        script = (EXTENSION / "message_menu.js").read_text(encoding="utf-8")
+        self.assertIn("通常フロー", menu)
+        self.assertIn("専用フロー", menu)
+        self.assertIn("締切登録を開始／続ける", menu)
+        self.assertIn("スケジュール調整を開始／続ける", menu)
+        self.assertIn("プレビューのみ", script)
         self.assertIn("messenger.messageDisplay.getDisplayedMessage(tab.id)", background)
         self.assertIn("NORMAL_WORKFLOW_TAGS", background)
         self.assertIn("const bulkTagKey = await resolveBulkTagKey()", background)
@@ -169,7 +179,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         popup_bridge = (EXTENSION / "popup_bridge.js").read_text(encoding="utf-8")
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.9")
+        self.assertEqual(manifest["version"], "0.3.10")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
