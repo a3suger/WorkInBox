@@ -65,6 +65,15 @@ WorkInBox の**正式な現行設計**。状態遷移、タグ、通常ワーク
 - 正式締切は SQLite を正本とし、Message-ID で元メールを参照する。
 - AI 判定前に引用された過去メール部分を機械的に除去してから文字数上限を適用する。
 
+### [limited_caldav.md](limited_caldav.md)
+
+Issue #32で実装する、Extensionの期限超過・7日以内サマリーと、Thunderbird標準ToDo UIから正式締切を編集する限定CalDAVの詳細仕様。
+
+- SQLiteを正式締切の正本として維持する。
+- タイトル、着手日時、期限、メモ、完了、重要度をVTODOと対応付ける。
+- 着手日時はThunderbirdからだけ編集し、WIB Webでは表示・編集しない。
+- 現行の読み取り専用`deadlines.ics`からの移行境界を定める。
+
 ### [current_work.md](current_work.md)
 
 現在の作業位置、完了済み作業、残作業、中断理由、GitHub / git の状態を記録する引き継ぎ用文書。

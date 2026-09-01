@@ -307,10 +307,12 @@ v0.3 以後では、本文判定や時間経過を必要とする拡張機能を
 
 ---
 
-## 将来検討: CalDAV / 双方向編集
+## 次段階: Extension締切サマリー / 限定CalDAV
 
-v0.2 では Thunderbird は読み取り専用 `.ics` を購読する。
+現行実装ではThunderbirdは読み取り専用`.ics`を購読する。実運用でThunderbirdからタイトル、着手日時、期限、メモ、完了、重要度を変更する必要が明確になったため、Issue #32で限定CalDAVを実装する。
 
-将来、Thunderbird から締切日時変更・完了操作を行い WorkInBox に反映する必要が明確になった場合に、CalDAV 等を検討する。
+SQLiteを正本とし、単一の締切collection、既存締切の取得・更新、ETag競合検知を初回範囲とする。Thunderbirdからの新規作成・削除、繰り返し、複数カレンダー等は含めない。
 
-その時点で競合解決、複数 PC、SQLite との同期規則を設計する。
+同時にExtensionダッシュボードへ、SQLiteにある未完了締切の「期限超過」と「今後7日以内」の件数、およびThunderbird ToDoへの導線を追加する。
+
+詳細は`docs/limited_caldav.md`を参照する。

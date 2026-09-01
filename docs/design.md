@@ -403,7 +403,9 @@ deadline
 
 したがって、締切一覧・締切詳細からは常に元メールを参照できるようにする。締切が active であることと、元メールが INBOX に存在することは同義ではない。
 
-Thunderbirdの読み取り専用VTODOからは、元メールを直接開く `mid:` リンクとは別に、WIBの締切詳細へ進めるようにする。正式登録後のタイトル・期限・メモはWIB側で修正し、SQLiteへ保存した内容を再生成するVTODOへ反映する。Thunderbirdから締切データを直接編集する双方向同期は行わない。
+現行実装では、Thunderbirdの読み取り専用VTODOから、元メールを直接開く `mid:` リンクとは別にWIBの締切詳細へ進める。正式登録後のタイトル・期限・メモはWIB側で修正し、SQLiteへ保存した内容を再生成するVTODOへ反映する。
+
+次段階ではIssue #32の限定CalDAVにより、Thunderbird標準ToDo UIからタイトル、着手日時、期限、メモ、完了、重要度を編集可能にする。SQLiteを正本とする原則は変えない。着手日時はSQLiteとVTODOで保持するがWIB Webでは表示・編集せず、Webから他項目を更新しても保持する。限定CalDAV移行後はVTODOの`DESCRIPTION`をSQLiteのメモだけに対応させ、WIB締切詳細ページの案内文は含めない。元メールの`mid:`リンクは維持する。詳細は`docs/limited_caldav.md`に従う。
 
 Record と締切は別のデータである。Record が存在しなくても締切は元メールの `source_message_id` を使って参照できる。
 
