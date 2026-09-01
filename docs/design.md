@@ -298,6 +298,8 @@ AI の対象条件そのものは TrackingBox の節で定義する。
 
 self-Ccで受信する支援依頼メールは、利用者が通常同期前に開いて既読になった場合も、`X-WorkInBox-Origin-Message-ID`を持つ直近メールとしてTriageBoxが再検出する。未読チェックポイントより前のメールも期間内なら回収し、`対応待ち + ★`とrelation保存を行う。
 
+支援依頼M2の判定では、Thunderbirdの送信Identityや別名アドレスが`identity`設定と一致しない場合に備え、Extensionだけが付与する`X-WorkInBox-Origin-Message-ID`を差出人の自己判定より優先する。
+
 ### 整理タグ
 
 - `一括処理`

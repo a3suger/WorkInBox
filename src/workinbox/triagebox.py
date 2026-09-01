@@ -253,9 +253,15 @@ class TriageService:
                 errors=len(errors),
             )
             try:
-                if kind == TriageSenderKind.SELF:
+                # The extension-controlled origin header is a stronger signal
+                # than the From address. Thunderbird may send through an
+                # identity/alias that is not listed in config.identity, but the
+                # self-Cc copy is still the WIB support request M2.
+                if item.headers.origin_message_id is not None:
                     if self._handle_self_support_request(item):
                         support_requests += 1
+                elif kind == TriageSenderKind.SELF:
+                    logging.info("TriageBox self mail: no origin header; no transition")
                 elif self._handle_waiting_action_reply(item):
                     waiting_action_replies += 1
                 else:

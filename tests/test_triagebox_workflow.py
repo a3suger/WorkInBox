@@ -206,6 +206,34 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             )
             self.assertEqual(TriageRelationStore(path).checkpoint("INBOX"), (10, 2))
 
+    def test_origin_header_identifies_support_request_from_unlisted_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            origin = triage_message(
+                "<origin@example>",
+                "sender@example.com",
+                1,
+                flags=("\\Flagged", "wib-schedule", "wib-requested"),
+            )
+            request = triage_message(
+                "<request@example>",
+                "unlisted-sending-identity@example.com",
+                2,
+                origin="<origin@example>",
+            )
+            imap = FakeTriageImapClient([origin, request])
+
+            result = TriageService(config, imap).run()
+
+            self.assertEqual(result.support_requests, 1)
+            self.assertIn("wib-waiting-action", imap.messages["<request@example>"].flags)
+            self.assertIn("\\Flagged", imap.messages["<request@example>"].flags)
+            self.assertEqual(
+                TriageRelationStore(path).origin_for("<request@example>"),
+                "<origin@example>",
+            )
+
     def test_second_run_only_fetches_after_saved_checkpoint(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
