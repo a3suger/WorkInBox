@@ -222,13 +222,13 @@ class TriageService:
                 self.relations.ensure_workflow_focus(item.email.message_id)
         self._progress(
             phase="triage",
-            label="TriageBox: 未読メール確認",
+            label="TriageBox: 新着・WIB依頼確認",
             current=0,
             total=len(unread),
             errors=0,
         )
         logging.info(
-            "TriageBox will process %d unread candidate messages oldest-first",
+            "TriageBox will process %d new/support-request candidate messages oldest-first",
             len(unread),
         )
         errors: list[TriageError] = []
@@ -269,7 +269,7 @@ class TriageService:
                 errors.append(self._error(item, exc))
             self._progress(
                 phase="triage",
-                label="TriageBox: 未読メール確認",
+                label="TriageBox: 新着・WIB依頼確認",
                 current=index,
                 total=len(unread),
                 errors=len(errors),
@@ -311,8 +311,16 @@ class TriageService:
         if origin_message_id is None:
             logging.info("TriageBox self mail: no origin header; no transition")
             return False
-        if self.relations.relation_kind_for(item.email.message_id) == _SUPPORT_REQUEST_REPLIED:
+        relation_kind = self.relations.relation_kind_for(item.email.message_id)
+        if relation_kind == _SUPPORT_REQUEST_REPLIED:
             logging.info("TriageBox self mail: support request already replied; no reactivation")
+            return False
+        if (
+            relation_kind == _SUPPORT_REQUEST
+            and _WAITING_ACTION in item.flags
+            and "\\Flagged" in item.flags
+        ):
+            logging.info("TriageBox self mail: support request already active; no transition")
             return False
 
         logging.info(

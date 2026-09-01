@@ -21,6 +21,17 @@ RAW_MESSAGE = (
     b"Body"
 )
 
+READ_SUPPORT_MESSAGE = (
+    b"Message-ID: <support@example>\r\n"
+    b"From: me@example.com\r\n"
+    b"To: supporter@example.com\r\n"
+    b"Subject: Schedule support\r\n"
+    b"Date: Sat, 8 Aug 2026 09:00:00 +0000\r\n"
+    b"X-WorkInBox-Origin-Message-ID: <origin@example>\r\n"
+    b"\r\n"
+    b"Body"
+)
+
 
 class FakeImap:
     init_count: int = 0
@@ -88,6 +99,46 @@ class FakeImap:
             return "OK", [(b"4 (UID 40 BODY[] {10})", RAW_MESSAGE), b")"]
         if uid == 50:
             return "NO", []
+        raise AssertionError((command, args))
+
+
+class ReadSupportImap:
+    searches: list[tuple[object, ...]] = []
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        pass
+
+    def __enter__(self) -> "ReadSupportImap":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def login(self, username: str, password: str):
+        return "OK", [b""]
+
+    def select(self, mailbox: str, readonly: bool = False):
+        return "OK", [b""]
+
+    def response(self, code: str):
+        if code == "UIDVALIDITY":
+            return "UIDVALIDITY", [b"55"]
+        if code == "UIDNEXT":
+            return "UIDNEXT", [b"101"]
+        raise AssertionError(code)
+
+    def uid(self, command: str, *args: object):
+        if command == "search":
+            ReadSupportImap.searches.append(args)
+            if "X-WorkInBox-Origin-Message-ID" in args:
+                return "OK", [b"90"]
+            return "OK", [b""]
+        if command == "fetch" and args[0] == "90":
+            metadata = (
+                b'1 (UID 90 FLAGS (\\Seen) '
+                b'INTERNALDATE "08-Aug-2026 09:00:00 +0000")'
+            )
+            return "OK", [(metadata, READ_SUPPORT_MESSAGE), b")"]
         raise AssertionError((command, args))
 
 
@@ -261,6 +312,33 @@ class ImapClientTest(unittest.TestCase):
     def test_new_mail_since_counts_today_as_one_calendar_day(self) -> None:
         self.assertEqual(_new_mail_since(date(2026, 8, 8), 1), date(2026, 8, 8))
         self.assertEqual(_new_mail_since(date(2026, 8, 8), 7), date(2026, 8, 2))
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", ReadSupportImap)
+    @patch("workinbox.imap_client.date")
+    def test_fetch_unread_recovers_read_support_request_before_checkpoint(
+        self, mock_date
+    ) -> None:
+        mock_date.today.return_value = date(2026, 8, 8)
+        ReadSupportImap.searches = []
+
+        result = ImapClient(self.config).fetch_unread((55, 100))
+
+        self.assertEqual([item.email.message_id for item in result.messages], ["<support@example>"])
+        self.assertEqual(
+            result.messages[0].headers.origin_message_id,
+            "<origin@example>",
+        )
+        self.assertIn(
+            (
+                None,
+                "HEADER",
+                "X-WorkInBox-Origin-Message-ID",
+                '\"\"',
+                "SINCE",
+                "02-Aug-2026",
+            ),
+            ReadSupportImap.searches,
+        )
 
     @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
     def test_uidvalidity_change_aborts_before_state_results(self) -> None:

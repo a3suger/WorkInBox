@@ -364,6 +364,9 @@ class ImapClient:
             current_uidvalidity = _uidvalidity(client)
             uidnext = _uidnext(client, self.config.mailbox)
             highest_existing_uid = max(uidnext - 1, 0)
+            since = _new_mail_since(date.today(), self.config.new_mail_lookback_days)
+            since_text = since.strftime("%d-%b-%Y")
+            uid_values: set[bytes] = set()
 
             if checkpoint is not None and checkpoint[0] == current_uidvalidity:
                 last_uid = checkpoint[1]
@@ -372,19 +375,20 @@ class ImapClient:
                         "TriageBox IMAP incremental search: no UIDs after checkpoint=%d",
                         last_uid,
                     )
-                    return TriageFetchResult((), current_uidvalidity, highest_existing_uid)
-                start_uid = last_uid + 1
-                logging.info(
-                    "TriageBox IMAP incremental search: UNSEEN UID %d:%d",
-                    start_uid,
-                    highest_existing_uid,
-                )
-                status, data = client.uid(
-                    "search", None, "UNSEEN", "UID", f"{start_uid}:{highest_existing_uid}"
-                )
+                else:
+                    start_uid = last_uid + 1
+                    logging.info(
+                        "TriageBox IMAP incremental search: UNSEEN UID %d:%d",
+                        start_uid,
+                        highest_existing_uid,
+                    )
+                    status, data = client.uid(
+                        "search", None, "UNSEEN", "UID", f"{start_uid}:{highest_existing_uid}"
+                    )
+                    if status != "OK":
+                        raise RuntimeError("IMAP UNSEEN search failed")
+                    uid_values.update(data[0].split() if data and data[0] else ())
             else:
-                since = _new_mail_since(date.today(), self.config.new_mail_lookback_days)
-                since_text = since.strftime("%d-%b-%Y")
                 if checkpoint is None:
                     logging.info(
                         "TriageBox IMAP initial search: UNSEEN SINCE %s (lookback_days=%d)",
@@ -399,21 +403,40 @@ class ImapClient:
                         since_text,
                     )
                 status, data = client.uid("search", None, "UNSEEN", "SINCE", since_text)
+                if status != "OK":
+                    raise RuntimeError("IMAP UNSEEN search failed")
+                uid_values.update(data[0].split() if data and data[0] else ())
 
+            # A self-Cc support request can become read before the normal sync.
+            # Recover recent WIB requests independently of the unread checkpoint
+            # so they still receive waiting-action + star and their relation is
+            # persisted.
+            status, support_data = client.uid(
+                "search",
+                None,
+                "HEADER",
+                "X-WorkInBox-Origin-Message-ID",
+                '""',
+                "SINCE",
+                since_text,
+            )
             if status != "OK":
-                raise RuntimeError("IMAP UNSEEN search failed")
-            uid_values = data[0].split() if data and data[0] else []
+                raise RuntimeError("IMAP WorkInBox support request search failed")
+            uid_values.update(
+                support_data[0].split() if support_data and support_data[0] else ()
+            )
+            ordered_uid_values = sorted(uid_values, key=int)
             logging.info("TriageBox IMAP search returned %d candidate UIDs", len(uid_values))
             self._progress(
                 phase="triage-fetch",
-                label="TriageBox: 未読メール取得",
+                label="TriageBox: 新着・WIB依頼取得",
                 current=0,
-                total=len(uid_values),
+                total=len(ordered_uid_values),
                 errors=0,
             )
 
             ordered: list[tuple[str, int, TriageMessage]] = []
-            for index, uid_bytes in enumerate(uid_values, start=1):
+            for index, uid_bytes in enumerate(ordered_uid_values, start=1):
                 uid = int(uid_bytes)
                 logging.info(
                     "TriageBox IMAP fetch %d/%d: uid=%d",
@@ -444,9 +467,9 @@ class ImapClient:
                     )
                 self._progress(
                     phase="triage-fetch",
-                    label="TriageBox: 未読メール取得",
+                    label="TriageBox: 新着・WIB依頼取得",
                     current=index,
-                    total=len(uid_values),
+                    total=len(ordered_uid_values),
                     errors=0,
                 )
 
