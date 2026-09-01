@@ -401,6 +401,9 @@ function countDashboardMessage(counts, message, since) {
     return;
   }
   for (const [countName, tagKey] of Object.entries(DASHBOARD_TAG_COUNTS)) {
+    if (countName === "schedule" && tags.has(REQUESTED_TAG)) {
+      continue;
+    }
     if (tags.has(tagKey)) {
       counts[countName] += 1;
     }

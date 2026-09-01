@@ -60,7 +60,15 @@ class FakeImap:
             ("FLAGGED", "KEYWORD", "wib-review"): b"12",
             ("FLAGGED", "KEYWORD", "wib-watch"): b"13 14 15",
             ("FLAGGED", "KEYWORD", "wib-deadline", "UNKEYWORD", "wib-deadline-done"): b"20",
-            ("FLAGGED", "KEYWORD", "wib-schedule", "UNKEYWORD", "wib-schedule-done"): b"21 22",
+            (
+                "FLAGGED",
+                "KEYWORD",
+                "wib-schedule",
+                "UNKEYWORD",
+                "wib-schedule-done",
+                "UNKEYWORD",
+                "wib-requested",
+            ): b"21 22",
             ("FLAGGED", "KEYWORD", "wib-pending"): b"23",
             ("FLAGGED", "KEYWORD", "wib-waiting-reply"): b"24 25",
             ("FLAGGED", "KEYWORD", "wib-waiting-action"): b"26",
@@ -102,6 +110,18 @@ class DashboardServiceTest(unittest.TestCase):
         self.assertEqual(snapshot.pending, 1)
         self.assertEqual(snapshot.waiting_total, 5)
         self.assertEqual(snapshot.records, 3)
+        self.assertIn(
+            (
+                "FLAGGED",
+                "KEYWORD",
+                "wib-schedule",
+                "UNKEYWORD",
+                "wib-schedule-done",
+                "UNKEYWORD",
+                "wib-requested",
+            ),
+            FakeImap.searches,
+        )
 
     @patch("workinbox.dashboard.imaplib.IMAP4_SSL", FakeImap)
     @patch("workinbox.dashboard.date")

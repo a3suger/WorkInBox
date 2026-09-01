@@ -120,6 +120,8 @@ class DashboardService:
                     "wib-schedule",
                     "UNKEYWORD",
                     "wib-schedule-done",
+                    "UNKEYWORD",
+                    "wib-requested",
                     allowed_uids=active_uids,
                 ),
                 pending=self._count(client, "FLAGGED", "KEYWORD", "wib-pending"),

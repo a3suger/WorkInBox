@@ -302,6 +302,13 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("schedule_support.supporters", source)
         self.assertIn("対応待ち", source)
 
+    def test_schedule_list_excludes_requested_messages(self) -> None:
+        source = (
+            Path(__file__).resolve().parents[1] / "src" / "workinbox" / "web.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('or "wib-requested" in keys', source)
+
 
 if __name__ == "__main__":
     unittest.main()

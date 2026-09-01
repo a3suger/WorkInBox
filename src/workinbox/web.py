@@ -221,7 +221,11 @@ def create_app(
             if tagged.error is not None:
                 continue
             keys = {tag.key for tag in tagged.tags}
-            if "wib-schedule" not in keys or "wib-schedule-done" in keys:
+            if (
+                "wib-schedule" not in keys
+                or "wib-schedule-done" in keys
+                or "wib-requested" in keys
+            ):
                 continue
             message = deadline_data_service.database.email_message(tagged.email.message_id)
             items.append({
