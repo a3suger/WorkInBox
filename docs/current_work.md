@@ -9,7 +9,7 @@
 - 親 Issue: #5 `docs/design.md 追従実装`
 - #6〜#16 の実装 Issue: すべて Closed
 - 残っている実機確認: #18〜#22・#24・#25
-- 追加実装Issue: #26・#27・#31 Closed、#28〜#30・#32・#33 Open
+- 追加実装Issue: #26・#27・#31・#32 Closed、#28〜#30・#33 Open
 - 現在位置: 対応待ちM2を基準に返信M3を既読でも回収し、M2をSQLiteの保存済みUIDから直接確認する修正を実装
 
 ## GitHub / git の現在状態
@@ -20,8 +20,8 @@
 - 実装 Issue #6〜#16: Closed
 - 実機確認 Issue #17・#23: Closed
 - 実機確認 Issue #18〜#22・#24・#25: Open
-- 追加実装 Issue #26・#27・#31: Closed
-- 追加実装 Issue #28〜#30・#32・#33: Open
+- 追加実装 Issue #26・#27・#31・#32: Closed
+- 追加実装 Issue #28〜#30・#33: Open
 - #16 `Thunderbird Bridge / Quick Filter を docs/design.md に合わせる`: Closed
 - 2026-08-26 に実運用で見つかった改善を #26〜#29 として作成した。
 - #26 は実装・自動テスト・実機確認を完了しClosed。
@@ -29,7 +29,8 @@
 - 2026-08-30 に、WIB接続なしでも通常作業を継続するExtension内ダッシュボードを #31 として作成し、一度Closed。2026-08-31の追加要望を受けて再Openした。
 - 2026-09-01 に、Extensionの締切サマリーとThunderbirdからの限定CalDAV双方向編集を #32 として作成した。詳細仕様は`docs/limited_caldav.md`。
 - 2026-09-02 に #31 の追加調整と実機確認を完了してClosedした。通常の「受信ボックス」状態へ戻ったWIB作業タブの再利用不具合は #33 へ分離した。
-- 最新確認済みActionsは run `33518466312` success、対象commitは `b586f1a`。
+- 2026-09-02 に #32 の限定CalDAV実装・自動テスト・Actions・実機確認を完了してClosedした。
+- 最新確認済みActionsは run `33533359247` success、対象commitは `d6942c6`。
 
 ### ローカル git
 
@@ -331,7 +332,7 @@ desktopのINFOログで、M2候補2件はいずれもTriageBoxへ到達した後
 
 M2への`対応待ち + ★`が成功した後、M2への返信M3に`対応あり + ★`が付かないことを確認した。対応待ちrelationを持つM2のMessage-IDを基準に、直近期間の`In-Reply-To` / `References`からM3を既読でも回収する。また、M3処理時のM2確認も保存済みUIDを使い、受信箱全体のMessage-ID検索によるタイムアウトを避けるよう修正した。
 
-#32は第1段階の締切サマリーに加え、SQLiteへ着手日時・完了状態・重要度・更新世代を追加し、loopback限定の`/caldav/deadlines/`を実装した。既存ToDoの取得と編集、完了済みのサマリー除外、ETag競合拒否、Web編集時のCalDAV専用項目保持に対応した。旧`deadlines.ics`は移行確認用に残している。自動テスト後にcommit・Actionsを確認し、`docs/manual_test_runbook.md`の#32実機確認を行う。
+#32は第1段階の締切サマリーに加え、SQLiteへ着手日時・完了状態・重要度・更新世代を追加し、loopback限定の`/caldav/deadlines/`を実装した。既存ToDoの取得と編集、完了済みのサマリー除外、ETag競合拒否、Web編集時のCalDAV専用項目保持に対応した。旧`deadlines.ics`は移行確認用に残している。commit `d6942c6`、自動テスト155件、Actions run `33533359247`、実機確認のすべてが成功し、#32をClosedした。
 
 Extension `0.3.9`では、`一括処理`または旧互換タグが付きスターのないメールをmailbox全体から数え、ダッシュボードの「整理済みメール / アーカイブ待ち」に表示する。同じ条件のThunderbird作業ビューを開き、定期的な確認とアーカイブへ進める。ダッシュボード全体の情報設計・配置見直しは、実運用するカードが揃った段階の別作業として扱う。
 
@@ -351,12 +352,8 @@ Extension `0.3.9`までの#31完了条件は実機確認済み。WIB作業タブ
 
 ## 次に行うこと
 
-1. #32の限定CalDAV実装をcommitしてGitHubへpushする。
-2. GitHub Actionsの成功を確認する。
-3. desktopでpullしてWIBを再起動する。
-4. `docs/limited_caldav.md`の移行手順で、noteのThunderbirdを旧`deadlines.ics`購読から限定CalDAVへ切り替える。
-5. `docs/manual_test_runbook.md`の「限定CalDAV（#32）」を順に実機確認する。
-6. 実機確認がすべて成功したら#32をClosedする。
+1. Openの実機確認Issue #18〜#22・#24・#25から、次に確認する対象を選ぶ。
+2. 追加実装Issue #28〜#30・#33は、実運用上の優先度に従って着手する。
 
 ## 設計判断待ち
 
