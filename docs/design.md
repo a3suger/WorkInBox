@@ -671,7 +671,7 @@ sequenceDiagram
     participant M4 as M4 M1スレッドの継続メール
 
     Note over M1: ★ + スケジュール調整
-    M1->>M2: WIBから支援者へ新規メール作成
+    M1->>M2: WIBから元メールを本文内転送した別スレッドを作成
     Note over M1: 依頼済み
     Note over M2: X-WorkInBox-Origin-Message-ID = M1
     Note over M2: ★ + 対応待ち
@@ -685,7 +685,7 @@ sequenceDiagram
 
 支援者依頼メール M2 には `X-WorkInBox-Origin-Message-ID` で M1 の Message-ID を入れる。
 
-WIB から支援者への新規メール M2 の作成が成立した時点で、起点メール M1 に `依頼済み` を付ける。
+WIB から支援者への別スレッドのメール M2（M1を本文内転送）の作成が成立した時点で、起点メール M1 に `依頼済み` を付ける。
 
 自分宛て/Cc の M2 を TriageBox が同期で確認した時点で、M2 に `対応待ち + ★` を付け、M1 と M2 の relation を SQLite に保存する。
 

@@ -189,7 +189,7 @@ M4: M1の標準メールスレッドに届く継続メール
 
 M1からM2送信後:
 
-- [ ] M2はReply/Forwardではなく別スレッドの新規メールになる
+- [ ] M2はReplyではなく別スレッドになり、元メールが本文内転送として含まれる
 - [ ] M2に `X-WorkInBox-Origin-Message-ID: <M1 Message-ID>` が付く
 - [ ] 送信成立後、ExtensionがM1へ `依頼済み` を付ける
 

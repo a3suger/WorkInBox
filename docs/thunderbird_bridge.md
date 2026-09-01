@@ -138,7 +138,7 @@ WIB Web のボタンに `data-wib-open-work-view` を付け、content script `wo
 
 ## 6. 専用ワークフローからのメール作成
 
-専用ワークフローで支援者へ依頼する M2 は M1 への Reply / Forward ではなく別スレッドの新規メールとして Thunderbird で作成する。
+専用ワークフローで支援者へ依頼する M2 は M1 への Reply ではなく、M1 を本文内転送した別スレッドのメールとして Thunderbird で作成する。元メールの内容を支援者へ提示しつつ、M1 の標準返信スレッドとは分離する。
 
 ```text
 M1 起点メール

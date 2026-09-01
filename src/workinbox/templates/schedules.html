@@ -60,7 +60,7 @@
     <details style="margin-top: 16px;">
       <summary>支援者へ依頼する</summary>
       <div class="notice" style="margin-top: 10px;">
-        起点メールとは別スレッドの新規メールとして依頼メールを作成し、X-WorkInBox-Origin-Message-ID で起点メールとの relation を保持します。自分を Cc にした依頼メールが INBOX に届いた後、次回の通常同期で TriageBox がそのメールをスター＋「対応待ち」にします。
+        起点メールとは別スレッドの依頼メールを作成し、元メールを本文内転送として含めます。X-WorkInBox-Origin-Message-ID で起点メールとの relation を保持します。自分を Cc にした依頼メールが INBOX に届いた後、次回の通常同期で TriageBox がそのメールをスター＋「対応待ち」にします。
       </div>
 
       {% if supporters %}

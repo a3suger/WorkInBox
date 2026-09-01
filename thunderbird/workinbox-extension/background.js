@@ -563,9 +563,14 @@ async function beginSupportRequest(request) {
   }
 
   const copy = requestCopy(requestKind);
-  // M2 is deliberately a new thread. Its WorkInBox relation to M1 is carried
-  // only by X-WorkInBox-Origin-Message-ID; M2 must not inherit reply headers.
-  const composeTab = await messenger.compose.beginNew();
+  // M2 is deliberately a separate thread, but the supporter needs the source
+  // message for context. An inline forward includes M1 in the body without
+  // making M2 a reply in M1's thread. The WorkInBox relation is still carried
+  // explicitly by X-WorkInBox-Origin-Message-ID.
+  const composeTab = await messenger.compose.beginForward(
+    originMessage.id,
+    "forwardInline",
+  );
   const details = await messenger.compose.getComposeDetails(composeTab.id);
   const updates = {
     to: [to],
