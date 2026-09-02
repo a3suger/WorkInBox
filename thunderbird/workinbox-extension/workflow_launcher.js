@@ -18,6 +18,16 @@ async function connect() {
     return;
   }
   try {
+    detail.textContent = "選択したメールへ専用フローのタグとスターを設定しています…";
+    const prepared = await messenger.runtime.sendMessage({
+      type: "workinbox-prepare-dedicated-workflow",
+      kind,
+      messageId,
+    });
+    if (!prepared?.ok) {
+      throw new Error(prepared?.error || "選択したメールを準備できませんでした");
+    }
+    detail.textContent = "WIB Webとの接続を確認しています…";
     const response = await fetch(new URL("api/health", WIB_URL), { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const health = await response.json();

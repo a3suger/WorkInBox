@@ -456,12 +456,6 @@ async function openDedicatedWorkflow(kind, messageId) {
     throw new Error(`Unknown dedicated workflow: ${kind}`);
   }
 
-  const message = await findMessageByHeaderMessageId(messageId);
-  if (!message) {
-    throw new Error(`Message-ID ${messageId} のメールを Thunderbird で見つけられませんでした。`);
-  }
-  await addTag(message, definition.tagKey, { flagged: true });
-
   const launcherUrl = new URL(messenger.runtime.getURL("workflow_launcher.html"));
   launcherUrl.searchParams.set("kind", kind);
   launcherUrl.searchParams.set("message_id", messageId);
@@ -481,6 +475,23 @@ async function openDedicatedWorkflow(kind, messageId) {
   const tab = await messenger.tabs.create({ url: launcherUrl.href, active: true });
   dedicatedWorkflowTabId = tab.id;
   return { ok: true, tabId: tab.id, reused: false };
+}
+
+async function prepareDedicatedWorkflow(kind, messageId) {
+  const tagKeys = {
+    deadline: "wib-deadline",
+    schedule: "wib-schedule",
+  };
+  const tagKey = tagKeys[kind];
+  if (!tagKey) {
+    throw new Error(`Unknown dedicated workflow: ${kind}`);
+  }
+  const message = await findMessageByHeaderMessageId(messageId);
+  if (!message) {
+    throw new Error(`Message-ID ${messageId} のメールを Thunderbird で見つけられませんでした。`);
+  }
+  await addTag(message, tagKey, { flagged: true });
+  return { ok: true };
 }
 
 function emptyDashboardCounts() {
@@ -931,6 +942,8 @@ messenger.runtime.onMessage.addListener((request) => {
     operation = openTasksSpace();
   } else if (request.type === "workinbox-open-dedicated-workflow") {
     operation = openDedicatedWorkflow(request.kind, request.messageId);
+  } else if (request.type === "workinbox-prepare-dedicated-workflow") {
+    operation = prepareDedicatedWorkflow(request.kind, request.messageId);
   } else {
     return undefined;
   }
