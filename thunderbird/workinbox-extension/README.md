@@ -73,6 +73,8 @@ Extension `0.3.10`では、メール閲覧画面のmessage display actionを「W
 
 Extension `0.3.11`では、正式アイコンを青い線画の受信トレイと、中央の丸みのある`w`を組み合わせたデザインへ更新しました。
 
+Extension `0.3.12`では、正式アイコンのWorkInBoxボタンをThunderbirdのスペースツールバーへ常設しました。ボタンを押すとExtension内ダッシュボードが開き、以後は同じ専用タブを再利用します。popupの`ダッシュボードを開く`も同じスペースを開きます。
+
 ## WIB Quick Filter 作業ビュー PoC
 
 WIB の現在作業を Thunderbird のメール一覧で処理するため、専用のメールタブを 1 枚だけ作成して再利用します。

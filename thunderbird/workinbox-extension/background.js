@@ -8,6 +8,15 @@ const BULK_TAG_DEFINITION = {
   color: "#424242",
 };
 const NORMAL_WORKFLOW_TAGS = new Set(["wib-answer", "wib-review", "wib-watch"]);
+const DASHBOARD_SPACE_BUTTON_ID = "workinbox_dashboard";
+const DASHBOARD_SPACE_BUTTON_PROPERTIES = Object.freeze({
+  url: "dashboard.html",
+  title: "WorkInBox",
+  defaultIcons: {
+    16: "icons/workinbox.svg",
+    32: "icons/workinbox.svg",
+  },
+});
 
 const WORK_VIEWS = {
   unattended: { label: "未着眼", unattended: true, unread: false },
@@ -36,6 +45,32 @@ const WORK_VIEWS = {
 let workViewTabId = null;
 let dashboardTabId = null;
 const pendingSupportRequests = new Map();
+
+async function registerDashboardSpaceButton() {
+  try {
+    return await messenger.spacesToolbar.addButton(
+      DASHBOARD_SPACE_BUTTON_ID,
+      DASHBOARD_SPACE_BUTTON_PROPERTIES,
+    );
+  } catch (error) {
+    // The button can survive a background-script reload. Keep its properties
+    // current instead of treating an existing button as a startup failure.
+    try {
+      await messenger.spacesToolbar.updateButton(
+        DASHBOARD_SPACE_BUTTON_ID,
+        DASHBOARD_SPACE_BUTTON_PROPERTIES,
+      );
+      return null;
+    } catch (_updateError) {
+      throw error;
+    }
+  }
+}
+
+const dashboardSpaceReady = registerDashboardSpaceButton().catch((error) => {
+  console.error("[WorkInBox dashboard] failed to register spaces toolbar button", error);
+  return null;
+});
 
 const DASHBOARD_TAG_COUNTS = Object.freeze({
   answer: "wib-answer",
@@ -375,6 +410,17 @@ async function getExistingDashboardTab() {
 }
 
 async function openDashboard() {
+  await dashboardSpaceReady;
+  try {
+    const spaceTab = await messenger.spacesToolbar.clickButton(
+      DASHBOARD_SPACE_BUTTON_ID,
+    );
+    dashboardTabId = spaceTab.id;
+    return { ok: true, tabId: spaceTab.id, reused: true, space: true };
+  } catch (error) {
+    console.warn("[WorkInBox dashboard] spaces toolbar button is unavailable", error);
+  }
+
   const existing = await getExistingDashboardTab();
   if (existing) {
     await messenger.tabs.update(existing.id, { active: true });
