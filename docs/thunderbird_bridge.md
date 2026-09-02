@@ -50,7 +50,7 @@ Thunderbird内では、`mid:`で見つからない場合の予備操作として
 
 ## 4. WIB 作業ビュー
 
-WIB ダッシュボードや Extension popup から `workinbox-open-work-view` を呼び、Thunderbird の WIB 専用作業タブを開く。
+WIB WebおよびExtension内ダッシュボードから `workinbox-open-work-view` を呼び、Thunderbird の WIB 専用作業タブを開く。
 
 作業タブは同一タブを再利用し、WIB 設定の mailbox を表示する。
 

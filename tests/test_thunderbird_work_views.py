@@ -164,28 +164,29 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
             background,
         )
 
-    def test_popup_uses_current_work_view_names(self) -> None:
+    def test_settings_page_is_limited_to_maintenance_tools(self) -> None:
         popup = (EXTENSION / "popup.html").read_text(encoding="utf-8")
 
-        for label in ("未着眼・未読", "未着眼・既読", "返信必要", "見る・検討", "注目"):
+        for label in ("Archive indexing policy", "タグスナップショット", "WIBタグ登録", "復元"):
             self.assertIn(label, popup)
-        self.assertNotIn("Quick Filter PoC", popup)
-        self.assertNotIn("回答必要", popup)
-        self.assertNotIn("読む・検討", popup)
+        for label in ("Extension ダッシュボード", "WorkInBox Web UI", "WIB 作業ビュー"):
+            self.assertNotIn(label, popup)
 
     def test_extension_dashboard_is_registered_and_opened_in_a_reused_tab(self) -> None:
         manifest = json.loads((EXTENSION / "manifest.json").read_text(encoding="utf-8"))
         popup = (EXTENSION / "popup.html").read_text(encoding="utf-8")
-        popup_bridge = (EXTENSION / "popup_bridge.js").read_text(encoding="utf-8")
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
         dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.13")
+        self.assertEqual(manifest["version"], "0.3.14")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
-        self.assertIn('id="open-extension-dashboard"', popup)
-        self.assertIn('type: "workinbox-open-dashboard"', popup_bridge)
+        self.assertNotIn("Extension ダッシュボード", popup)
+        self.assertNotIn("WorkInBox Web UI", popup)
+        self.assertNotIn("WIB 作業ビュー", popup)
+        self.assertNotIn('src="popup_bridge.js"', popup)
+        self.assertFalse((EXTENSION / "popup_bridge.js").exists())
         self.assertIn('messenger.runtime.getURL("dashboard.html")', background)
         self.assertIn("getExistingDashboardTab()", background)
         self.assertIn('DASHBOARD_SPACE_BUTTON_ID = "workinbox_dashboard"', background)

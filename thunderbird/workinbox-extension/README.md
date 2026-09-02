@@ -77,6 +77,8 @@ Extension `0.3.12`では、正式アイコンのWorkInBoxボタンをThunderbird
 
 Extension `0.3.13`では、重複していたメニューバーのWorkInBoxボタンを削除しました。従来のpopupはアドオンの`設定・ツール`画面として維持し、Extension内ダッシュボード右上の歯車ボタン、またはアドオンマネージャーの設定から開きます。
 
+Extension `0.3.14`では、`設定・ツール`画面からダッシュボード、WIB Web UI、WIB作業ビューの重複導線を削除しました。この画面はArchive索引設定とWIBタグの登録・バックアップ・復元に限定します。
+
 ## WIB Quick Filter 作業ビュー PoC
 
 WIB の現在作業を Thunderbird のメール一覧で処理するため、専用のメールタブを 1 枚だけ作成して再利用します。
