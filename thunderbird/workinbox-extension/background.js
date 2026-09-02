@@ -332,15 +332,7 @@ async function resolveDedicatedWorkViewTab(mailbox) {
   return created;
 }
 
-async function openWorkView(viewName, imapTarget, lookbackDays = null) {
-  const view = WORK_VIEWS[viewName];
-  if (!view) {
-    throw new Error(`Unknown WorkInBox work view: ${viewName}`);
-  }
-
-  const { account, mailbox } = await resolveWorkViewMailbox(imapTarget);
-  const mailTab = await resolveDedicatedWorkViewTab(mailbox);
-
+async function applyWorkView(mailTab, view, lookbackDays) {
   if (view.unattended) {
     await messenger.mailTabs.setQuickFilter(mailTab.id, { show: false });
     await messenger.mailViews.ensureUnattendedView(mailTab.id, lookbackDays);
@@ -382,6 +374,33 @@ async function openWorkView(viewName, imapTarget, lookbackDays = null) {
         },
       },
     });
+  }
+}
+
+async function openWorkView(viewName, imapTarget, lookbackDays = null) {
+  const view = WORK_VIEWS[viewName];
+  if (!view) {
+    throw new Error(`Unknown WorkInBox work view: ${viewName}`);
+  }
+
+  const { account, mailbox } = await resolveWorkViewMailbox(imapTarget);
+  let mailTab = await resolveDedicatedWorkViewTab(mailbox);
+
+  try {
+    await applyWorkView(mailTab, view, lookbackDays);
+  } catch (error) {
+    // Opening a message can leave the reused tab without a three-pane view.
+    // Replace only the dedicated WIB tab and retry with a fresh mail tab.
+    console.warn("[WorkInBox bridge] rebuilding unavailable work-view tab", error);
+    try {
+      await messenger.tabs.remove(mailTab.id);
+    } catch (_removeError) {
+      // The tab may already have disappeared while recovering.
+    }
+    workViewTabId = null;
+    workViewTabTitle = null;
+    mailTab = await resolveDedicatedWorkViewTab(mailbox);
+    await applyWorkView(mailTab, view, lookbackDays);
   }
 
   await messenger.tabs.update(mailTab.id, { active: true });
