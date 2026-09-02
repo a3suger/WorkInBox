@@ -4,6 +4,10 @@ const WIB_URL = "http://127.0.0.1:8000/";
 const params = new URLSearchParams(window.location.search);
 const kind = params.get("kind");
 const messageId = params.get("message_id");
+const thunderbirdMessageIdValue = Number(params.get("thunderbird_message_id"));
+const thunderbirdMessageId = Number.isInteger(thunderbirdMessageIdValue)
+  ? thunderbirdMessageIdValue
+  : null;
 const title = document.querySelector("#title");
 const detail = document.querySelector("#detail");
 const retry = document.querySelector("#retry");
@@ -23,6 +27,7 @@ async function connect() {
       type: "workinbox-prepare-dedicated-workflow",
       kind,
       messageId,
+      thunderbirdMessageId,
     });
     if (!prepared?.ok) {
       throw new Error(prepared?.error || "選択したメールを準備できませんでした");

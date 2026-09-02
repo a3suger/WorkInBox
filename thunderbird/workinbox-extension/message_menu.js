@@ -22,6 +22,7 @@ for (const button of document.querySelectorAll("button")) {
             : "workinbox-dismiss-dedicated-workflow",
           kind: kind || dismissKind,
           messageId: message.headerMessageId,
+          thunderbirdMessageId: message.id,
         });
         if (!response?.ok) {
           throw new Error(response?.error || "専用フローを開けませんでした。");
