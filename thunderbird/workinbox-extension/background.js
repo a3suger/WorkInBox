@@ -44,6 +44,7 @@ const WORK_VIEWS = {
 
 let workViewTabId = null;
 let dashboardTabId = null;
+let dedicatedWorkflowTabId = null;
 const pendingSupportRequests = new Map();
 
 async function registerDashboardSpaceButton() {
@@ -443,6 +444,43 @@ async function openTasksSpace() {
   }
   const result = await messenger.tasksSpace.open();
   return { ok: Boolean(result?.opened), reused: false };
+}
+
+async function openDedicatedWorkflow(kind, messageId) {
+  const definitions = {
+    deadline: { tagKey: "wib-deadline" },
+    schedule: { tagKey: "wib-schedule" },
+  };
+  const definition = definitions[kind];
+  if (!definition) {
+    throw new Error(`Unknown dedicated workflow: ${kind}`);
+  }
+
+  const message = await findMessageByHeaderMessageId(messageId);
+  if (!message) {
+    throw new Error(`Message-ID ${messageId} のメールを Thunderbird で見つけられませんでした。`);
+  }
+  await addTag(message, definition.tagKey, { flagged: true });
+
+  const launcherUrl = new URL(messenger.runtime.getURL("workflow_launcher.html"));
+  launcherUrl.searchParams.set("kind", kind);
+  launcherUrl.searchParams.set("message_id", messageId);
+
+  if (dedicatedWorkflowTabId !== null) {
+    try {
+      const tab = await messenger.tabs.update(dedicatedWorkflowTabId, {
+        url: launcherUrl.href,
+        active: true,
+      });
+      return { ok: true, tabId: tab.id, reused: true };
+    } catch (_error) {
+      dedicatedWorkflowTabId = null;
+    }
+  }
+
+  const tab = await messenger.tabs.create({ url: launcherUrl.href, active: true });
+  dedicatedWorkflowTabId = tab.id;
+  return { ok: true, tabId: tab.id, reused: false };
 }
 
 function emptyDashboardCounts() {
@@ -868,6 +906,9 @@ messenger.tabs.onRemoved.addListener((tabId) => {
   if (tabId === dashboardTabId) {
     dashboardTabId = null;
   }
+  if (tabId === dedicatedWorkflowTabId) {
+    dedicatedWorkflowTabId = null;
+  }
 });
 
 messenger.runtime.onMessage.addListener((request) => {
@@ -888,6 +929,8 @@ messenger.runtime.onMessage.addListener((request) => {
     operation = dashboardCounts(request.imapTarget, request.lookbackDays);
   } else if (request.type === "workinbox-open-tasks") {
     operation = openTasksSpace();
+  } else if (request.type === "workinbox-open-dedicated-workflow") {
+    operation = openDedicatedWorkflow(request.kind, request.messageId);
   } else {
     return undefined;
   }

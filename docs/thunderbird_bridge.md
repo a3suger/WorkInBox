@@ -52,6 +52,8 @@ Thunderbird内では、`mid:`で見つからない場合の予備操作として
 
 WIB WebおよびExtension内ダッシュボードから `workinbox-open-work-view` を呼び、Thunderbird の WIB 専用作業タブを開く。
 
+メール閲覧画面のWIB操作メニューから専用フローを開始・再開するときは、表示中メールのMessage-IDを取得し、締切なら`wib-deadline`、スケジュール調整なら`wib-schedule`をスターとともに付ける。Extensionは専用フロータブを1枚だけ再利用し、まずローカルの起動画面で`/api/health`を確認する。接続できれば`/deadlines/message?message_id=...`または`/schedules/message?message_id=...`へ遷移し、接続できなければ起動画面に再試行を表示する。
+
 作業タブは同一タブを再利用し、WIB 設定の mailbox を表示する。
 
 ### 4.1 未着眼確認

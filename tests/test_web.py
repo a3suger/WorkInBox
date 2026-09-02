@@ -74,7 +74,9 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/records"])
         self.assertIn("GET", routes["/pending"])
         self.assertIn("GET", routes["/deadlines"])
+        self.assertIn("GET", routes["/deadlines/message"])
         self.assertIn("GET", routes["/schedules"])
+        self.assertIn("GET", routes["/schedules/message"])
         self.assertIn("GET", routes["/api/thunderbird/imap-target"])
         self.assertIn("GET", routes["/api/health"])
         self.assertIn("GET", routes["/api/extension/bootstrap"])
@@ -186,6 +188,12 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("/deadlines/no-deadline", source)
         self.assertIn("このメールには締切なしとして終了", source)
         self.assertIn("未確定の候補をすべて登録しない状態", source)
+        self.assertIn("scope_message_id", source)
+
+    def test_schedule_template_preserves_message_scope(self) -> None:
+        source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "schedules.html")
+        self.assertIn("scope_message_id", source)
+        self.assertIn("選択したメール", source)
 
     def test_deadline_source_page_contains_mail_fallback_and_auto_open(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

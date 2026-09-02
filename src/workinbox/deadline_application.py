@@ -40,7 +40,7 @@ class DeadlineExtractionService:
         self.imap_client = imap_client or ImapClient(config.imap)
         self.extractor = extractor or OllamaDeadlineExtractor(config.ai)
 
-    def extract_pending(self) -> DeadlineExtractionResult:
+    def extract_pending(self, message_id: str | None = None) -> DeadlineExtractionResult:
         self.database.initialize()
         self._initialize_extraction_state()
 
@@ -51,6 +51,11 @@ class DeadlineExtractionService:
         errors: list[DeadlineExtractionError] = []
 
         tracked_emails = self.database.list_tracked_emails(active=True)
+        if message_id is not None:
+            tracked_emails = [
+                tracked for tracked in tracked_emails
+                if tracked.message_id == message_id
+            ]
         references = [
             ImapReference(
                 tracked.message_id,

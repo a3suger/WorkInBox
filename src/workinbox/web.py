@@ -160,9 +160,13 @@ def create_app(
         extraction_failure: str | None = None,
         action_message: str | None = None,
         action_failure: str | None = None,
+        target_message_id: str | None = None,
     ):
         items: list[dict[str, object]] = []
-        for tagged in tag_service.read_for_emails(tracking_service.active_emails()):
+        active_emails = tracking_service.active_emails()
+        if target_message_id is not None:
+            active_emails = [email for email in active_emails if email.message_id == target_message_id]
+        for tagged in tag_service.read_for_emails(active_emails):
             if tagged.error is not None:
                 continue
             keys = {tag.key for tag in tagged.tags}
@@ -185,6 +189,7 @@ def create_app(
                 "extraction_failure": extraction_failure,
                 "action_message": action_message,
                 "action_failure": action_failure,
+                "target_message_id": target_message_id,
             },
         )
 
@@ -219,9 +224,13 @@ def create_app(
         *,
         action_message: str | None = None,
         action_failure: str | None = None,
+        target_message_id: str | None = None,
     ):
         items: list[dict[str, object]] = []
-        for tagged in tag_service.read_for_emails(tracking_service.active_emails()):
+        active_emails = tracking_service.active_emails()
+        if target_message_id is not None:
+            active_emails = [email for email in active_emails if email.message_id == target_message_id]
+        for tagged in tag_service.read_for_emails(active_emails):
             if tagged.error is not None:
                 continue
             keys = {tag.key for tag in tagged.tags}
@@ -247,6 +256,7 @@ def create_app(
                 **common_view_flags(schedules=True),
                 "action_message": action_message,
                 "action_failure": action_failure,
+                "target_message_id": target_message_id,
             },
         )
 
@@ -300,9 +310,29 @@ def create_app(
             return render_deadlines(request, extraction_failure=str(exc))
         return render_deadlines(request, extraction_result=result)
 
+    @app.get("/deadlines/message")
+    def deadline_for_message(request: Request, message_id: str):
+        try:
+            result = deadline_ai_service.extract_pending(message_id)
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            return render_deadlines(
+                request,
+                target_message_id=message_id,
+                extraction_failure=str(exc),
+            )
+        return render_deadlines(
+            request,
+            target_message_id=message_id,
+            extraction_result=result,
+        )
+
     @app.get("/schedules")
     def schedule_adjustments(request: Request):
         return render_schedules(request)
+
+    @app.get("/schedules/message")
+    def schedule_for_message(request: Request, message_id: str):
+        return render_schedules(request, target_message_id=message_id)
 
     @app.get("/api/thunderbird/imap-target")
     def thunderbird_imap_target() -> dict[str, object]:
@@ -531,7 +561,7 @@ def create_app(
         return render_mail_list(request, active=True, tag_message="Record に保存して通常ワークフローを終了しました。")
 
     @app.post("/deadlines/add")
-    async def add_deadline_candidate(request: Request):
+    async def add_deadline_candidate(request: Request, scope_message_id: str | None = None):
         try:
             form = await read_urlencoded_form(request)
             message_id = form.get("message_id", "").strip()
@@ -546,46 +576,47 @@ def create_app(
                 needs_review=due_at is None,
             )
         except (OSError, RuntimeError, ValueError, sqlite3.Error, UnicodeDecodeError) as exc:
-            return render_deadlines(request, action_failure=str(exc))
-        return render_deadlines(request, action_message="締切候補を手動で追加しました。")
+            return render_deadlines(request, target_message_id=scope_message_id, action_failure=str(exc))
+        return render_deadlines(request, target_message_id=scope_message_id, action_message="締切候補を手動で追加しました。")
 
     @app.post("/deadlines/no-deadline")
     def dismiss_no_deadline(request: Request, message_id: str):
         try:
             deadline_flow_service.dismiss_no_deadline(message_id)
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
-            return render_deadlines(request, action_failure=str(exc))
+            return render_deadlines(request, target_message_id=message_id, action_failure=str(exc))
         return render_deadlines(
             request,
+            target_message_id=message_id,
             action_message="締切なしとして締切登録支援を終了しました。",
         )
 
     @app.post("/deadlines/{candidate_id}/register")
-    def register_deadline_candidate(request: Request, candidate_id: int):
+    def register_deadline_candidate(request: Request, candidate_id: int, scope_message_id: str | None = None):
         try:
             _, completion = deadline_flow_service.register_candidate(candidate_id)
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
-            return render_deadlines(request, action_failure=str(exc))
+            return render_deadlines(request, target_message_id=scope_message_id, action_failure=str(exc))
         if completion.completed:
-            return render_deadlines(request, action_message="締切を正式登録し、このメールの締切判断を完了しました。")
-        return render_deadlines(request, action_message="締切を正式登録しました。")
+            return render_deadlines(request, target_message_id=scope_message_id, action_message="締切を正式登録し、このメールの締切判断を完了しました。")
+        return render_deadlines(request, target_message_id=scope_message_id, action_message="締切を正式登録しました。")
 
     @app.post("/deadlines/{candidate_id}/reject")
-    def reject_deadline_candidate(request: Request, candidate_id: int):
+    def reject_deadline_candidate(request: Request, candidate_id: int, scope_message_id: str | None = None):
         try:
             _, completion = deadline_flow_service.reject_candidate(candidate_id)
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
-            return render_deadlines(request, action_failure=str(exc))
+            return render_deadlines(request, target_message_id=scope_message_id, action_failure=str(exc))
         if completion.completed:
             if completion.registered_count > 0:
                 message = "締切候補を登録しないと判断し、このメールの締切判断を完了しました。"
             else:
                 message = "すべての締切候補を登録しないと判断し、締切ありタグを外しました。"
-            return render_deadlines(request, action_message=message)
-        return render_deadlines(request, action_message="締切候補を登録しないと判断しました。")
+            return render_deadlines(request, target_message_id=scope_message_id, action_message=message)
+        return render_deadlines(request, target_message_id=scope_message_id, action_message="締切候補を登録しないと判断しました。")
 
     @app.post("/deadlines/{candidate_id}/revise")
-    async def revise_deadline_candidate(request: Request, candidate_id: int):
+    async def revise_deadline_candidate(request: Request, candidate_id: int, scope_message_id: str | None = None):
         try:
             form = await read_urlencoded_form(request)
             deadline_data_service.revise_candidate(
@@ -596,16 +627,16 @@ def create_app(
                 needs_review="needs_review" in form,
             )
         except (OSError, RuntimeError, ValueError, sqlite3.Error, UnicodeDecodeError) as exc:
-            return render_deadlines(request, action_failure=str(exc))
-        return render_deadlines(request, action_message="締切候補を修正しました。")
+            return render_deadlines(request, target_message_id=scope_message_id, action_failure=str(exc))
+        return render_deadlines(request, target_message_id=scope_message_id, action_message="締切候補を修正しました。")
 
     @app.post("/schedules/complete")
-    def complete_schedule_adjustment(request: Request, message_id: str):
+    def complete_schedule_adjustment(request: Request, message_id: str, scope_message_id: str | None = None):
         try:
             tag_service.set_tag(message_id, "wib-schedule-done", enabled=True)
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
-            return render_schedules(request, action_failure=str(exc))
-        return render_schedules(request, action_message="スケジュール対応済みとして記録しました。")
+            return render_schedules(request, target_message_id=scope_message_id, action_failure=str(exc))
+        return render_schedules(request, target_message_id=scope_message_id, action_message="スケジュール対応済みとして記録しました。")
 
     @app.post("/pending/resolve")
     def resolve_pending(request: Request, message_id: str, resolution: str):

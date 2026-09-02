@@ -7,7 +7,7 @@
 <div class="toolbar">
   <div>
     <h2>締切登録支援</h2>
-    <div class="muted">{{ items | length }} 通のメール</div>
+    <div class="muted">{% if target_message_id %}選択したメール{% else %}{{ items | length }} 通のメール{% endif %}</div>
   </div>
 </div>
 
@@ -88,17 +88,17 @@
 
         {% if candidate.status.value == "pending" %}
         <div class="deadline-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-          <form method="post" action="/deadlines/{{ candidate.id }}/register">
+          <form method="post" action="/deadlines/{{ candidate.id }}/register{% if target_message_id %}?scope_message_id={{ target_message_id | urlencode }}{% endif %}">
             <button type="submit" class="primary" {% if not candidate.due_at %}disabled title="日付を修正してから登録してください"{% endif %}>登録する</button>
           </form>
-          <form method="post" action="/deadlines/{{ candidate.id }}/reject">
+          <form method="post" action="/deadlines/{{ candidate.id }}/reject{% if target_message_id %}?scope_message_id={{ target_message_id | urlencode }}{% endif %}">
             <button type="submit">登録しない</button>
           </form>
         </div>
 
         <details class="deadline-edit" style="margin-top: 12px;">
           <summary>修正する</summary>
-          <form method="post" action="/deadlines/{{ candidate.id }}/revise" style="display: grid; gap: 8px; margin-top: 10px; max-width: 760px;">
+          <form method="post" action="/deadlines/{{ candidate.id }}/revise{% if target_message_id %}?scope_message_id={{ target_message_id | urlencode }}{% endif %}" style="display: grid; gap: 8px; margin-top: 10px; max-width: 760px;">
             <label>
               タイトル
               <input type="text" name="title" value="{{ candidate.title }}" required style="width: 100%; box-sizing: border-box; padding: 7px 8px;">
@@ -136,7 +136,7 @@
 
     <details class="deadline-add" style="margin-top: 16px;">
       <summary>＋ 締切を追加</summary>
-      <form method="post" action="/deadlines/add" style="display: grid; gap: 8px; margin-top: 10px; max-width: 760px;">
+      <form method="post" action="/deadlines/add{% if target_message_id %}?scope_message_id={{ target_message_id | urlencode }}{% endif %}" style="display: grid; gap: 8px; margin-top: 10px; max-width: 760px;">
         <input type="hidden" name="message_id" value="{{ email.message_id }}">
         <label>
           タイトル
@@ -159,6 +159,6 @@
   {% endfor %}
 </div>
 {% else %}
-<div class="empty">現在、締切登録支援の対象メールはありません。</div>
+<div class="empty">{% if target_message_id %}選択したメールは締切登録支援の対象外か、WIBへまだ同期されていません。{% else %}現在、締切登録支援の対象メールはありません。{% endif %}</div>
 {% endif %}
 {% endblock %}

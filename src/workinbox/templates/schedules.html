@@ -7,7 +7,7 @@
 <div class="toolbar">
   <div>
     <h2>スケジュール調整支援</h2>
-    <div class="muted">{{ items | length }} 通のメール</div>
+    <div class="muted">{% if target_message_id %}選択したメール{% else %}{{ items | length }} 通のメール{% endif %}</div>
   </div>
 </div>
 
@@ -52,7 +52,7 @@
       自分で予定確認・日程調整・予定入力等を完了した場合は、下のボタンでこのメールのスケジュール対応を完了できます。
     </div>
 
-    <form method="post" action="/schedules/complete">
+    <form method="post" action="/schedules/complete?message_id={{ email.message_id | urlencode }}{% if target_message_id %}&amp;scope_message_id={{ target_message_id | urlencode }}{% endif %}">
       <input type="hidden" name="message_id" value="{{ email.message_id }}">
       <button type="submit" class="primary">自分で対応済み</button>
     </form>
@@ -111,6 +111,6 @@
   {% endfor %}
 </div>
 {% else %}
-<div class="empty">現在、スケジュール調整支援の対象メールはありません。</div>
+<div class="empty">{% if target_message_id %}選択したメールはスケジュール調整支援の対象外か、WIBへまだ同期されていません。{% else %}現在、スケジュール調整支援の対象メールはありません。{% endif %}</div>
 {% endif %}
 {% endblock %}
