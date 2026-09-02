@@ -44,6 +44,10 @@ def _mid_value(message_id: str) -> str:
     return value
 
 
+def _message_ids_equal(left: str, right: str) -> bool:
+    return _mid_value(left) == _mid_value(right)
+
+
 _TEMPLATES.env.filters["mid_value"] = _mid_value
 
 
@@ -165,7 +169,10 @@ def create_app(
         items: list[dict[str, object]] = []
         active_emails = tracking_service.active_emails()
         if target_message_id is not None:
-            active_emails = [email for email in active_emails if email.message_id == target_message_id]
+            active_emails = [
+                email for email in active_emails
+                if _message_ids_equal(email.message_id, target_message_id)
+            ]
         for tagged in tag_service.read_for_emails(active_emails):
             if tagged.error is not None:
                 continue
@@ -229,7 +236,10 @@ def create_app(
         items: list[dict[str, object]] = []
         active_emails = tracking_service.active_emails()
         if target_message_id is not None:
-            active_emails = [email for email in active_emails if email.message_id == target_message_id]
+            active_emails = [
+                email for email in active_emails
+                if _message_ids_equal(email.message_id, target_message_id)
+            ]
         for tagged in tag_service.read_for_emails(active_emails):
             if tagged.error is not None:
                 continue

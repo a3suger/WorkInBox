@@ -52,9 +52,11 @@ class DeadlineExtractionService:
 
         tracked_emails = self.database.list_tracked_emails(active=True)
         if message_id is not None:
+            normalized_message_id = message_id.strip().removeprefix("<").removesuffix(">")
             tracked_emails = [
                 tracked for tracked in tracked_emails
-                if tracked.message_id == message_id
+                if tracked.message_id.strip().removeprefix("<").removesuffix(">")
+                == normalized_message_id
             ]
         references = [
             ImapReference(
