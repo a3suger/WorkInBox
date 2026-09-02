@@ -8,6 +8,15 @@ const BULK_TAG_DEFINITION = {
   color: "#424242",
 };
 const NORMAL_WORKFLOW_TAGS = new Set(["wib-answer", "wib-review", "wib-watch"]);
+const OPEN_WORKFLOW_TAGS = new Set([
+  ...NORMAL_WORKFLOW_TAGS,
+  "wib-deadline",
+  "wib-schedule",
+  "wib-pending",
+  "wib-waiting-reply",
+  "wib-waiting-action",
+  "wib-action-ready",
+]);
 const DASHBOARD_SPACE_BUTTON_ID = "workinbox_dashboard";
 const DASHBOARD_SPACE_BUTTON_PROPERTIES = Object.freeze({
   url: "dashboard.html",
@@ -494,6 +503,36 @@ async function prepareDedicatedWorkflow(kind, messageId) {
   return { ok: true };
 }
 
+async function dismissDedicatedWorkflow(kind, messageId) {
+  const tagKeys = {
+    deadline: "wib-deadline",
+    schedule: "wib-schedule",
+  };
+  const removedTagKey = tagKeys[kind];
+  if (!removedTagKey) {
+    throw new Error(`Unknown dedicated workflow: ${kind}`);
+  }
+  const message = await findMessageByHeaderMessageId(messageId);
+  if (!message) {
+    throw new Error(`Message-ID ${messageId} のメールを Thunderbird で見つけられませんでした。`);
+  }
+
+  const remainingTags = (message.tags || []).filter((tag) => tag !== removedTagKey);
+  const hasOtherOpenWorkflow = remainingTags.some((tag) => OPEN_WORKFLOW_TAGS.has(tag));
+  if (hasOtherOpenWorkflow) {
+    await messenger.messages.update(message.id, { tags: remainingTags });
+    return { ok: true, completed: false };
+  }
+
+  const bulkTagKey = await resolveBulkTagKey();
+  const completedTags = [...new Set([...remainingTags, bulkTagKey])];
+  await messenger.messages.update(message.id, {
+    tags: completedTags,
+    flagged: false,
+  });
+  return { ok: true, completed: true };
+}
+
 function emptyDashboardCounts() {
   return {
     unattendedTotal: 0,
@@ -944,6 +983,8 @@ messenger.runtime.onMessage.addListener((request) => {
     operation = openDedicatedWorkflow(request.kind, request.messageId);
   } else if (request.type === "workinbox-prepare-dedicated-workflow") {
     operation = prepareDedicatedWorkflow(request.kind, request.messageId);
+  } else if (request.type === "workinbox-dismiss-dedicated-workflow") {
+    operation = dismissDedicatedWorkflow(request.kind, request.messageId);
   } else {
     return undefined;
   }
