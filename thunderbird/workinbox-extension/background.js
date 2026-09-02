@@ -52,6 +52,7 @@ const WORK_VIEWS = {
 };
 
 let workViewTabId = null;
+let workViewTabTitle = null;
 let dashboardTabId = null;
 let dedicatedWorkflowTabId = null;
 const pendingSupportRequests = new Map();
@@ -386,6 +387,7 @@ async function openWorkView(viewName, imapTarget, lookbackDays = null) {
   await messenger.tabs.update(mailTab.id, { active: true });
 
   const requestedTabTitle = `WIB:${view.label}`;
+  workViewTabTitle = requestedTabTitle;
   const titleResult = await messenger.tabTitle.setTitle(mailTab.id, requestedTabTitle);
   if (!titleResult?.applied) {
     console.warn("[WorkInBox bridge] tab title was not applied as requested", titleResult);
@@ -405,6 +407,16 @@ async function openWorkView(viewName, imapTarget, lookbackDays = null) {
     lookbackDays: view.unattended ? lookbackDays : null,
     unreadQuickFilter: Boolean(view.unattended && view.unread),
   };
+}
+
+async function restoreWorkViewTabTitle(tabId) {
+  if (tabId !== workViewTabId || !workViewTabTitle) {
+    return;
+  }
+  const result = await messenger.tabTitle.setTitle(tabId, workViewTabTitle);
+  if (!result?.applied) {
+    console.warn("[WorkInBox bridge] failed to restore work-view tab title", result);
+  }
 }
 
 async function getExistingDashboardTab() {
@@ -952,12 +964,34 @@ messenger.messageDisplayAction.onClicked.addListener((tab) => {
 messenger.tabs.onRemoved.addListener((tabId) => {
   if (tabId === workViewTabId) {
     workViewTabId = null;
+    workViewTabTitle = null;
   }
   if (tabId === dashboardTabId) {
     dashboardTabId = null;
   }
   if (tabId === dedicatedWorkflowTabId) {
     dedicatedWorkflowTabId = null;
+  }
+});
+
+messenger.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (
+    tabId === workViewTabId
+    && workViewTabTitle
+    && typeof changeInfo.title === "string"
+    && changeInfo.title !== workViewTabTitle
+  ) {
+    void restoreWorkViewTabTitle(tabId).catch((error) => {
+      console.warn("[WorkInBox bridge] could not preserve work-view tab title", error);
+    });
+  }
+});
+
+messenger.tabs.onActivated.addListener(({ tabId }) => {
+  if (tabId === workViewTabId && workViewTabTitle) {
+    void restoreWorkViewTabTitle(tabId).catch((error) => {
+      console.warn("[WorkInBox bridge] could not restore active work-view tab title", error);
+    });
   }
 });
 
