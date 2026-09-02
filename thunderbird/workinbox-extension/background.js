@@ -1,4 +1,7 @@
 const WORKINBOX_ORIGIN_HEADER = "X-WorkInBox-Origin-Message-ID";
+const WORKINBOX_ACTION_HEADER = "X-WorkInBox-Action";
+const WORKINBOX_REQUEST_ID_HEADER = "X-WorkInBox-Request-ID";
+const RECORD_ACTION = "create-record";
 const REQUESTED_TAG = "wib-requested";
 const BULK_TAG = "wib-bulk";
 const LEGACY_BULK_TAG = "wib-batch";
@@ -8,6 +11,7 @@ const BULK_TAG_DEFINITION = {
   color: "#424242",
 };
 const NORMAL_WORKFLOW_TAGS = new Set(["wib-answer", "wib-review", "wib-watch"]);
+const NORMAL_SELECTION_TAGS = new Set([...NORMAL_WORKFLOW_TAGS, "wib-pending"]);
 const OPEN_WORKFLOW_TAGS = new Set([
   ...NORMAL_WORKFLOW_TAGS,
   "wib-deadline",
@@ -56,6 +60,7 @@ let workViewTabTitle = null;
 let dashboardTabId = null;
 let dedicatedWorkflowTabId = null;
 const pendingSupportRequests = new Map();
+const pendingMenuComposes = new Map();
 
 async function registerDashboardSpaceButton() {
   try {
@@ -769,6 +774,103 @@ function withOriginHeader(headers, originMessageId) {
   ];
 }
 
+function withWorkInBoxHeaders(headers, values) {
+  const names = new Set(Object.keys(values).map((name) => name.toLowerCase()));
+  const current = (Array.isArray(headers) ? headers : []).filter(
+    (header) => !names.has(String(header?.name || "").toLowerCase()),
+  );
+  return [
+    ...current,
+    ...Object.entries(values).map(([name, value]) => ({ name, value })),
+  ];
+}
+
+async function selfAddressForMessage(message) {
+  const accountId = message?.folder?.accountId;
+  if (!accountId) throw new Error("元メールのアカウントを確認できませんでした。");
+  const account = await messenger.accounts.get(accountId);
+  const identities = Array.isArray(account?.identities) ? account.identities : [];
+  const identity = identities.find((item) => item.email) || null;
+  if (!identity?.email) throw new Error("自分宛てのメールアドレスを確認できませんでした。");
+  return identity.email;
+}
+
+async function messageMenuState(messageId, thunderbirdMessageId) {
+  const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
+  if (!message) throw new Error("表示中のメールを取得できませんでした。");
+  const tags = new Set(message.tags || []);
+  return {
+    ok: true,
+    actionReady: tags.has("wib-action-ready"),
+    normalWorkflow: [...NORMAL_WORKFLOW_TAGS].find((tag) => tags.has(tag)) || null,
+  };
+}
+
+async function setNormalWorkflow(messageId, thunderbirdMessageId, tagKey) {
+  if (!NORMAL_WORKFLOW_TAGS.has(tagKey)) throw new Error("通常フローの指定が不正です。");
+  const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
+  if (!message) throw new Error("表示中のメールを取得できませんでした。");
+  if ((message.tags || []).includes("wib-action-ready")) throw new Error("対応ありメールでは通常フローを変更できません。");
+  const tags = (message.tags || []).filter((tag) => (
+    !NORMAL_SELECTION_TAGS.has(tag) && tag !== BULK_TAG && tag !== LEGACY_BULK_TAG
+  ));
+  await messenger.messages.update(message.id, { tags: [...new Set([...tags, tagKey])], flagged: true });
+  return { ok: true };
+}
+
+async function beginRecordRequest(message) {
+  const to = await selfAddressForMessage(message);
+  const requestId = crypto.randomUUID();
+  const composeTab = await messenger.compose.beginNew({ to: [to] });
+  const details = await messenger.compose.getComposeDetails(composeTab.id);
+  await messenger.compose.setComposeDetails(composeTab.id, {
+    customHeaders: withWorkInBoxHeaders(details.customHeaders, {
+      [WORKINBOX_ACTION_HEADER]: RECORD_ACTION,
+      [WORKINBOX_ORIGIN_HEADER]: message.headerMessageId,
+      [WORKINBOX_REQUEST_ID_HEADER]: requestId,
+    }),
+  });
+  pendingMenuComposes.set(composeTab.id, { action: RECORD_ACTION, messageId: message.id });
+  return { ok: true };
+}
+
+async function completeMessage(messageId, thunderbirdMessageId, mode) {
+  const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
+  if (!message) throw new Error("表示中のメールを取得できませんでした。");
+  if ((message.tags || []).includes("wib-action-ready")) throw new Error("対応ありメールでは通常終了を選べません。");
+  if (!(message.tags || []).some((tag) => NORMAL_WORKFLOW_TAGS.has(tag))) {
+    throw new Error("回答必要・見る／検討・注目のいずれもないため終了できません。");
+  }
+  if (mode === "record") return beginRecordRequest(message);
+  if (mode !== "normal") throw new Error("終了方法の指定が不正です。");
+  const bulkTagKey = await resolveBulkTagKey();
+  await addTag(message, bulkTagKey);
+  await messenger.messages.update(message.id, { flagged: false });
+  return { ok: true };
+}
+
+async function handleActionReady(messageId, thunderbirdMessageId, action) {
+  const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
+  if (!message) throw new Error("表示中のメールを取得できませんでした。");
+  if (!(message.tags || []).includes("wib-action-ready")) throw new Error("このメールには対応ありタグがありません。");
+  if (action === "finish") {
+    const bulkTagKey = await resolveBulkTagKey();
+    await addTag(message, bulkTagKey);
+    await messenger.messages.update(message.id, { flagged: false });
+    return { ok: true };
+  }
+  if (!new Set(["question", "thanks"]).has(action)) throw new Error("対応方法の指定が不正です。");
+  const composeTab = await messenger.compose.beginReply(message.id, "replyToSender");
+  const details = await messenger.compose.getComposeDetails(composeTab.id);
+  await messenger.compose.setComposeDetails(composeTab.id, {
+    customHeaders: withWorkInBoxHeaders(details.customHeaders, {
+      [WORKINBOX_ACTION_HEADER]: action === "thanks" ? "support-thanks" : "support-question",
+    }),
+  });
+  pendingMenuComposes.set(composeTab.id, { action, messageId: message.id });
+  return { ok: true };
+}
+
 function prependRequestBody(details, requestText) {
   if (details.isPlainText || typeof details.body !== "string") {
     return {
@@ -926,6 +1028,9 @@ async function originMessageIdFromSentMessages(sendInfo) {
   const sentMessages = Array.isArray(sendInfo?.messages) ? sendInfo.messages : [];
   for (const sentMessage of sentMessages) {
     const full = await messenger.messages.getFull(sentMessage.id);
+    if (headerValue(full, WORKINBOX_ACTION_HEADER)) {
+      continue;
+    }
     const originMessageId = headerValue(full, WORKINBOX_ORIGIN_HEADER);
     if (originMessageId) {
       return originMessageId;
@@ -981,6 +1086,24 @@ messenger.compose.onAfterSend.addListener((tab, sendInfo) => {
   void applySupportRequestSentState(tab, sendInfo).catch((error) => {
     console.error("[WorkInBox bridge] failed to apply support request state", error);
   });
+  const pending = pendingMenuComposes.get(tab?.id);
+  if (!pending) return;
+  pendingMenuComposes.delete(tab.id);
+  if (pending.action !== "thanks" && pending.action !== RECORD_ACTION) return;
+  void messenger.messages.get(pending.messageId).then(async (message) => {
+    const bulkTagKey = await resolveBulkTagKey();
+    await addTag(message, bulkTagKey);
+  }).catch((error) => {
+    console.error("[WorkInBox menu] failed to mark sent operation for tracking", error);
+  });
+});
+
+messenger.compose.onBeforeSend.addListener(async (tab, details) => {
+  const pending = pendingMenuComposes.get(tab?.id);
+  if (pending?.action === RECORD_ACTION && !String(details?.subject || "").trim()) {
+    return { cancel: true };
+  }
+  return {};
 });
 
 messenger.messageDisplayAction.onClicked.addListener((tab) => {
@@ -995,6 +1118,8 @@ messenger.messageDisplayAction.onClicked.addListener((tab) => {
 });
 
 messenger.tabs.onRemoved.addListener((tabId) => {
+  pendingMenuComposes.delete(tabId);
+  pendingSupportRequests.delete(tabId);
   if (tabId === workViewTabId) {
     workViewTabId = null;
     workViewTabTitle = null;
@@ -1064,6 +1189,14 @@ messenger.runtime.onMessage.addListener((request) => {
       request.messageId,
       request.thunderbirdMessageId,
     );
+  } else if (request.type === "workinbox-message-menu-state") {
+    operation = messageMenuState(request.messageId, request.thunderbirdMessageId);
+  } else if (request.type === "workinbox-set-normal-workflow") {
+    operation = setNormalWorkflow(request.messageId, request.thunderbirdMessageId, request.tagKey);
+  } else if (request.type === "workinbox-complete-message") {
+    operation = completeMessage(request.messageId, request.thunderbirdMessageId, request.mode);
+  } else if (request.type === "workinbox-handle-action-ready") {
+    operation = handleActionReady(request.messageId, request.thunderbirdMessageId, request.action);
   } else {
     return undefined;
   }

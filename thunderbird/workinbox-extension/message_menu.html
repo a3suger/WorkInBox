@@ -9,20 +9,18 @@
 <body>
   <main>
     <h1>WIB操作</h1>
-    <p class="preview">専用フローは選択中のメールを対象にWIB Webで開きます。その他の項目は引き続きプレビューです。</p>
+    <p class="preview" id="menu-description">表示中のメールを確認しています…</p>
 
-    <details open>
+    <details open id="normal-menu" hidden>
       <summary>通常フロー</summary>
       <div class="menu-items">
-        <button type="button">回答必要にする</button>
-        <button type="button">見る・検討にする</button>
-        <button type="button">注目にする</button>
-        <button type="button">Recordへ保存して終了</button>
-        <button type="button">通常フローを終了</button>
+        <button type="button" data-normal-workflow="wib-answer"><span class="check">　</span>回答必要</button>
+        <button type="button" data-normal-workflow="wib-review"><span class="check">　</span>見る・検討する</button>
+        <button type="button" data-normal-workflow="wib-watch"><span class="check">　</span>注目</button>
       </div>
     </details>
 
-    <details open>
+    <details open id="dedicated-menu" hidden>
       <summary>専用フロー</summary>
       <section>
         <h2>締切</h2>
@@ -38,6 +36,23 @@
           <button type="button" data-dismiss-dedicated-workflow="schedule">スケジュール調整なし</button>
         </div>
       </section>
+    </details>
+
+    <details open id="completion-menu" hidden>
+      <summary>終了</summary>
+      <div class="menu-items">
+        <button type="button" data-completion="record">Recordに記録して終了</button>
+        <button type="button" data-completion="normal">通常終了</button>
+      </div>
+    </details>
+
+    <details open id="action-ready-menu" hidden>
+      <summary>対応への処理</summary>
+      <div class="menu-items">
+        <button type="button" data-action-ready="question">追加の質問を送る</button>
+        <button type="button" data-action-ready="thanks">お礼を送って終了</button>
+        <button type="button" data-action-ready="finish">返信せず終了</button>
+      </div>
     </details>
 
     <p id="status" role="status" aria-live="polite"></p>

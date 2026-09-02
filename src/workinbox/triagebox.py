@@ -12,6 +12,7 @@ from .sync_progress import ProgressCallback
 from .config import AppConfig
 from .database import EmailDatabase
 from .models import EmailMessage, ImapFlagsSnapshot
+from .record_store import RecordStore
 from .triage_store import TriageRelationStore
 
 
@@ -30,6 +31,8 @@ _SUPPORT_RELATION_KINDS = {
     _SUPPORT_REPLY,
 }
 _DEDICATED_WORKFLOW_KEYS = {_SCHEDULE, _DEADLINE}
+_RECORD_ACTION = "create-record"
+_SUPPORT_FOLLOWUP_ACTIONS = {"support-question", "support-thanks"}
 
 
 class TriageSenderKind(StrEnum):
@@ -44,6 +47,8 @@ class TriageHeaders:
     in_reply_to: tuple[str, ...]
     references: tuple[str, ...]
     origin_message_id: str | None
+    action: str | None = None
+    request_id: str | None = None
 
     @property
     def referenced_message_ids(self) -> tuple[str, ...]:
@@ -167,6 +172,8 @@ def parse_triage_headers(message: Message) -> TriageHeaders:
         in_reply_to=parse_message_id_list(message.get("In-Reply-To")),
         references=parse_message_id_list(message.get("References")),
         origin_message_id=origin_message_id,
+        action=(message.get("X-WorkInBox-Action") or "").strip() or None,
+        request_id=(message.get("X-WorkInBox-Request-ID") or "").strip() or None,
     )
 
 
@@ -180,12 +187,14 @@ class TriageService:
         *,
         relation_store: TriageRelationStore | None = None,
         database: EmailDatabase | None = None,
+        record_store: RecordStore | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:
         self.config = config
         self.imap_client = imap_client
         self.relations = relation_store or TriageRelationStore(config.database.path)
         self.database = database or EmailDatabase(config.database.path)
+        self.records = record_store or RecordStore(config.database.path)
         self.progress_callback = progress_callback
 
     def _progress(self, **event: object) -> None:
@@ -212,6 +221,7 @@ class TriageService:
         )
         self.relations.initialize()
         self.database.initialize()
+        self.records.initialize()
         checkpoint = self.relations.checkpoint(self.config.imap.mailbox)
         if checkpoint is None:
             logging.info("TriageBox checkpoint: none")
@@ -224,9 +234,10 @@ class TriageService:
         try:
             fetched = self.imap_client.fetch_unread(
                 checkpoint,
-                reply_targets=self.relations.message_ids_for_relation_kind(
-                    _SUPPORT_REQUEST
-                ),
+                reply_targets=tuple(dict.fromkeys((
+                    *self.relations.message_ids_for_relation_kind(_SUPPORT_REQUEST),
+                    *self.relations.message_ids_for_relation_kind(_SUPPORT_REPLY),
+                ))),
             )
         except (OSError, RuntimeError, ValueError) as exc:
             logging.warning("TriageBox unread fetch failed: %s", exc)
@@ -275,11 +286,19 @@ class TriageService:
                 # than the From address. Thunderbird may send through an
                 # identity/alias that is not listed in config.identity, but the
                 # self-Cc copy is still the WIB support request M2.
-                if item.headers.origin_message_id is not None:
+                if item.headers.action == _RECORD_ACTION:
+                    self._handle_record_request(item)
+                elif item.headers.action in _SUPPORT_FOLLOWUP_ACTIONS:
+                    if self._handle_self_action_reply(item):
+                        support_requests += 1
+                elif item.headers.origin_message_id is not None:
                     if self._handle_self_support_request(item):
                         support_requests += 1
                 elif kind == TriageSenderKind.SELF:
-                    logging.info("TriageBox self mail: no origin header; no transition")
+                    if self._handle_self_action_reply(item):
+                        support_requests += 1
+                    else:
+                        logging.info("TriageBox self mail: no applicable WIB transition")
                 elif self._handle_waiting_action_reply(item):
                     waiting_action_replies += 1
                 else:
@@ -330,6 +349,29 @@ class TriageService:
             errors=tuple(errors),
         )
 
+    def _handle_record_request(self, item: TriageMessage) -> None:
+        origin_message_id = item.headers.origin_message_id
+        request_id = item.headers.request_id
+        if origin_message_id is None or not request_id:
+            raise ValueError("Record request is missing origin Message-ID or request ID")
+        origin = self.database.email_message(origin_message_id)
+        if origin is None:
+            raise ValueError(f"Record source is not synchronized: {origin_message_id}")
+        if self.records.get_by_request_id(request_id) is None:
+            title = (item.email.subject or "").strip()
+            if not title:
+                raise ValueError("Record title must not be empty")
+            self.records.create(
+                origin_message_id,
+                self.config.imap.username,
+                title,
+                note=(item.email.body or "").strip(),
+                request_id=request_id,
+                request_message_id=item.email.message_id,
+            )
+        self._set_keyword(item, _BULK, enabled=True)
+        logging.info("TriageBox stored Record request %s for %s", request_id, origin_message_id)
+
     def _handle_self_support_request(self, item: TriageMessage) -> bool:
         origin_message_id = item.headers.origin_message_id
         if origin_message_id is None:
@@ -372,6 +414,38 @@ class TriageService:
             item.email.message_id,
         )
         return True
+
+    def _handle_self_action_reply(self, item: TriageMessage) -> bool:
+        for referenced_id in item.headers.referenced_message_ids:
+            if self.relations.relation_kind_for(referenced_id) != _SUPPORT_REPLY:
+                continue
+            previous = self._message_by_saved_uid_or_search(referenced_id)
+            if previous is None or _ACTION_READY not in previous.flags:
+                continue
+            origin_message_id = self.relations.origin_for(referenced_id)
+            # The bulk+star state is the normal durable signal. The action
+            # header also closes the small race where the self-copy arrives
+            # before Thunderbird has propagated the origin keyword update.
+            is_thanks = item.headers.action == "support-thanks" or _BULK in previous.flags
+            self._set_keyword(previous, _BULK, enabled=True)
+            self._set_flagged(previous, enabled=False)
+            self._set_keyword(item, _BULK if is_thanks else _WAITING_ACTION, enabled=True)
+            self._set_flagged(item, enabled=not is_thanks)
+            if not is_thanks and origin_message_id is not None:
+                self.relations.record(
+                    item.email.message_id,
+                    origin_message_id,
+                    _SUPPORT_REQUEST,
+                    related_message_id=referenced_id,
+                )
+            logging.info(
+                "TriageBox self follow-up handled as %s: previous=%s current=%s",
+                "thanks" if is_thanks else "question",
+                referenced_id,
+                item.email.message_id,
+            )
+            return True
+        return False
 
     def _origin_flags(self, origin_message_id: str) -> set[str] | None:
         reference = self.database.imap_reference(origin_message_id)

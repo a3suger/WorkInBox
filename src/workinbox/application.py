@@ -8,6 +8,8 @@ from enum import StrEnum
 from time import perf_counter
 
 from .ai_classifier import OllamaClassifier
+from .record_store import RecordStore
+from .record_summarizer import OllamaRecordSummarizer
 from .config import AppConfig
 from .database import EmailDatabase
 from .deadline_dates import normalize_due_at
@@ -112,6 +114,7 @@ class SynchronizationService:
         database: EmailDatabase | None = None,
         imap_client: ImapClient | None = None,
         classifier: OllamaClassifier | None = None,
+        record_summarizer: OllamaRecordSummarizer | None = None,
         triage_service: TriageService | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:
@@ -123,6 +126,8 @@ class SynchronizationService:
             progress_callback=progress_callback,
         )
         self.classifier = classifier or OllamaClassifier(config.ai)
+        self.record_summarizer = record_summarizer or OllamaRecordSummarizer(config.ai)
+        self.records = RecordStore(config.database.path)
         self.triage_service = triage_service or TriageService(
             config,
             self.imap_client,
@@ -189,6 +194,7 @@ class SynchronizationService:
         ai_errors: tuple[SyncError, ...] = ()
         if mode == SyncMode.NORMAL:
             ai_classified, ai_errors = self._classify_unclassified_active()
+            ai_errors = (*ai_errors, *self._summarize_pending_records())
 
         self._progress(
             phase="complete",
@@ -216,6 +222,31 @@ class SynchronizationService:
                 for error in triage_result.errors
             ),
         )
+
+    def _summarize_pending_records(self) -> tuple[SyncError, ...]:
+        errors: list[SyncError] = []
+        for record in self.records.pending_ai():
+            try:
+                message = self.database.email_message(record.source_message_id)
+                if message is None:
+                    raise RuntimeError("Record source email is unavailable")
+                summary = self.record_summarizer.summarize(message)
+                self.records.update_summary(record.id, summary)
+                for message_id in (record.source_message_id, record.request_message_id):
+                    if not message_id:
+                        continue
+                    reference = self.database.imap_reference(message_id)
+                    if reference is not None and reference.mailbox == self.config.imap.mailbox:
+                        self.imap_client.set_flagged(
+                            reference.uid,
+                            enabled=False,
+                            expected_uidvalidity=reference.uidvalidity,
+                        )
+                        self.database.update_tracking_status(message_id, TrackingStatus.INACTIVE_UNSTARRED)
+            except (OSError, RuntimeError, ValueError) as exc:
+                logging.warning("Record summary failed for %s: %s", record.source_message_id, exc)
+                errors.append(SyncError(record.source_message_id, str(exc)))
+        return tuple(errors)
 
     def _eligible_unclassified(
         self,

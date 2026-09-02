@@ -68,6 +68,20 @@ button:focus-visible {
   outline: none;
 }
 
+button.selected {
+  font-weight: 700;
+  color: AccentColor;
+}
+
+.check {
+  display: inline-block;
+  width: 1.2em;
+}
+
+[hidden] {
+  display: none !important;
+}
+
 #status {
   min-height: 1.4em;
   margin: 8px 2px 0;

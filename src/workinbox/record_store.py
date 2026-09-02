@@ -16,6 +16,8 @@ class Record:
     note: str
     created_at: str
     updated_at: str
+    request_id: str | None = None
+    request_message_id: str | None = None
 
 
 class RecordStore:
@@ -39,6 +41,14 @@ class RecordStore:
                 )
                 """
             )
+            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(records)")}
+            if "request_id" not in columns:
+                connection.execute("ALTER TABLE records ADD COLUMN request_id TEXT")
+            if "request_message_id" not in columns:
+                connection.execute("ALTER TABLE records ADD COLUMN request_message_id TEXT")
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS records_request_id ON records (request_id) WHERE request_id IS NOT NULL"
+            )
             connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS records_source_message
@@ -54,6 +64,8 @@ class RecordStore:
         *,
         summary: str = "",
         note: str = "",
+        request_id: str | None = None,
+        request_message_id: str | None = None,
     ) -> Record:
         self.initialize()
         now = datetime.now(timezone.utc).isoformat()
@@ -62,8 +74,8 @@ class RecordStore:
                 """
                 INSERT INTO records (
                     source_message_id, source_account, title, summary, note,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    created_at, updated_at, request_id, request_message_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     source_message_id,
@@ -73,6 +85,8 @@ class RecordStore:
                     note,
                     now,
                     now,
+                    request_id,
+                    request_message_id,
                 ),
             )
             record_id = int(cursor.lastrowid)
@@ -87,7 +101,7 @@ class RecordStore:
             row = connection.execute(
                 """
                 SELECT id, source_message_id, source_account, title, summary,
-                       note, created_at, updated_at
+                       note, created_at, updated_at, request_id, request_message_id
                 FROM records
                 WHERE id = ?
                 """,
@@ -101,12 +115,36 @@ class RecordStore:
             rows = connection.execute(
                 """
                 SELECT id, source_message_id, source_account, title, summary,
-                       note, created_at, updated_at
+                       note, created_at, updated_at, request_id, request_message_id
                 FROM records
                 ORDER BY updated_at DESC, id DESC
                 """
             ).fetchall()
         return [record for row in rows if (record := self._from_row(row)) is not None]
+
+    def get_by_request_id(self, request_id: str) -> Record | None:
+        self.initialize()
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT id, source_message_id, source_account, title, summary,
+                       note, created_at, updated_at, request_id, request_message_id
+                FROM records WHERE request_id = ?
+                """,
+                (request_id,),
+            ).fetchone()
+        return self._from_row(row)
+
+    def pending_ai(self) -> list[Record]:
+        return [record for record in self.list() if record.request_id and not record.summary]
+
+    def update_summary(self, record_id: int, summary: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                "UPDATE records SET summary = ?, updated_at = ? WHERE id = ?",
+                (summary.strip(), now, record_id),
+            )
 
     def delete(self, record_id: int) -> None:
         self.initialize()
@@ -126,4 +164,6 @@ class RecordStore:
             note=str(row[5]),
             created_at=str(row[6]),
             updated_at=str(row[7]),
+            request_id=str(row[8]) if row[8] is not None else None,
+            request_message_id=str(row[9]) if row[9] is not None else None,
         )

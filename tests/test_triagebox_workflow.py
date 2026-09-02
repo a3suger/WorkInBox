@@ -9,6 +9,7 @@ from workinbox.application import SynchronizationService, WorkTagService
 from workinbox.config import AppConfig, DatabaseConfig, IdentityConfig, ImapConfig
 from workinbox.database import EmailDatabase
 from workinbox.models import EmailMessage, ImapFlagsSnapshot
+from workinbox.record_store import RecordStore
 from workinbox.triage_store import TriageRelationStore
 from workinbox.triagebox import TriageFetchResult, TriageHeaders, TriageMessage, TriageService
 
@@ -147,6 +148,8 @@ def triage_message(
     origin: str | None = None,
     in_reply_to: tuple[str, ...] = (),
     references: tuple[str, ...] = (),
+    action: str | None = None,
+    request_id: str | None = None,
 ) -> TriageMessage:
     email = EmailMessage(
         message_id,
@@ -167,6 +170,8 @@ def triage_message(
             in_reply_to=in_reply_to,
             references=references,
             origin_message_id=origin,
+            action=action,
+            request_id=request_id,
         ),
         flags=flags,
     )
@@ -487,6 +492,83 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             self.assertEqual(result.added, 2)
             self.assertEqual(classifier.messages, [])
             self.assertIsNotNone(database.email_message("<request@example>"))
+
+    def test_record_request_is_saved_once_and_marked_bulk(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            origin = triage_message("<origin@example>", "sender@example.com", 1, flags=("\\Flagged", "wib-review", "wib-bulk"))
+            request = triage_message(
+                "<record@example>", "me@example.com", 2,
+                action="create-record", request_id="request-1", origin="<origin@example>",
+            )
+            request = TriageMessage(
+                EmailMessage(
+                    request.email.message_id, request.email.sender, request.email.recipients,
+                    "保存する件名", request.email.received_at, "利用者のメモ",
+                    mailbox="INBOX", uidvalidity=10, uid=2,
+                ),
+                request.headers,
+                request.flags,
+            )
+            database = EmailDatabase(path)
+            database.initialize()
+            database.synchronize([origin.email])
+            imap = FakeTriageImapClient([origin, request])
+            service = TriageService(config, imap, database=database)
+
+            service.run()
+            imap.unread_ids = ["<record@example>"]
+            service.relations.save_checkpoint("INBOX", 10, 0)
+            service.run()
+
+            records = RecordStore(path).list()
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0].title, "保存する件名")
+            self.assertEqual(records[0].note, "利用者のメモ")
+            self.assertEqual(records[0].request_id, "request-1")
+            self.assertIn("wib-bulk", imap.messages["<record@example>"].flags)
+
+    def test_action_ready_followups_distinguish_question_and_thanks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            reply = triage_message("<reply@example>", "supporter@example.com", 3, flags=("\\Flagged", "wib-action-ready"))
+            question = triage_message(
+                "<question@example>", "me@example.com", 4,
+                action="support-question", in_reply_to=("<reply@example>",),
+            )
+            database = EmailDatabase(path)
+            database.initialize()
+            database.synchronize([reply.email])
+            relations = TriageRelationStore(path)
+            relations.initialize()
+            relations.record("<reply@example>", "<origin@example>", "schedule_support_reply")
+            imap = FakeTriageImapClient([reply, question])
+            imap.unread_ids = ["<question@example>"]
+
+            TriageService(config, imap, database=database, relation_store=relations).run()
+
+            self.assertIn("wib-bulk", imap.messages["<reply@example>"].flags)
+            self.assertNotIn("\\Flagged", imap.messages["<reply@example>"].flags)
+            self.assertIn("wib-waiting-action", imap.messages["<question@example>"].flags)
+            self.assertIn("\\Flagged", imap.messages["<question@example>"].flags)
+
+            imap.set_keyword(4, "wib-action-ready", enabled=True, expected_uidvalidity=10)
+            imap.set_keyword(4, "wib-bulk", enabled=True, expected_uidvalidity=10)
+            relations.record("<question@example>", "<origin@example>", "schedule_support_reply")
+            thanks = triage_message(
+                "<thanks@example>", "me@example.com", 5,
+                action="support-thanks", in_reply_to=("<question@example>",),
+            )
+            imap.messages["<thanks@example>"] = thanks
+            imap.unread_ids = ["<thanks@example>"]
+            relations.save_checkpoint("INBOX", 10, 4)
+
+            TriageService(config, imap, database=database, relation_store=relations).run()
+
+            self.assertIn("wib-bulk", imap.messages["<thanks@example>"].flags)
+            self.assertNotIn("\\Flagged", imap.messages["<thanks@example>"].flags)
 
 
 if __name__ == "__main__":

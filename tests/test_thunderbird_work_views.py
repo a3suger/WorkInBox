@@ -131,7 +131,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
             "experiments/mail_views/implementation.js",
         )
 
-    def test_message_display_action_opens_preview_menu(self) -> None:
+    def test_message_display_action_opens_contextual_workflow_menu(self) -> None:
         manifest = json.loads((EXTENSION / "manifest.json").read_text(encoding="utf-8"))
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
@@ -149,7 +149,17 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("専用フロー", menu)
         self.assertIn("締切登録を開始／続ける", menu)
         self.assertIn("スケジュール調整を開始／続ける", menu)
-        self.assertIn("プレビューのみ", script)
+        self.assertIn('id="action-ready-menu"', menu)
+        self.assertIn('data-action-ready="question"', menu)
+        self.assertIn('data-action-ready="thanks"', menu)
+        self.assertIn('data-action-ready="finish"', menu)
+        self.assertIn('data-normal-workflow="wib-answer"', menu)
+        self.assertIn('data-completion="record"', menu)
+        self.assertIn('type: "workinbox-message-menu-state"', script)
+        self.assertIn('type: "workinbox-set-normal-workflow"', script)
+        self.assertIn('type: "workinbox-complete-message"', script)
+        self.assertIn('type: "workinbox-handle-action-ready"', script)
+        self.assertIn('document.querySelector("#action-ready-menu").hidden = !actionReady', script)
         self.assertIn('data-dedicated-workflow="deadline"', menu)
         self.assertIn('data-dedicated-workflow="schedule"', menu)
         self.assertIn('data-dismiss-dedicated-workflow="deadline"', menu)
@@ -166,6 +176,10 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("tags: completedTags", background)
         self.assertIn("flagged: false", background)
         self.assertIn("await addTag(message, tagKey, { flagged: true })", background)
+        self.assertIn("async function setNormalWorkflow", background)
+        self.assertIn("async function handleActionReady", background)
+        self.assertIn("async function beginRecordRequest", background)
+        self.assertIn('const RECORD_ACTION = "create-record"', background)
         self.assertIn('messenger.runtime.getURL("workflow_launcher.html")', background)
         self.assertTrue((EXTENSION / "workflow_launcher.html").is_file())
         launcher = (EXTENSION / "workflow_launcher.js").read_text(encoding="utf-8")
@@ -200,7 +214,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
         dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.22")
+        self.assertEqual(manifest["version"], "0.3.23")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
