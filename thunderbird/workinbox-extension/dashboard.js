@@ -226,6 +226,10 @@ async function openTasks() {
   if (!response?.ok) throw new Error(response?.error || "ThunderbirdのToDoを開けませんでした。");
 }
 
+async function openSettings() {
+  await messenger.runtime.openOptionsPage();
+}
+
 document.addEventListener("click", (event) => {
   const workView = event.target.closest("[data-work-view]");
   const wibPath = event.target.closest("[data-wib-path]");
@@ -235,6 +239,7 @@ document.addEventListener("click", (event) => {
   else if (event.target.closest("#open-wib")) operation = openWib();
   else if (event.target.closest("#normal-sync")) operation = startNormalSync();
   else if (event.target.closest("#open-tasks")) operation = openTasks();
+  else if (event.target.closest("#open-settings")) operation = openSettings();
   else if (event.target.closest("#refresh")) operation = refreshAll();
   if (operation) {
     void operation.catch((error) => {
