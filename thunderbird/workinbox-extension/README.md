@@ -91,6 +91,8 @@ Extension `0.3.19`では、WIB作業タブでメールを選ぶとThunderbirdが
 
 Extension `0.3.20`では、同じMessage-IDのコピーが複数フォルダーにある場合に、専用フロー操作が閲覧中とは別のコピーを更新し得る問題を修正しました。メニューからThunderbird内部のメッセージIDも渡し、表示中のメールを優先してタグとスターを更新します。
 
+Extension `0.3.21`では、標準のタブ更新イベントでは検知できなかったThunderbird内部のタブ名上書きに対応しました。`tabTitle` ExperimentがWIB作業タブのlabel属性を直接監視し、メール選択後に`受信トレイ`へ変わった場合も`WIB:<ビュー名>`へ戻します。
+
 ## WIB Quick Filter 作業ビュー PoC
 
 WIB の現在作業を Thunderbird のメール一覧で処理するため、専用のメールタブを 1 枚だけ作成して再利用します。

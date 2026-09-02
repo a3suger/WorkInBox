@@ -1,5 +1,16 @@
 var tabTitle = class extends ExtensionCommon.ExtensionAPI {
   getAPI(context) {
+    const titleObservers = new Map();
+
+    context.callOnClose({
+      close() {
+        for (const observer of titleObservers.values()) {
+          observer.disconnect();
+        }
+        titleObservers.clear();
+      },
+    });
+
     function resolveTabInfo(tabId) {
       const wrapper = context.extension.tabManager.get(tabId);
       if (!wrapper) {
@@ -33,7 +44,13 @@ var tabTitle = class extends ExtensionCommon.ExtensionAPI {
         throw new Error(`tab node not found for Thunderbird tab: ${tabId}`);
       }
 
-      return { tabInfo, tabNode };
+      return { tabInfo, tabNode, win };
+    }
+
+    function applyTitle(tabInfo, tabNode, title) {
+      tabInfo.title = title;
+      tabNode.label = title;
+      tabNode.setAttribute("label", title);
     }
 
     return {
@@ -44,10 +61,21 @@ var tabTitle = class extends ExtensionCommon.ExtensionAPI {
             throw new Error("Tab title must not be empty.");
           }
 
-          const { tabInfo, tabNode } = resolveTabInfo(tabId);
-          tabInfo.title = requestedTitle;
-          tabNode.label = requestedTitle;
-          tabNode.setAttribute("label", requestedTitle);
+          const { tabInfo, tabNode, win } = resolveTabInfo(tabId);
+          titleObservers.get(tabId)?.disconnect();
+          applyTitle(tabInfo, tabNode, requestedTitle);
+
+          const observer = new win.MutationObserver(() => {
+            const currentTitle = tabNode.label || tabNode.getAttribute("label") || "";
+            if (currentTitle !== requestedTitle) {
+              applyTitle(tabInfo, tabNode, requestedTitle);
+            }
+          });
+          observer.observe(tabNode, {
+            attributes: true,
+            attributeFilter: ["label"],
+          });
+          titleObservers.set(tabId, observer);
 
           const appliedTitle = tabNode.label || tabNode.getAttribute("label") || "";
           return {
