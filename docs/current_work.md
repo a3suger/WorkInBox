@@ -434,7 +434,8 @@ Extension `0.3.9`までの#31完了条件は実機確認済み。#33で、WIB作
 - TriageBoxはRecord依頼を依頼IDで冪等にSQLiteへ保存する。TrackingBoxは新しいAI要約処理で元メールのsummaryを生成し、成功後に元メールと登録依頼メールのスターを外す。
 - Recordテーブルへ依頼IDと登録依頼メールMessage-IDを追加し、既存DBは起動時migrationで更新する。
 - `docs/design.md`とExtension READMEを現行仕様へ更新した。
-- Python全160テスト、JavaScript構文確認、`git diff --check`が成功した。
+- Record要約から元メール・登録依頼メールのスター解除までを確認する統合テストを追加した。
+- Python全161テスト、JavaScript構文確認、ExtensionのXPI相当パッケージ整合性確認、`git diff --check`が成功した。
 
 ## 次に行うこと
 

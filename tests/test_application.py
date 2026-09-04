@@ -17,6 +17,7 @@ from workinbox.models import (
     ImapReference,
     TrackingStatus,
 )
+from workinbox.record_store import RecordStore
 
 
 class FakeClassifier:
@@ -27,6 +28,16 @@ class FakeClassifier:
     def classify(self, message: EmailMessage) -> AiClassification:
         self.messages.append(message)
         return self.result
+
+
+class FakeRecordSummarizer:
+    def __init__(self, summary: str = "AIが生成した要約") -> None:
+        self.summary = summary
+        self.messages: list[EmailMessage] = []
+
+    def summarize(self, message: EmailMessage) -> str:
+        self.messages.append(message)
+        return self.summary
 
 
 class FakeImapClient:
@@ -42,6 +53,7 @@ class FakeImapClient:
         self.received_references: list[ImapReference] = []
         self.flags_by_uid = flags_by_uid or {}
         self.keyword_updates: list[tuple[int, tuple[str, ...], bool, int | None]] = []
+        self.flagged_updates: list[tuple[int, bool, int | None]] = []
 
     def synchronize(
         self,
@@ -77,6 +89,20 @@ class FakeImapClient:
         else:
             current = [flag for flag in current if flag not in keys]
         self.flags_by_uid[uid] = tuple(current)
+        return ImapFlagsSnapshot("INBOX", expected_uidvalidity or 10, uid, tuple(current))
+
+    def set_flagged(
+        self,
+        uid: int,
+        *,
+        enabled: bool,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
+        current = [flag for flag in self.flags_by_uid.get(uid, ()) if flag != "\\Flagged"]
+        if enabled:
+            current.append("\\Flagged")
+        self.flags_by_uid[uid] = tuple(current)
+        self.flagged_updates.append((uid, enabled, expected_uidvalidity))
         return ImapFlagsSnapshot("INBOX", expected_uidvalidity or 10, uid, tuple(current))
 
 
@@ -187,6 +213,45 @@ class SynchronizationServiceTest(unittest.TestCase):
                 imap.keyword_updates,
                 [(3, ("wib-deadline", "wib-schedule"), True, 10)],
             )
+
+    def test_normal_sync_summarizes_pending_record_and_unstars_both_messages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database = EmailDatabase(path)
+            database.initialize()
+            origin = EmailMessage(
+                "<origin@example>", "sender@example.com", "me@example.com",
+                "元メール", None, "要約対象の本文", mailbox="INBOX", uidvalidity=10, uid=3,
+            )
+            request = EmailMessage(
+                "<record@example>", "me@example.com", "me@example.com",
+                "記録タイトル", None, "利用者メモ", mailbox="INBOX", uidvalidity=10, uid=4,
+            )
+            database.synchronize([origin, request])
+            records = RecordStore(path)
+            records.create(
+                origin.message_id, "user", "記録タイトル", note="利用者メモ",
+                request_id="request-1", request_message_id=request.message_id,
+            )
+            imap = FakeImapClient(
+                [], flags_by_uid={
+                    3: ("\\Flagged", "wib-review", "wib-bulk"),
+                    4: ("\\Flagged", "wib-bulk"),
+                },
+            )
+            summarizer = FakeRecordSummarizer()
+            service = SynchronizationService(
+                self.make_config(path), database=database, imap_client=imap,
+                classifier=FakeClassifier(), record_summarizer=summarizer,
+            )
+
+            result = service.normal_sync()
+
+            self.assertEqual(result.ai_errors, ())
+            self.assertEqual([message.message_id for message in summarizer.messages], ["<origin@example>"])
+            self.assertEqual(records.list()[0].summary, "AIが生成した要約")
+            self.assertEqual(imap.flagged_updates, [(3, False, 10), (4, False, 10)])
+            self.assertEqual(database.email_message("<origin@example>").message_id, "<origin@example>")
 
     def test_pending_view_and_resolution_use_normal_workflow_tags(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
