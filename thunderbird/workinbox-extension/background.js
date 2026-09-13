@@ -546,6 +546,25 @@ async function resolveDisplayedMessage(thunderbirdMessageId, messageId) {
   return findMessageByHeaderMessageId(messageId);
 }
 
+async function refreshDisplayedMessageTags(message) {
+  if (!message?.headerMessageId) {
+    return message;
+  }
+  try {
+    const result = await messenger.messages.query({
+      headerMessageId: message.headerMessageId,
+      messagesPerPage: 20,
+    });
+    const current = result.messages.find((candidate) => candidate.id === message.id);
+    if (current && Array.isArray(current.tags)) {
+      return { ...message, tags: current.tags };
+    }
+  } catch (_error) {
+    // Keep the displayed header when the refresh query is unavailable.
+  }
+  return message;
+}
+
 async function prepareDedicatedWorkflow(kind, messageId, thunderbirdMessageId) {
   const tagKeys = {
     deadline: "wib-deadline",
@@ -555,7 +574,9 @@ async function prepareDedicatedWorkflow(kind, messageId, thunderbirdMessageId) {
   if (!tagKey) {
     throw new Error(`Unknown dedicated workflow: ${kind}`);
   }
-  const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
+  const message = await refreshDisplayedMessageTags(
+    await resolveDisplayedMessage(thunderbirdMessageId, messageId),
+  );
   if (!message) {
     throw new Error(`Message-ID ${messageId} のメールを Thunderbird で見つけられませんでした。`);
   }
@@ -572,7 +593,9 @@ async function dismissDedicatedWorkflow(kind, messageId, thunderbirdMessageId) {
   if (!removedTagKey) {
     throw new Error(`Unknown dedicated workflow: ${kind}`);
   }
-  const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
+  const message = await refreshDisplayedMessageTags(
+    await resolveDisplayedMessage(thunderbirdMessageId, messageId),
+  );
   if (!message) {
     throw new Error(`Message-ID ${messageId} のメールを Thunderbird で見つけられませんでした。`);
   }
@@ -807,7 +830,9 @@ async function selfAddressForMessage(message) {
 }
 
 async function messageMenuState(messageId, thunderbirdMessageId) {
-  const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
+  const message = await refreshDisplayedMessageTags(
+    await resolveDisplayedMessage(thunderbirdMessageId, messageId),
+  );
   if (!message) throw new Error("表示中のメールを取得できませんでした。");
   const tags = new Set(message.tags || []);
   const hasNormalWorkflow = [...NORMAL_WORKFLOW_TAGS].some((tag) => tags.has(tag));
@@ -859,7 +884,9 @@ async function beginRecordRequest(message) {
 }
 
 async function completeMessage(messageId, thunderbirdMessageId, mode) {
-  const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
+  const message = await refreshDisplayedMessageTags(
+    await resolveDisplayedMessage(thunderbirdMessageId, messageId),
+  );
   if (!message) throw new Error("表示中のメールを取得できませんでした。");
   if ((message.tags || []).includes("wib-action-ready")) throw new Error("対応ありメールでは通常終了を選べません。");
   const tags = new Set(message.tags || []);
