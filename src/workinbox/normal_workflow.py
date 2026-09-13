@@ -10,6 +10,10 @@ from .record_store import Record, RecordStore
 
 
 _NORMAL_TAGS = frozenset({"wib-answer", "wib-review", "wib-watch"})
+_DEDICATED_COMPLETION_PAIRS = (
+    ("wib-deadline", "wib-deadline-done"),
+    ("wib-schedule", "wib-schedule-done"),
+)
 _BULK = "wib-bulk"
 
 
@@ -135,6 +139,21 @@ class NormalWorkflowCompletionService:
             reference.uid,
             expected_uidvalidity=reference.uidvalidity,
         )
-        if not _NORMAL_TAGS.intersection(snapshot.flags):
+        flags = frozenset(snapshot.flags)
+        if _NORMAL_TAGS.intersection(flags):
+            return message, reference, flags
+
+        # Dedicated workflows may finish with only their completed marker
+        # remaining.  They must be completed before allowing this generic
+        # Active-list operation; an active dedicated tag without its done
+        # marker is still protected from accidental skipping.
+        completed_dedicated = False
+        for active_tag, done_tag in _DEDICATED_COMPLETION_PAIRS:
+            if active_tag in flags and done_tag not in flags:
+                raise ValueError(
+                    "message is not in a normal workflow; dedicated workflow is not complete"
+                )
+            completed_dedicated = completed_dedicated or done_tag in flags
+        if not completed_dedicated:
             raise ValueError("message is not in a normal workflow")
-        return message, reference, frozenset(snapshot.flags)
+        return message, reference, flags

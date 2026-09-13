@@ -41,7 +41,7 @@ async function initialize() {
   document.querySelector("#action-ready-menu").hidden = !actionReady;
   document.querySelector("#normal-menu").hidden = actionReady;
   document.querySelector("#dedicated-menu").hidden = actionReady;
-  document.querySelector("#completion-menu").hidden = actionReady;
+  document.querySelector("#completion-menu").hidden = actionReady || !response.completionAvailable;
   description.textContent = actionReady
     ? "対応ありメールへの処理を選んでください。"
     : "通常フロー、専用フロー、または終了操作を選んでください。";

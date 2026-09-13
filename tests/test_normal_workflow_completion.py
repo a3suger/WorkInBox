@@ -139,6 +139,38 @@ class NormalWorkflowCompletionTest(unittest.TestCase):
             self.assertIn("\\Flagged", imap.flags)
             self.assertEqual(records.list(), [])
 
+    def test_completed_dedicated_workflow_can_end_without_normal_tag(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            database, imap, records, service = self.setUpTarget(
+                path, ("\\Flagged", "wib-deadline-done")
+            )
+
+            result = service.complete("<mail@example>")
+
+            self.assertIsNone(result.saved_record)
+            self.assertIn("wib-deadline-done", imap.flags)
+            self.assertIn("wib-bulk", imap.flags)
+            self.assertNotIn("\\Flagged", imap.flags)
+            self.assertEqual(records.list(), [])
+            self.assertEqual(
+                database.list_tracked_emails(active=False)[0].tracking_status,
+                TrackingStatus.INACTIVE_UNSTARRED,
+            )
+
+    def test_unfinished_dedicated_workflow_cannot_be_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            _database, imap, records, service = self.setUpTarget(
+                path, ("\\Flagged", "wib-deadline")
+            )
+
+            with self.assertRaisesRegex(ValueError, "dedicated workflow is not complete"):
+                service.complete("<mail@example>")
+
+            self.assertIn("\\Flagged", imap.flags)
+            self.assertEqual(records.list(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

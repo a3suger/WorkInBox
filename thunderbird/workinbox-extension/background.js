@@ -804,10 +804,13 @@ async function messageMenuState(messageId, thunderbirdMessageId) {
   const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
   if (!message) throw new Error("表示中のメールを取得できませんでした。");
   const tags = new Set(message.tags || []);
+  const hasNormalWorkflow = [...NORMAL_WORKFLOW_TAGS].some((tag) => tags.has(tag));
+  const hasCompletedDedicatedWorkflow = tags.has("wib-deadline-done") || tags.has("wib-schedule-done");
   return {
     ok: true,
     actionReady: tags.has("wib-action-ready"),
     normalWorkflow: [...NORMAL_WORKFLOW_TAGS].find((tag) => tags.has(tag)) || null,
+    completionAvailable: hasNormalWorkflow || hasCompletedDedicatedWorkflow,
   };
 }
 
