@@ -42,6 +42,21 @@ async function initialize() {
   document.querySelector("#normal-menu").hidden = actionReady;
   document.querySelector("#dedicated-menu").hidden = actionReady;
   document.querySelector("#completion-menu").hidden = actionReady || !response.completionAvailable;
+  for (const [kind, labels] of Object.entries({
+    deadline: { start: "締切登録を開始", continue: "締切登録を続ける" },
+    schedule: { start: "スケジュール調整を開始", continue: "スケジュール調整を続ける" },
+  })) {
+    const state = response.dedicated?.[kind] || {};
+    const startButton = document.querySelector(`[data-dedicated-workflow="${kind}"]`);
+    const dismissButton = document.querySelector(`[data-dismiss-dedicated-workflow="${kind}"]`);
+    if (startButton) {
+      startButton.hidden = Boolean(state.done);
+      startButton.textContent = state.active ? labels.continue : labels.start;
+    }
+    if (dismissButton) {
+      dismissButton.hidden = !state.active || Boolean(state.done);
+    }
+  }
   description.textContent = actionReady
     ? "対応ありメールへの処理を選んでください。"
     : "通常フロー、専用フロー、または終了操作を選んでください。";
@@ -63,8 +78,8 @@ for (const button of document.querySelectorAll("button")) {
       void sendOperation(button, requestFor(currentMessage, {
         type: kind ? "workinbox-open-dedicated-workflow" : "workinbox-dismiss-dedicated-workflow",
         kind: kind || dismissKind,
-      }), dismissKind ? (response) => response.completed
-        ? "専用フローを終了し、一括処理にしました。"
+      }), dismissKind ? (response) => response.pending
+        ? "専用フローを外し、判定保留にしました。"
         : "専用フローを外しました。ほかのWIB作業を継続します。" : "専用フローを開きました。");
     } else if (normalWorkflow) {
       void sendOperation(button, requestFor(currentMessage, {

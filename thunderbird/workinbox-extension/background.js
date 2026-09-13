@@ -12,6 +12,11 @@ const BULK_TAG_DEFINITION = {
 };
 const NORMAL_WORKFLOW_TAGS = new Set(["wib-answer", "wib-review", "wib-watch"]);
 const NORMAL_SELECTION_TAGS = new Set([...NORMAL_WORKFLOW_TAGS, "wib-pending"]);
+const DEDICATED_WORKFLOW_PAIRS = [
+  ["wib-deadline", "wib-deadline-done"],
+  ["wib-schedule", "wib-schedule-done"],
+];
+const DEDICATED_DONE_TAGS = new Set(DEDICATED_WORKFLOW_PAIRS.map(([, done]) => done));
 const OPEN_WORKFLOW_TAGS = new Set([
   ...NORMAL_WORKFLOW_TAGS,
   "wib-deadline",
@@ -573,19 +578,20 @@ async function dismissDedicatedWorkflow(kind, messageId, thunderbirdMessageId) {
   }
 
   const remainingTags = (message.tags || []).filter((tag) => tag !== removedTagKey);
-  const hasOtherOpenWorkflow = remainingTags.some((tag) => OPEN_WORKFLOW_TAGS.has(tag));
-  if (hasOtherOpenWorkflow) {
+  const hasOtherWibTag = remainingTags.some((tag) => (
+    OPEN_WORKFLOW_TAGS.has(tag) || DEDICATED_DONE_TAGS.has(tag)
+  ));
+  if (hasOtherWibTag) {
     await messenger.messages.update(message.id, { tags: remainingTags });
     return { ok: true, completed: false };
   }
 
-  const bulkTagKey = await resolveBulkTagKey();
-  const completedTags = [...new Set([...remainingTags, bulkTagKey])];
+  const pendingTags = [...new Set([...remainingTags, "wib-pending"])]
   await messenger.messages.update(message.id, {
-    tags: completedTags,
-    flagged: false,
+    tags: pendingTags,
+    flagged: true,
   });
-  return { ok: true, completed: true };
+  return { ok: true, completed: false, pending: true };
 }
 
 function emptyDashboardCounts() {
@@ -805,12 +811,21 @@ async function messageMenuState(messageId, thunderbirdMessageId) {
   if (!message) throw new Error("表示中のメールを取得できませんでした。");
   const tags = new Set(message.tags || []);
   const hasNormalWorkflow = [...NORMAL_WORKFLOW_TAGS].some((tag) => tags.has(tag));
-  const hasCompletedDedicatedWorkflow = tags.has("wib-deadline-done") || tags.has("wib-schedule-done");
+  const hasPending = tags.has("wib-pending");
+  const dedicated = Object.fromEntries(DEDICATED_WORKFLOW_PAIRS.map(([active, done]) => [
+    active.replace("wib-", ""), { active: tags.has(active), done: tags.has(done) },
+  ]));
+  const hasUnfinishedDedicatedWorkflow = DEDICATED_WORKFLOW_PAIRS.some(
+    ([active, done]) => tags.has(active) && !tags.has(done),
+  );
+  const hasCompletedDedicatedWorkflow = [...DEDICATED_DONE_TAGS].some((tag) => tags.has(tag));
   return {
     ok: true,
     actionReady: tags.has("wib-action-ready"),
     normalWorkflow: [...NORMAL_WORKFLOW_TAGS].find((tag) => tags.has(tag)) || null,
-    completionAvailable: hasNormalWorkflow || hasCompletedDedicatedWorkflow,
+    completionAvailable: !hasUnfinishedDedicatedWorkflow
+      && (hasNormalWorkflow || hasPending || hasCompletedDedicatedWorkflow),
+    dedicated,
   };
 }
 
@@ -846,8 +861,17 @@ async function completeMessage(messageId, thunderbirdMessageId, mode) {
   const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
   if (!message) throw new Error("表示中のメールを取得できませんでした。");
   if ((message.tags || []).includes("wib-action-ready")) throw new Error("対応ありメールでは通常終了を選べません。");
-  if (!(message.tags || []).some((tag) => NORMAL_WORKFLOW_TAGS.has(tag))) {
-    throw new Error("回答必要・見る／検討・注目のいずれもないため終了できません。");
+  const tags = new Set(message.tags || []);
+  const unfinishedDedicated = DEDICATED_WORKFLOW_PAIRS.some(
+    ([active, done]) => tags.has(active) && !tags.has(done),
+  );
+  const canComplete = !unfinishedDedicated && (
+    [...NORMAL_WORKFLOW_TAGS].some((tag) => tags.has(tag))
+      || tags.has("wib-pending")
+      || [...DEDICATED_DONE_TAGS].some((tag) => tags.has(tag))
+  );
+  if (!canComplete) {
+    throw new Error("未完了の専用ワークフローがあるか、終了可能なWIBタグがありません。");
   }
   if (mode === "record") return beginRecordRequest(message);
   if (mode !== "normal") throw new Error("終了方法の指定が不正です。");
