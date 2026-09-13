@@ -836,9 +836,9 @@ async function selfAddressForMessage(message) {
 }
 
 async function messageMenuState(messageId, thunderbirdMessageId) {
-  const message = await refreshDisplayedMessageTags(
-    await resolveDisplayedMessage(thunderbirdMessageId, messageId),
-  );
+  // Keep popup startup responsive. The displayed message header is sufficient
+  // for rendering the menu; mutating operations refresh tags before acting.
+  const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
   if (!message) throw new Error("表示中のメールを取得できませんでした。");
   const tags = new Set(message.tags || []);
   const hasNormalWorkflow = [...NORMAL_WORKFLOW_TAGS].some((tag) => tags.has(tag));
