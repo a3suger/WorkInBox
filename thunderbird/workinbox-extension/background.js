@@ -326,12 +326,17 @@ async function resolveDedicatedWorkViewTab(mailbox) {
   if (existing) {
     await messenger.mailTabs.update(existing.id, {
       displayedFolder: mailbox,
+      // WIB work views are scoped to the mailbox and filter configured below.
+      // Hide the folder tree so selecting another folder cannot make the tab
+      // title and the actual work view diverge.
+      folderPaneVisible: false,
     });
     return messenger.mailTabs.get(existing.id);
   }
 
   const created = await messenger.mailTabs.create({
     displayedFolder: mailbox,
+    folderPaneVisible: false,
   });
   workViewTabId = created.id;
   return created;

@@ -10,6 +10,10 @@ WorkInBox の Thunderbird 側 UI を担当する MailExtension の初期実装�
 
 現在の manifest は Thunderbird 140 以上を対象にしています。
 
+Extension `0.3.24`では、WIB専用作業タブのフォルダペインを非表示にし、
+作業ビューのタブ名と表示対象がずれないようにしています。通常のThunderbird
+メールタブのフォルダペイン表示は変更しません。
+
 利用する主な標準 API:
 
 - `messages.tags.list()`

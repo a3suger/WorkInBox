@@ -214,7 +214,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
         dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.23")
+        self.assertEqual(manifest["version"], "0.3.24")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
@@ -231,6 +231,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("messenger.tabs.onActivated.addListener", background)
         self.assertIn("restoreWorkViewTabTitle(tabId)", background)
         self.assertIn("async function applyWorkView(mailTab, view, lookbackDays)", background)
+        self.assertIn("folderPaneVisible: false", background)
         self.assertIn("rebuilding unavailable work-view tab", background)
         self.assertIn("await messenger.tabs.remove(mailTab.id)", background)
         self.assertIn("mailTab = await resolveDedicatedWorkViewTab(mailbox)", background)
