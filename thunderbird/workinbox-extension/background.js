@@ -551,10 +551,16 @@ async function refreshDisplayedMessageTags(message) {
     return message;
   }
   try {
-    const result = await messenger.messages.query({
-      headerMessageId: message.headerMessageId,
-      messagesPerPage: 20,
-    });
+    const result = await Promise.race([
+      messenger.messages.query({
+        headerMessageId: message.headerMessageId,
+        messagesPerPage: 20,
+      }),
+      new Promise((resolve) => window.setTimeout(() => resolve(null), 150)),
+    ]);
+    if (!result) {
+      return message;
+    }
     const current = result.messages.find((candidate) => candidate.id === message.id);
     if (current && Array.isArray(current.tags)) {
       return { ...message, tags: current.tags };
