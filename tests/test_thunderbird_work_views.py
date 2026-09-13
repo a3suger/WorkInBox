@@ -190,6 +190,8 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn("messenger.messageDisplay.getDisplayedMessage(tab.id)", background)
         self.assertIn("completionAvailable: !hasUnfinishedDedicatedWorkflow", background)
         self.assertIn("!response.completionAvailable", script)
+        self.assertIn('recordAvailable: !tags.has("wib-watch")', background)
+        self.assertIn("!response.recordAvailable", script)
         self.assertIn("NORMAL_WORKFLOW_TAGS", background)
         self.assertIn("const bulkTagKey = await resolveBulkTagKey()", background)
         self.assertIn("await addTag(message, bulkTagKey)", background)
@@ -217,7 +219,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
         dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.26")
+        self.assertEqual(manifest["version"], "0.3.27")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())

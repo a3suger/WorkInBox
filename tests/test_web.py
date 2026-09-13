@@ -183,6 +183,7 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("/normal-workflow/record", source)
         self.assertIn("通常終了", source)
         self.assertIn("Record に保存して終了", source)
+        self.assertIn("'wib-watch' not in present_keys", source)
         self.assertIn("wib-answer", source)
         self.assertIn("wib-review", source)
         self.assertIn("wib-watch", source)

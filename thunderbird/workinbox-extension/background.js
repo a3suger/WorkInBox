@@ -825,6 +825,7 @@ async function messageMenuState(messageId, thunderbirdMessageId) {
     normalWorkflow: [...NORMAL_WORKFLOW_TAGS].find((tag) => tags.has(tag)) || null,
     completionAvailable: !hasUnfinishedDedicatedWorkflow
       && (hasNormalWorkflow || hasPending || hasCompletedDedicatedWorkflow),
+    recordAvailable: !tags.has("wib-watch"),
     dedicated,
   };
 }

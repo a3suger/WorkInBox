@@ -98,6 +98,7 @@
           <form method="post" action="/normal-workflow/complete?message_id={{ email.message_id | urlencode }}">
             <button type="submit" class="primary">通常終了</button>
           </form>
+          {% if 'wib-watch' not in present_keys %}
           <details>
             <summary>Record に保存して終了</summary>
             <form method="post" action="/normal-workflow/record" style="display: grid; gap: 7px; margin-top: 8px; min-width: 280px;">
@@ -108,6 +109,7 @@
               <button type="submit">Record 保存終了</button>
             </form>
           </details>
+          {% endif %}
         </div>
         {% endif %}
       </td>

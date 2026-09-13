@@ -42,6 +42,10 @@ async function initialize() {
   document.querySelector("#normal-menu").hidden = actionReady;
   document.querySelector("#dedicated-menu").hidden = actionReady;
   document.querySelector("#completion-menu").hidden = actionReady || !response.completionAvailable;
+  const recordButton = document.querySelector('[data-completion="record"]');
+  if (recordButton) {
+    recordButton.hidden = !response.recordAvailable;
+  }
   for (const [kind, labels] of Object.entries({
     deadline: { start: "締切登録を開始", continue: "締切登録を続ける" },
     schedule: { start: "スケジュール調整を開始", continue: "スケジュール調整を続ける" },
