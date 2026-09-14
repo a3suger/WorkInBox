@@ -208,6 +208,15 @@ async function exportSnapshot() {
 async function ensureWibTag(definition) {
   let tags = await messenger.messages.tags.list();
   let existing = tags.find((tag) => tag.key === definition.key);
+  let effectiveKey = definition.key;
+
+  // Thunderbird does not allow two tag definitions with the same display
+  // name. Keep an existing legacy key (notably wib-batch) when it already
+  // represents this WIB tag, and normalize its appearance instead.
+  if (!existing) {
+    existing = tags.find((tag) => tag.tag === definition.tag);
+    if (existing) effectiveKey = existing.key;
+  }
 
   if (!existing) {
     await messenger.messages.tags.create(
@@ -235,8 +244,9 @@ async function ensureWibTag(definition) {
   }
 
   if (Object.keys(properties).length > 0) {
-    await messenger.messages.tags.update(definition.key, properties);
+    await messenger.messages.tags.update(effectiveKey, properties);
   }
+  return effectiveKey;
 }
 
 async function moveDefaultImportantBehindWibTags() {
@@ -260,8 +270,10 @@ async function provisionTags() {
     throw new Error("WIBタグ登録の前にタグスナップショットを保存してください。");
   }
 
+  const preservedLegacyKeys = new Set();
   for (const definition of WIB_TAGS) {
-    await ensureWibTag(definition);
+    const effectiveKey = await ensureWibTag(definition);
+    if (LEGACY_WIB_KEYS.has(effectiveKey)) preservedLegacyKeys.add(effectiveKey);
   }
 
   // Thunderbird's built-in $label1 (`重要` in Japanese) normally owns the
@@ -274,7 +286,7 @@ async function provisionTags() {
   // destructively rewritten during this migration.
   const currentTags = await messenger.messages.tags.list();
   for (const tag of currentTags) {
-    if (LEGACY_WIB_KEYS.has(tag.key)) {
+    if (LEGACY_WIB_KEYS.has(tag.key) && !preservedLegacyKeys.has(tag.key)) {
       await messenger.messages.tags.delete(tag.key);
     }
   }
