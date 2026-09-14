@@ -392,13 +392,15 @@ async function restoreFromFile(file) {
   await restoreSnapshot(snapshot, file.name);
 }
 
-function handle(action) {
+function handle(action, label = "処理") {
   return async (...args) => {
     try {
       await action(...args);
     } catch (error) {
       console.error("[WorkInBox connector]", error);
-      setStatus(`ERROR: ${error.message || error}`);
+      const message = error?.message || String(error);
+      const detail = error?.stack && error.stack !== message ? ` (${error.stack})` : "";
+      setStatus(`ERROR: ${label}に失敗しました: ${message}${detail}`);
     }
   };
 }
@@ -419,4 +421,4 @@ copyDiagnosticsButton.addEventListener("click", handle(copyDiagnostics));
 exportDiagnosticsButton.addEventListener("click", handle(exportDiagnostics));
 migrateLegacyBulkButton.addEventListener("click", handle(migrateLegacyBulk));
 
-document.addEventListener("DOMContentLoaded", handle(refresh));
+document.addEventListener("DOMContentLoaded", handle(refresh, "設定ツールの初期化"));
