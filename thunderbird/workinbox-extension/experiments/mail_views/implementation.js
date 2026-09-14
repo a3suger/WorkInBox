@@ -1,6 +1,6 @@
 var mailViews = class extends ExtensionCommon.ExtensionAPI {
   getAPI(context) {
-    const VIEW_NAME = "WIB 未着眼";
+    const VIEW_NAME = "WIB 未着眼 v2";
 
     function createSearchTerm(searchSession, attrib, op, configureValue) {
       const term = searchSession.createTerm();
@@ -48,13 +48,17 @@ var mailViews = class extends ExtensionCommon.ExtensionAPI {
         );
       }
       if (lookbackDays) {
+        const since = new Date();
+        since.setHours(0, 0, 0, 0);
+        since.setDate(since.getDate() - (lookbackDays - 1));
         view.appendTerm(
           createSearchTerm(
             searchSession,
-            Ci.nsMsgSearchAttrib.AgeInDays,
-            Ci.nsMsgSearchOp.IsLessThan,
+            Ci.nsMsgSearchAttrib.Date,
+            Ci.nsMsgSearchOp.IsAfter,
             (value) => {
-              value.age = lookbackDays;
+              // Thunderbird stores search dates as PRTime (microseconds).
+              value.date = since.getTime() * 1000;
             },
           ),
         );

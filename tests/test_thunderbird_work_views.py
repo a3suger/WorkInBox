@@ -21,7 +21,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn('["wib-bulk", "wib-batch"]', implementation)
         self.assertIn("Ci.nsMsgSearchAttrib.Keywords", implementation)
         self.assertIn("Ci.nsMsgSearchOp.DoesntContain", implementation)
-        self.assertIn('const VIEW_NAME = "WIB 未着眼";', implementation)
+        self.assertIn('const VIEW_NAME = "WIB 未着眼 v2";', implementation)
         self.assertIn(
             "threePaneWindow.gViewWrapper.setMailView(name, null, true)",
             implementation,
@@ -220,7 +220,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
         dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.30")
+        self.assertEqual(manifest["version"], "0.3.31")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
@@ -331,9 +331,9 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
             EXTENSION / "dashboard.html"
         ).read_text(encoding="utf-8"))
         self.assertIn("request.lookbackDays", background)
-        self.assertIn("Ci.nsMsgSearchAttrib.AgeInDays", experiment)
-        self.assertIn("Ci.nsMsgSearchOp.IsLessThan", experiment)
-        self.assertIn("value.age = lookbackDays", experiment)
+        self.assertIn("Ci.nsMsgSearchAttrib.Date", experiment)
+        self.assertIn("Ci.nsMsgSearchOp.IsAfter", experiment)
+        self.assertIn("value.date = since.getTime() * 1000", experiment)
         parameters = schema[0]["functions"][0]["parameters"]
         self.assertEqual(parameters[1]["name"], "lookbackDays")
         self.assertTrue(parameters[1]["optional"])
