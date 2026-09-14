@@ -27,7 +27,12 @@ var imapAccounts = class extends ExtensionCommon.ExtensionAPI {
         },
 
         async migrateLegacyBulk(accountId, path) {
-          const folder = context.extension.folderManager.get(accountId, path);
+          let folder;
+          try {
+            folder = context.extension.folderManager.get(accountId, path);
+          } catch (error) {
+            throw new Error(`対象フォルダを取得できませんでした（${accountId}:${path}）: ${error.message || error}`);
+          }
           if (!folder) throw new Error(`Thunderbird folder not found: ${accountId}:${path}`);
           let database;
           try {
