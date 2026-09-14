@@ -12,6 +12,15 @@
     <p id="status" class="status">状態を確認しています…</p>
 
     <section>
+      <h2>診断情報</h2>
+      <p>desktop と note の検索対象・検索条件・取得件数を比較するための情報です。メール本文やパスワードは含みません。</p>
+      <button id="run-diagnostics" type="button">診断情報を取得</button>
+      <button id="copy-diagnostics" type="button" disabled>診断情報をコピー</button>
+      <button id="export-diagnostics" type="button" disabled>JSONを書き出す</button>
+      <pre id="diagnostics-output" class="archive-preview">診断情報はまだありません。</pre>
+    </section>
+
+    <section>
       <h2>Archive indexing policy</h2>
       <p>Archive 配下では Favorite のフォルダだけを Global Search / Gloda の索引対象にします。まずプレビューで変更予定を確認してください。</p>
       <p id="archive-indexing-status" class="status">未確認です。</p>

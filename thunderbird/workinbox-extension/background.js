@@ -681,6 +681,8 @@ function countDashboardMessage(counts, message, since) {
 }
 
 async function scanDashboardQuery(queryInfo, onMessage, progress) {
+  const startedAt = new Date().toISOString();
+  let processed = 0;
   let page = await messenger.messages.query({
     ...queryInfo,
     messagesPerPage: 100,
@@ -690,6 +692,7 @@ async function scanDashboardQuery(queryInfo, onMessage, progress) {
     for (const message of page.messages || []) {
       onMessage(message);
       progress.current += 1;
+      processed += 1;
     }
     void messenger.runtime.sendMessage({
       type: "workinbox-dashboard-progress",
@@ -700,6 +703,7 @@ async function scanDashboardQuery(queryInfo, onMessage, progress) {
     }
     page = await messenger.messages.continueList(page.id);
   }
+  return { processed, startedAt };
 }
 
 async function dashboardCounts(imapTarget, rawLookbackDays) {
@@ -769,6 +773,48 @@ async function dashboardCounts(imapTarget, rawLookbackDays) {
     },
   });
   return result;
+}
+
+async function dashboardDiagnostics() {
+  const stored = await messenger.storage.local.get(DASHBOARD_CACHE_KEY);
+  const config = stored[DASHBOARD_CACHE_KEY]?.config;
+  if (!config?.imapTarget || !config?.lookbackDays) {
+    throw new Error("先にダッシュボードでWIBへ接続し、対象mailbox設定を取得してください。");
+  }
+  const { account, mailbox } = await resolveWorkViewMailbox(config.imapTarget);
+  const since = dashboardSince(Number(config.lookbackDays));
+  const queries = [];
+  const progress = { current: 0 };
+  const run = async (name, queryInfo, predicate = null) => {
+    let matched = 0;
+    const messageIds = [];
+    const stat = await scanDashboardQuery(queryInfo, (message) => {
+      if (!predicate || predicate(message)) {
+        matched += 1;
+        if (messageIds.length < 1000) {
+          messageIds.push(message.headerMessageId || message.id || null);
+        }
+      }
+    }, progress);
+    queries.push({ name, query: queryInfo, returned: stat.processed, matched, messageIds });
+  };
+  await run("unattended", { folderId: mailbox.id, fromDate: since, flagged: false }, (message) => {
+    const tags = new Set(message.tags || []);
+    return !message.flagged && !tags.has(BULK_TAG) && !tags.has(LEGACY_BULK_TAG);
+  });
+  await run("bulkArchive", { folderId: mailbox.id, flagged: false, tags: { mode: "any", tags: { [BULK_TAG]: true, [LEGACY_BULK_TAG]: true } } });
+  await run("workflow", { folderId: mailbox.id, flagged: true, tags: { mode: "any", tags: Object.fromEntries(Object.values(DASHBOARD_TAG_COUNTS).map((tagKey) => [tagKey, true])) } });
+  return {
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    extensionVersion: (await messenger.runtime.getManifest()).version,
+    lookbackDays: Number(config.lookbackDays),
+    since: since.toISOString(),
+    imapTarget: { host: config.imapTarget.host, port: config.imapTarget.port, username: config.imapTarget.username, mailbox: config.imapTarget.mailbox },
+    thunderbird: { accountId: account.id, accountName: account.name || account.id, folderId: mailbox.id, folderName: mailbox.name || config.imapTarget.mailbox, folderPath: mailbox.path || null },
+    totalReturned: progress.current,
+    queries,
+  };
 }
 
 function notifyDashboardInvalidated() {
@@ -1235,6 +1281,8 @@ messenger.runtime.onMessage.addListener((request) => {
     operation = openDashboard();
   } else if (request.type === "workinbox-dashboard-counts") {
     operation = dashboardCounts(request.imapTarget, request.lookbackDays);
+  } else if (request.type === "workinbox-dashboard-diagnostics") {
+    operation = dashboardDiagnostics();
   } else if (request.type === "workinbox-open-tasks") {
     operation = openTasksSpace();
   } else if (request.type === "workinbox-open-dedicated-workflow") {

@@ -34,9 +34,59 @@ const exportSnapshotButton = document.querySelector("#export-snapshot");
 const provisionTagsButton = document.querySelector("#provision-tags");
 const restoreSnapshotButton = document.querySelector("#restore-snapshot");
 const restoreFileInput = document.querySelector("#restore-file");
+const runDiagnosticsButton = document.querySelector("#run-diagnostics");
+const copyDiagnosticsButton = document.querySelector("#copy-diagnostics");
+const exportDiagnosticsButton = document.querySelector("#export-diagnostics");
+const diagnosticsOutput = document.querySelector("#diagnostics-output");
+let latestDiagnostics = null;
 
 function setStatus(message) {
   statusElement.textContent = message;
+}
+
+async function runDiagnostics() {
+  runDiagnosticsButton.disabled = true;
+  diagnosticsOutput.textContent = "診断情報を取得しています…";
+  try {
+    const result = await messenger.runtime.sendMessage({ type: "workinbox-dashboard-diagnostics" });
+    if (!result?.ok) throw new Error(result?.error || "診断情報を取得できませんでした。");
+    latestDiagnostics = result;
+    diagnosticsOutput.textContent = JSON.stringify(result, null, 2);
+    copyDiagnosticsButton.disabled = false;
+    exportDiagnosticsButton.disabled = false;
+    setStatus("診断情報を取得しました。desktop と note の結果を比較してください。");
+  } finally {
+    runDiagnosticsButton.disabled = false;
+  }
+}
+
+async function copyDiagnostics() {
+  if (!latestDiagnostics) return;
+  const text = JSON.stringify(latestDiagnostics, null, 2);
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+  } else {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  setStatus("診断情報をクリップボードへコピーしました。");
+}
+
+async function exportDiagnostics() {
+  if (!latestDiagnostics) return;
+  const url = URL.createObjectURL(new Blob([JSON.stringify(latestDiagnostics, null, 2) + "\n"], { type: "application/json" }));
+  try {
+    await messenger.downloads.download({ url, filename: "workinbox-thunderbird-diagnostics.json", saveAs: true });
+    setStatus("診断情報のJSON書き出しを開始しました。");
+  } finally {
+    window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
 }
 
 function copyTag(tag) {
@@ -326,5 +376,8 @@ restoreFileInput.addEventListener(
     event.target.value = "";
   }),
 );
+runDiagnosticsButton.addEventListener("click", handle(runDiagnostics));
+copyDiagnosticsButton.addEventListener("click", handle(copyDiagnostics));
+exportDiagnosticsButton.addEventListener("click", handle(exportDiagnostics));
 
 document.addEventListener("DOMContentLoaded", handle(refresh));
