@@ -12,6 +12,12 @@ const title = document.querySelector("#title");
 const detail = document.querySelector("#detail");
 const retry = document.querySelector("#retry");
 
+document.title = kind === "deadline"
+  ? "WebWIB：締切"
+  : kind === "schedule"
+    ? "WebWIB：スケジュール調整"
+    : "WebWIB";
+
 async function connect() {
   retry.hidden = true;
   title.textContent = "WIBへ接続しています";

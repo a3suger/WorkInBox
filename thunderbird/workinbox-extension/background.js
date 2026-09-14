@@ -427,7 +427,7 @@ async function openWorkView(viewName, imapTarget, lookbackDays = null) {
 
   await messenger.tabs.update(mailTab.id, { active: true });
 
-  const requestedTabTitle = `WIB:${view.label}`;
+  const requestedTabTitle = `WIB：${view.label}`;
   workViewTabTitle = requestedTabTitle;
   const titleResult = await messenger.tabTitle.setTitle(mailTab.id, requestedTabTitle);
   if (!titleResult?.applied) {
