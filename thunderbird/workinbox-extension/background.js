@@ -788,7 +788,20 @@ async function dashboardDiagnostics() {
   const run = async (name, queryInfo, predicate = null) => {
     let matched = 0;
     const messageIds = [];
+    const messages = [];
+    const tagCounts = {};
     const stat = await scanDashboardQuery(queryInfo, (message) => {
+      const tags = [...new Set(message.tags || [])].sort();
+      for (const tag of tags) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      if (messages.length < 1000) {
+        messages.push({
+          messageId: message.headerMessageId || message.id || null,
+          date: message.date instanceof Date ? message.date.toISOString() : message.date || null,
+          read: Boolean(message.read),
+          flagged: Boolean(message.flagged),
+          tags,
+        });
+      }
       if (!predicate || predicate(message)) {
         matched += 1;
         if (messageIds.length < 1000) {
@@ -796,7 +809,7 @@ async function dashboardDiagnostics() {
         }
       }
     }, progress);
-    queries.push({ name, query: queryInfo, returned: stat.processed, matched, messageIds });
+    queries.push({ name, query: queryInfo, returned: stat.processed, matched, tagCounts, messageIds, messages });
   };
   await run("unattended", { folderId: mailbox.id, fromDate: since, flagged: false }, (message) => {
     const tags = new Set(message.tags || []);
