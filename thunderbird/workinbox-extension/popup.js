@@ -38,6 +38,7 @@ const runDiagnosticsButton = document.querySelector("#run-diagnostics");
 const copyDiagnosticsButton = document.querySelector("#copy-diagnostics");
 const exportDiagnosticsButton = document.querySelector("#export-diagnostics");
 const diagnosticsOutput = document.querySelector("#diagnostics-output");
+const migrateLegacyBulkButton = document.querySelector("#migrate-legacy-bulk");
 let latestDiagnostics = null;
 
 function setStatus(message) {
@@ -86,6 +87,22 @@ async function exportDiagnostics() {
     setStatus("診断情報のJSON書き出しを開始しました。");
   } finally {
     window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+}
+
+async function migrateLegacyBulk() {
+  const confirmed = window.confirm(
+    "対象INBOXのメールに付いた旧キーワード wib-batch を、新キーワード wib-bulk へ移行します。\n" +
+    "メール本文は変更しません。続けますか？",
+  );
+  if (!confirmed) return;
+  migrateLegacyBulkButton.disabled = true;
+  try {
+    const result = await messenger.runtime.sendMessage({ type: "workinbox-migrate-legacy-bulk" });
+    if (!result?.ok) throw new Error(result?.error || "旧タグを移行できませんでした。");
+    setStatus(`${result.migrated}件の旧一括処理キーワードを新方式へ移行しました。`);
+  } finally {
+    migrateLegacyBulkButton.disabled = false;
   }
 }
 
@@ -397,5 +414,6 @@ restoreFileInput.addEventListener(
 runDiagnosticsButton.addEventListener("click", handle(runDiagnostics));
 copyDiagnosticsButton.addEventListener("click", handle(copyDiagnostics));
 exportDiagnosticsButton.addEventListener("click", handle(exportDiagnostics));
+migrateLegacyBulkButton.addEventListener("click", handle(migrateLegacyBulk));
 
 document.addEventListener("DOMContentLoaded", handle(refresh));

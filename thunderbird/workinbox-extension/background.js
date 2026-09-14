@@ -830,6 +830,19 @@ async function dashboardDiagnostics() {
   };
 }
 
+async function migrateLegacyBulk() {
+  const stored = await messenger.storage.local.get(DASHBOARD_CACHE_KEY);
+  const config = stored[DASHBOARD_CACHE_KEY]?.config;
+  if (!config?.imapTarget) throw new Error("先にダッシュボードで対象mailbox設定を取得してください。");
+  const { account, mailbox } = await resolveWorkViewMailbox(config.imapTarget);
+  const path = String(mailbox.path || config.imapTarget.mailbox || "").replace(/^\/+/, "");
+  if (!path) throw new Error("対象フォルダのパスを解決できませんでした。");
+  return {
+    ok: true,
+    ...(await messenger.imapAccounts.migrateLegacyBulk(account.id, path)),
+  };
+}
+
 function notifyDashboardInvalidated() {
   void messenger.runtime.sendMessage({
     type: "workinbox-dashboard-invalidated",
@@ -1296,6 +1309,8 @@ messenger.runtime.onMessage.addListener((request) => {
     operation = dashboardCounts(request.imapTarget, request.lookbackDays);
   } else if (request.type === "workinbox-dashboard-diagnostics") {
     operation = dashboardDiagnostics();
+  } else if (request.type === "workinbox-migrate-legacy-bulk") {
+    operation = migrateLegacyBulk();
   } else if (request.type === "workinbox-open-tasks") {
     operation = openTasksSpace();
   } else if (request.type === "workinbox-open-dedicated-workflow") {

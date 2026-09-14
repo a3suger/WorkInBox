@@ -20,6 +20,23 @@
             "port": { "type": "integer" }
           }
         }
+      },
+      {
+        "name": "migrateLegacyBulk",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "accountId", "type": "string" },
+          { "name": "path", "type": "string" }
+        ],
+        "returns": {
+          "type": "object",
+          "properties": {
+            "found": { "type": "integer" },
+            "migrated": { "type": "integer" },
+            "folderURI": { "type": "string" }
+          }
+        }
       }
     ]
   }
