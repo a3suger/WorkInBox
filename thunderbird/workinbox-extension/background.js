@@ -837,10 +837,22 @@ async function migrateLegacyBulk() {
   const { account, mailbox } = await resolveWorkViewMailbox(config.imapTarget);
   const path = String(mailbox.path || config.imapTarget.mailbox || "").replace(/^\/+/, "");
   if (!path) throw new Error("対象フォルダのパスを解決できませんでした。");
-  return {
-    ok: true,
-    ...(await messenger.imapAccounts.migrateLegacyBulk(account.id, path)),
-  };
+  let page = await messenger.messages.query({ folderId: mailbox.id, messagesPerPage: 100 });
+  let scanned = 0;
+  let migrated = 0;
+  while (page) {
+    for (const message of page.messages || []) {
+      scanned += 1;
+      const tags = new Set(message.tags || []);
+      if (!tags.has("$label3") || tags.has(BULK_TAG) || tags.has(LEGACY_BULK_TAG)) continue;
+      tags.add(BULK_TAG);
+      await messenger.messages.update(message.id, { tags: [...tags] });
+      migrated += 1;
+    }
+    if (!page.id) break;
+    page = await messenger.messages.continueList(page.id);
+  }
+  return { ok: true, scanned, found: migrated, migrated };
 }
 
 function notifyDashboardInvalidated() {

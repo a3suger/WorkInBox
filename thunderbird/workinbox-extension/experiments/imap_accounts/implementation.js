@@ -26,41 +26,6 @@ var imapAccounts = class extends ExtensionCommon.ExtensionAPI {
           };
         },
 
-        async migrateLegacyBulk(accountId, path) {
-          let folder;
-          try {
-            folder = context.extension.folderManager.get(accountId, path);
-          } catch (error) {
-            throw new Error(`対象フォルダを取得できませんでした（${accountId}:${path}）: ${error.message || error}`);
-          }
-          if (!folder) throw new Error(`Thunderbird folder not found: ${accountId}:${path}`);
-          let database;
-          try {
-            database = folder.msgDatabase;
-          } catch (error) {
-            throw new Error(`対象フォルダのローカルDBを開けませんでした: ${error.message || error}`);
-          }
-          const headers = [];
-          try {
-            const enumerator = database.EnumerateMessages();
-            while (enumerator.hasMoreElements()) {
-              const header = enumerator.getNext();
-              const keywords = String(header.getStringProperty("keywords") || "").split(/\s+/);
-              if (keywords.includes("wib-batch")) headers.push(header);
-            }
-          } catch (error) {
-            throw new Error(`旧キーワードを読み取れませんでした: ${error.message || error}`);
-          }
-          if (headers.length > 0) {
-            try {
-              folder.addKeywordsToMessages(headers, "wib-bulk");
-              folder.removeKeywordsFromMessages(headers, "wib-batch");
-            } catch (error) {
-              throw new Error(`IMAPキーワードを書き換えられませんでした（${headers.length}件）: ${error.message || error}`);
-            }
-          }
-          return { found: headers.length, migrated: headers.length, folderURI: folder.URI };
-        },
       },
     };
   }
