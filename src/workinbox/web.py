@@ -522,6 +522,18 @@ def create_app(
             },
         )
 
+    @app.post("/deadlines/no-deadline")
+    def dismiss_no_deadline(request: Request, message_id: str):
+        try:
+            deadline_flow_service.dismiss_no_deadline(message_id)
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            return render_deadlines(request, target_message_id=message_id, action_failure=str(exc))
+        return render_deadlines(
+            request,
+            target_message_id=message_id,
+            action_message="締切なしとして締切登録支援を終了しました。",
+        )
+
     @app.get("/deadlines/{deadline_id}")
     def deadline_detail(request: Request, deadline_id: int):
         return render_deadline_detail(request, deadline_id)
@@ -588,18 +600,6 @@ def create_app(
         except (OSError, RuntimeError, ValueError, sqlite3.Error, UnicodeDecodeError) as exc:
             return render_deadlines(request, target_message_id=scope_message_id, action_failure=str(exc))
         return render_deadlines(request, target_message_id=scope_message_id, action_message="締切候補を手動で追加しました。")
-
-    @app.post("/deadlines/no-deadline")
-    def dismiss_no_deadline(request: Request, message_id: str):
-        try:
-            deadline_flow_service.dismiss_no_deadline(message_id)
-        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
-            return render_deadlines(request, target_message_id=message_id, action_failure=str(exc))
-        return render_deadlines(
-            request,
-            target_message_id=message_id,
-            action_message="締切なしとして締切登録支援を終了しました。",
-        )
 
     @app.post("/deadlines/{candidate_id}/register")
     def register_deadline_candidate(request: Request, candidate_id: int, scope_message_id: str | None = None):
