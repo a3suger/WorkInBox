@@ -37,6 +37,7 @@ const DASHBOARD_SPACE_BUTTON_PROPERTIES = Object.freeze({
 });
 
 const WORK_VIEWS = {
+  active: { label: "Active（スター付き）", active: true },
   unattended: { label: "未着眼", unattended: true, unread: false },
   "unattended-unread": { label: "未着眼・未読", unattended: true, unread: true },
   "unattended-read": { label: "未着眼・既読", unattended: true, unread: false },
@@ -348,7 +349,13 @@ async function resolveDedicatedWorkViewTab(mailbox) {
 }
 
 async function applyWorkView(mailTab, view, lookbackDays) {
-  if (view.unattended) {
+  if (view.active) {
+    await messenger.mailViews.resetView(mailTab.id);
+    await messenger.mailTabs.setQuickFilter(mailTab.id, {
+      show: true,
+      flagged: true,
+    });
+  } else if (view.unattended) {
     await messenger.mailTabs.setQuickFilter(mailTab.id, { show: false });
     await messenger.mailViews.ensureUnattendedView(mailTab.id, lookbackDays);
     if (view.unread) {

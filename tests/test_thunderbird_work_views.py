@@ -220,7 +220,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         background = (EXTENSION / "background.js").read_text(encoding="utf-8")
         dashboard_script = (EXTENSION / "dashboard.js").read_text(encoding="utf-8")
 
-        self.assertEqual(manifest["version"], "0.3.41")
+        self.assertEqual(manifest["version"], "0.3.42")
         self.assertTrue((EXTENSION / "dashboard.html").is_file())
         self.assertTrue((EXTENSION / "dashboard.js").is_file())
         self.assertTrue((EXTENSION / "dashboard.css").is_file())
@@ -306,6 +306,7 @@ class ThunderbirdWorkViewContractTest(unittest.TestCase):
         self.assertIn('tags.has("wib-schedule-done")', background)
         self.assertIn('tags.has(REQUESTED_TAG) || tags.has("wib-schedule-done")', background)
         self.assertIn('data-work-view="bulkArchive"', dashboard)
+        self.assertIn('data-work-view="active"', dashboard)
         self.assertIn('bulkArchive: { label: "整理済み・アーカイブ待ち", bulkArchive: true }', background)
         self.assertIn("counts.bulkArchive += 1", background)
         self.assertIn("[LEGACY_BULK_TAG]: true", background)
