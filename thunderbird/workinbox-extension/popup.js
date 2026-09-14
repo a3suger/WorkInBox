@@ -145,9 +145,15 @@ async function refresh() {
   currentTagsElement.textContent = JSON.stringify(tags.map(copyTag), null, 2);
 
   const registeredWibCount = tags.filter((tag) => WIB_KEYS.has(tag.key)).length;
+  // A legacy wib-batch definition is a valid implementation of the
+  // 一括処理 tag when Thunderbird cannot create a duplicate display name.
+  const bulkAliasRegistered =
+    !tags.some((tag) => tag.key === "wib-bulk")
+    && tags.some((tag) => tag.key === "wib-batch" && tag.tag === "一括処理");
+  const displayedWibCount = registeredWibCount + (bulkAliasRegistered ? 1 : 0);
   if (snapshot) {
     setStatus(
-      `タグスナップショット保存済み。WIBタグ ${registeredWibCount}/${WIB_TAGS.length} 個を確認しました。`,
+      `タグスナップショット保存済み。WIBタグ ${displayedWibCount}/${WIB_TAGS.length} 個を確認しました。`,
     );
   } else if (tags.some((tag) => MANAGED_WIB_KEYS.has(tag.key))) {
     setStatus(
