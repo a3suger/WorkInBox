@@ -99,7 +99,10 @@ async function migrateLegacyBulk() {
   migrateLegacyBulkButton.disabled = true;
   try {
     const result = await messenger.runtime.sendMessage({ type: "workinbox-migrate-legacy-bulk" });
-    if (!result?.ok) throw new Error(result?.error || "旧タグを移行できませんでした。");
+    if (!result?.ok) {
+      const detail = result?.details ? `\n\n${result.details}` : "";
+      throw new Error(`${result?.error || "旧タグを移行できませんでした。"}${detail}`);
+    }
     setStatus(`${result.migrated}件の旧一括処理キーワードを新方式へ移行しました。`);
   } finally {
     migrateLegacyBulkButton.disabled = false;

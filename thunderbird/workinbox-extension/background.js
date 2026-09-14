@@ -1346,5 +1346,6 @@ messenger.runtime.onMessage.addListener((request) => {
   return operation.catch((error) => ({
     ok: false,
     error: error.message || String(error),
+    details: error.stack || null,
   }));
 });
