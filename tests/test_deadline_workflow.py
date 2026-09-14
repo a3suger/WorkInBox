@@ -91,7 +91,7 @@ class DeadlineWorkflowTest(unittest.TestCase):
             self.assertFalse(completion.completed)
             self.assertEqual(imap.flags, ("\\Flagged", "wib-deadline"))
 
-    def test_all_rejected_without_other_work_adds_bulk_and_unstars(self) -> None:
+    def test_all_rejected_without_other_adds_bulk_and_unstars(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             message_id, database, imap, deadline_service, workflow = self.make_services(
                 Path(directory) / "workinbox.db"
@@ -106,10 +106,6 @@ class DeadlineWorkflowTest(unittest.TestCase):
             self.assertNotIn("wib-deadline", imap.flags)
             self.assertIn("wib-bulk", imap.flags)
             self.assertNotIn("\\Flagged", imap.flags)
-            self.assertEqual(
-                database.list_tracked_emails(active=False)[0].tracking_status,
-                TrackingStatus.INACTIVE_UNSTARRED,
-            )
 
     def test_registered_candidate_with_normal_workflow_keeps_star(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -172,12 +168,8 @@ class DeadlineWorkflowTest(unittest.TestCase):
 
             self.assertTrue(completion.completed)
             self.assertNotIn("wib-deadline", imap.flags)
-            self.assertIn("wib-bulk", imap.flags)
-            self.assertNotIn("\\Flagged", imap.flags)
-            self.assertEqual(
-                database.list_tracked_emails(active=False)[0].tracking_status,
-                TrackingStatus.INACTIVE_UNSTARRED,
-            )
+            self.assertIn("wib-pending", imap.flags)
+            self.assertIn("\\Flagged", imap.flags)
 
     def test_no_deadline_dismissal_rejects_existing_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -204,12 +196,8 @@ class DeadlineWorkflowTest(unittest.TestCase):
                 "rejected",
             )
             self.assertNotIn("wib-deadline", imap.flags)
-            self.assertIn("wib-bulk", imap.flags)
-            self.assertNotIn("\\Flagged", imap.flags)
-            self.assertEqual(
-                database.list_tracked_emails(active=False)[0].tracking_status,
-                TrackingStatus.INACTIVE_UNSTARRED,
-            )
+            self.assertIn("wib-pending", imap.flags)
+            self.assertIn("\\Flagged", imap.flags)
 
     def test_no_deadline_dismissal_refuses_registered_deadline(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

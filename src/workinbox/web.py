@@ -611,6 +611,14 @@ def create_app(
             return render_deadlines(request, target_message_id=scope_message_id, action_message="締切を正式登録し、このメールの締切判断を完了しました。")
         return render_deadlines(request, target_message_id=scope_message_id, action_message="締切を正式登録しました。")
 
+    @app.post("/schedules/no-schedule")
+    def dismiss_no_schedule(request: Request, message_id: str, scope_message_id: str | None = None):
+        try:
+            tag_service.dismiss_dedicated_workflow(message_id, "wib-schedule")
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            return render_schedules(request, target_message_id=scope_message_id or message_id, action_failure=str(exc))
+        return render_schedules(request, target_message_id=scope_message_id or message_id, action_message="スケジュール調整なしとして終了しました。")
+
     @app.post("/deadlines/{candidate_id}/reject")
     def reject_deadline_candidate(request: Request, candidate_id: int, scope_message_id: str | None = None):
         try:

@@ -27,7 +27,7 @@ from .models import (
 from .triage_store import TriageRelationStore
 from .triagebox import TriageResult, TriageService
 from .sync_progress import ProgressCallback
-from .work_tags import WorkTagDefinition, definitions_for_flags, require_work_tag
+from .work_tags import WORK_TAG_KEYS, WorkTagDefinition, definitions_for_flags, require_work_tag
 
 
 _INITIAL_CLASSIFICATION_KEYS = frozenset(
@@ -796,6 +796,20 @@ class WorkTagService:
                 message_id,
                 TrackingStatus.INACTIVE_UNSTARRED,
             )
+
+    def dismiss_dedicated_workflow(self, message_id: str, key: str) -> None:
+        if key not in {"wib-deadline", "wib-schedule"}:
+            raise ValueError(f"Unknown dedicated workflow: {key!r}")
+        self.database.initialize()
+        reference = self.database.imap_reference(message_id)
+        if reference is None:
+            raise RuntimeError(f"IMAP identity is unavailable for {message_id}")
+        snapshot = self.imap_client.inspect_flags(reference.uid, expected_uidvalidity=reference.uidvalidity)
+        self.imap_client.set_keyword(reference.uid, key, enabled=False, expected_uidvalidity=reference.uidvalidity)
+        remaining = set(snapshot.flags) - {key}
+        if not (remaining & (WORK_TAG_KEYS - {"wib-bulk"})):
+            self.imap_client.set_keyword(reference.uid, "wib-pending", enabled=True, expected_uidvalidity=reference.uidvalidity)
+        self.imap_client.set_flagged(reference.uid, enabled=True, expected_uidvalidity=reference.uidvalidity)
 
     def set_tag(self, message_id: str, key: str, *, enabled: bool) -> None:
         tag = require_work_tag(key)

@@ -62,20 +62,13 @@ class DeadlineWorkflowService:
                 self.deadline_service.reject_candidate(candidate.id)
 
         if candidates:
-            return self.complete_if_ready(message_id)
+            return self._dismiss_without_deadline(message_id, rejected_count=len(candidates))
 
-        self.work_tag_service.set_tag(
-            message_id,
-            "wib-deadline",
-            enabled=False,
-        )
-        self._apply_common_end_transition(message_id)
-        return DeadlineMessageCompletion(
-            message_id=message_id,
-            completed=True,
-            registered_count=0,
-            rejected_count=0,
-        )
+        return self._dismiss_without_deadline(message_id, rejected_count=0)
+
+    def _dismiss_without_deadline(self, message_id: str, *, rejected_count: int) -> DeadlineMessageCompletion:
+        self.work_tag_service.dismiss_dedicated_workflow(message_id, "wib-deadline")
+        return DeadlineMessageCompletion(message_id, True, 0, rejected_count)
 
     def complete_if_ready(self, message_id: str) -> DeadlineMessageCompletion:
         candidates = self.deadline_service.candidates(message_id)
