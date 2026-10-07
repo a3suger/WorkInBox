@@ -35,9 +35,29 @@
         <div><dt>最終接続成功</dt><dd id="last-connected">-</dd></div>
         <div><dt>WIBバージョン</dt><dd id="wib-version">-</dd></div>
         <div><dt>最終WIB同期</dt><dd id="last-sync">-</dd></div>
-        <div><dt>同期状態</dt><dd id="sync-state">-</dd></div>
+        <div>
+          <dt>同期状態</dt>
+          <dd class="sync-state-line">
+            <span id="sync-state">-</span>
+            <button id="sync-details-button" class="text-button" type="button" hidden>詳細</button>
+          </dd>
+        </div>
       </dl>
     </section>
+
+    <dialog id="sync-details-dialog" aria-labelledby="sync-details-title">
+      <form method="dialog" class="sync-details">
+        <h2 id="sync-details-title">通常同期の進行状況</h2>
+        <dl>
+          <div><dt>現在の段階</dt><dd id="sync-detail-stage">-</dd></div>
+          <div><dt>処理内容</dt><dd id="sync-detail-label">-</dd></div>
+          <div><dt>処理件数</dt><dd id="sync-detail-count">-</dd></div>
+          <div><dt>残り</dt><dd id="sync-detail-remaining">-</dd></div>
+          <div><dt>エラー</dt><dd id="sync-detail-errors">0件</dd></div>
+        </dl>
+        <div class="dialog-actions"><button value="close">閉じる</button></div>
+      </form>
+    </dialog>
 
     <section class="summary">
       <div>

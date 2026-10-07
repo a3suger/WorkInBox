@@ -9,6 +9,21 @@ let refreshing = false;
 let invalidationTimer = null;
 let syncPollTimer = null;
 
+const SYNC_STAGE_TOTAL = 5;
+const SYNC_STAGES = {
+  starting: { number: 1, label: "新着メールを取得" },
+  "triage-fetch": { number: 1, label: "新着メールを取得" },
+  triage: { number: 2, label: "新着メールと返信・依頼関係を確認" },
+  "triage-relations": { number: 2, label: "新着メールと返信・依頼関係を確認" },
+  tracking: { number: 3, label: "既存メールと新着スターを同期" },
+  "tracking-existing": { number: 3, label: "既存メールと新着スターを同期" },
+  "tracking-discovery": { number: 3, label: "既存メールと新着スターを同期" },
+  "tracking-ai-check": { number: 4, label: "AI分類・Record要約" },
+  "tracking-ai": { number: 4, label: "AI分類・Record要約" },
+  "tracking-record": { number: 4, label: "AI分類・Record要約" },
+  complete: { number: 5, label: "完了" },
+};
+
 function element(selector) {
   return document.querySelector(selector);
 }
@@ -60,7 +75,60 @@ function setConnection(state, detail, health = {}, syncStatus = {}) {
   element("#connection-detail").textContent = detail;
   element("#wib-version").textContent = health.version || "-";
   element("#last-sync").textContent = formatDate(health.last_sync_at);
-  element("#sync-state").textContent = syncStatus.running ? "同期実行中" : (state === "offline" ? "確認できません" : "停止中");
+  renderSyncStatus(syncStatus, state);
+}
+
+function finiteNumber(value) {
+  return Number.isFinite(value) ? value : null;
+}
+
+function syncProgressView(syncStatus) {
+  const progress = syncStatus?.progress || {};
+  const stage = SYNC_STAGES[progress.phase] || {
+    number: syncStatus?.running ? 1 : 5,
+    label: syncStatus?.running ? "同期準備" : "完了",
+  };
+  const current = finiteNumber(progress.current);
+  const total = finiteNumber(progress.total);
+  const errors = finiteNumber(progress.errors) || 0;
+  const hasCount = total !== null;
+  const countText = hasCount ? `${current || 0} / ${total}件` : "準備中";
+  return {
+    stage,
+    label: progress.label || stage.label,
+    current,
+    total,
+    errors,
+    countText,
+    remainingText: hasCount ? `${Math.max(total - (current || 0), 0)}件` : "-",
+  };
+}
+
+function renderSyncStatus(syncStatus, connectionState) {
+  const running = Boolean(syncStatus?.running);
+  const progress = syncProgressView(syncStatus);
+  const detailsButton = element("#sync-details-button");
+  if (running) {
+    element("#sync-state").textContent = `${progress.label} — ${progress.countText}`;
+    detailsButton.hidden = false;
+  } else {
+    element("#sync-state").textContent = connectionState === "offline" ? "確認できません" : "停止中";
+    detailsButton.hidden = true;
+  }
+
+  const dialog = element("#sync-details-dialog");
+  if (running || dialog.open) {
+    element("#sync-detail-stage").textContent = `${progress.stage.number} / ${SYNC_STAGE_TOTAL}`;
+    element("#sync-detail-label").textContent = progress.label;
+    element("#sync-detail-count").textContent = progress.countText;
+    element("#sync-detail-remaining").textContent = progress.remainingText;
+    element("#sync-detail-errors").textContent = `${progress.errors}件`;
+  }
+}
+
+function openSyncDetails() {
+  const dialog = element("#sync-details-dialog");
+  if (!dialog.open) dialog.showModal();
 }
 
 function setOnlineControls(isOnline, syncRunning = false) {
@@ -238,6 +306,7 @@ document.addEventListener("click", (event) => {
   else if (wibPath) operation = openWib(wibPath.dataset.wibPath);
   else if (event.target.closest("#open-wib")) operation = openWib();
   else if (event.target.closest("#normal-sync")) operation = startNormalSync();
+  else if (event.target.closest("#sync-details-button")) openSyncDetails();
   else if (event.target.closest("#open-tasks")) operation = openTasks();
   else if (event.target.closest("#open-settings")) operation = openSettings();
   else if (event.target.closest("#refresh")) operation = refreshAll();

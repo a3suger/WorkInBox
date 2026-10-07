@@ -225,7 +225,15 @@ class SynchronizationService:
 
     def _summarize_pending_records(self) -> tuple[SyncError, ...]:
         errors: list[SyncError] = []
-        for record in self.records.pending_ai():
+        pending = self.records.pending_ai()
+        self._progress(
+            phase="tracking-record",
+            label="TrackingBox: Record要約",
+            current=0,
+            total=len(pending),
+            errors=0,
+        )
+        for current, record in enumerate(pending, start=1):
             try:
                 message = self.database.email_message(record.source_message_id)
                 if message is None:
@@ -246,6 +254,13 @@ class SynchronizationService:
             except (OSError, RuntimeError, ValueError) as exc:
                 logging.warning("Record summary failed for %s: %s", record.source_message_id, exc)
                 errors.append(SyncError(record.source_message_id, str(exc)))
+            self._progress(
+                phase="tracking-record",
+                label="TrackingBox: Record要約",
+                current=current,
+                total=len(pending),
+                errors=len(errors),
+            )
         return tuple(errors)
 
     def _eligible_unclassified(

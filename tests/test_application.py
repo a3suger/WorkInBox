@@ -240,9 +240,11 @@ class SynchronizationServiceTest(unittest.TestCase):
                 },
             )
             summarizer = FakeRecordSummarizer()
+            progress: list[dict[str, object]] = []
             service = SynchronizationService(
                 self.make_config(path), database=database, imap_client=imap,
                 classifier=FakeClassifier(), record_summarizer=summarizer,
+                progress_callback=progress.append,
             )
 
             result = service.normal_sync()
@@ -252,6 +254,13 @@ class SynchronizationServiceTest(unittest.TestCase):
             self.assertEqual(records.list()[0].summary, "AIが生成した要約")
             self.assertEqual(imap.flagged_updates, [(3, False, 10), (4, False, 10)])
             self.assertEqual(database.email_message("<origin@example>").message_id, "<origin@example>")
+            record_progress = [
+                event for event in progress if event.get("phase") == "tracking-record"
+            ]
+            self.assertEqual(record_progress[0]["current"], 0)
+            self.assertEqual(record_progress[0]["total"], 1)
+            self.assertEqual(record_progress[-1]["current"], 1)
+            self.assertEqual(record_progress[-1]["errors"], 0)
 
     def test_pending_view_and_resolution_use_normal_workflow_tags(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -42,6 +42,15 @@ button:disabled { opacity: .5; cursor: default; }
 .connection.offline { border-left-color: #dc2626; }
 .connection-heading { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
 .connection-actions { margin-top: 10px; }
+.sync-state-line { display: flex; align-items: baseline; gap: 7px; }
+.text-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: LinkText;
+  text-decoration: underline;
+  font: inherit;
+}
 .connection-dot { width: 10px; height: 10px; border-radius: 50%; background: #64748b; }
 .online .connection-dot { background: #16a34a; }
 .degraded .connection-dot { background: #d97706; }
@@ -50,6 +59,22 @@ dl { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0 0; }
 dl div { min-width: 150px; }
 dt { font-size: .78rem; opacity: .72; }
 dd { margin: 2px 0 0; }
+dialog {
+  width: min(430px, calc(100vw - 48px));
+  border: 1px solid color-mix(in srgb, CanvasText 28%, transparent);
+  border-radius: 9px;
+  padding: 0;
+  background: Canvas;
+  color: CanvasText;
+}
+dialog::backdrop { background: rgb(0 0 0 / 35%); }
+.sync-details { padding: 18px; }
+.sync-details h2 { margin: 0 0 14px; font-size: 1.08rem; }
+.sync-details dl { display: grid; gap: 10px; margin: 0; }
+.sync-details dl div { display: grid; grid-template-columns: 110px 1fr; min-width: 0; gap: 12px; }
+.sync-details dt { font-size: .86rem; }
+.sync-details dd { overflow-wrap: anywhere; }
+.dialog-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 .summary { display: flex; align-items: end; justify-content: space-between; gap: 14px; }
 .summary h2, .group h2, .wib-only h2 { margin: 0 0 6px; font-size: 1.05rem; }
 .progress { font-size: .9rem; opacity: .8; }
