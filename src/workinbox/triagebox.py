@@ -537,7 +537,10 @@ class TriageService:
             return True
 
         if previous_focus and previous_focus != workflow_origin:
-            previous = self.imap_client.find_message_by_message_id(previous_focus)
+            # Prefer the mailbox/UID stored in SQLite. Searching the whole
+            # mailbox by Message-ID can block until the IMAP read timeout on
+            # large inboxes, even though the previous focus is already tracked.
+            previous = self._message_by_saved_uid_or_search(previous_focus)
             if previous is not None:
                 self._set_keyword(previous, _BULK, enabled=True)
                 self._set_flagged(previous, enabled=False)

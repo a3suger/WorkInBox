@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from workinbox.config import AppConfig, DatabaseConfig, IdentityConfig, ImapConfig
+from workinbox.database import EmailDatabase
 from workinbox.models import EmailMessage, ImapFlagsSnapshot
 from workinbox.triage_store import TriageRelationStore
 from workinbox.triagebox import TriageFetchResult, TriageHeaders, TriageMessage, TriageService
@@ -55,6 +56,17 @@ class FakeFocusImapClient:
             item.email, item.headers, tuple(flags)
         )
         return ImapFlagsSnapshot("INBOX", expected_uidvalidity or 10, uid, tuple(flags))
+
+    def inspect_flags(
+        self,
+        uid: int,
+        *,
+        expected_uidvalidity: int | None = None,
+    ) -> ImapFlagsSnapshot:
+        item = self._by_uid(uid)
+        return ImapFlagsSnapshot(
+            "INBOX", expected_uidvalidity or 10, uid, item.flags
+        )
 
     def set_flagged(
         self,
@@ -202,6 +214,46 @@ class DedicatedWorkflowFocusTest(unittest.TestCase):
 
             self.assertEqual(result.errors, ())
             self.assertEqual(imap.find_calls, [])
+
+    def test_moving_existing_focus_uses_saved_uid_without_mailbox_search(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            previous_focus = message(
+                "<m4@example>",
+                "sender@example.com",
+                4,
+                flags=("\\Flagged",),
+                in_reply_to=("<m1@example>",),
+            )
+            next_focus = message(
+                "<m5@example>",
+                "sender@example.com",
+                5,
+                in_reply_to=("<m4@example>",),
+                references=("<m1@example>", "<m4@example>"),
+            )
+            imap = FakeFocusImapClient([previous_focus, next_focus])
+
+            store = TriageRelationStore(path)
+            store.initialize()
+            store.ensure_workflow_focus("<m1@example>")
+            store.set_current_focus("<m1@example>", "<m4@example>")
+            store.save_checkpoint("INBOX", 10, 4)
+
+            database = EmailDatabase(path)
+            database.initialize()
+            database.synchronize([previous_focus.email])
+
+            result = TriageService(
+                self.config(path), imap, relation_store=store, database=database
+            ).run()
+
+            self.assertEqual(result.errors, ())
+            self.assertEqual(imap.find_calls, [])
+            self.assertEqual(store.current_focus_for("<m1@example>"), "<m5@example>")
+            self.assertIn("wib-bulk", imap.messages["<m4@example>"].flags)
+            self.assertNotIn("\\Flagged", imap.messages["<m4@example>"].flags)
+            self.assertIn("\\Flagged", imap.messages["<m5@example>"].flags)
 
     def test_progress_reports_relation_check_before_message_finishes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
