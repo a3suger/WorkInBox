@@ -21,7 +21,7 @@
 - 残っている実機確認: #18〜#22
 - 実機確認 #24・#25: Closed
 - 追加実装Issue: #26〜#29・#31〜#33 Closed、#30・#34・#36・#37・#39・#41〜#43 Open
-- 現在位置: #42をExtension `0.3.45`として実装し、#43で専用ワークフロー着眼点移動時のIMAPタイムアウトを修正。自動テスト164件成功。commit・Actions確認後、desktopでWIB再起動、noteでExtension再読み込みを行って通常同期を再実行する
+- 現在位置: #42をExtension `0.3.45`として実装し、#43で専用ワークフロー着眼点移動時のIMAPタイムアウトを修正。commit `f66db12`、自動テスト164件、GitHub Actions run `37668976180`が成功。desktopでWIB再起動、noteでExtension再読み込みを行って通常同期を再実行する
 
 ### 2026-10-08 #42 通常同期の詳細進捗
 
@@ -37,7 +37,7 @@
 - 返信relation照合自体は数ミリ秒で完了していたが、その後の専用ワークフロー着眼点移動で以前のfocusをMessage-IDにより受信箱全体から検索し、約60秒でread timeoutになっていた。
 - 以前のfocusを既存の保存済みUID優先処理で解決し、SQLiteにUIDがある場合はMessage-ID全体検索を呼ばないよう修正した。
 - 以前のfocusが`一括処理 + スターなし`になり、新着メールへスターとcurrent focusが移ること、およびMessage-ID検索が呼ばれないことを自動テストへ追加した。
-- Python自動テスト164件と`git diff --check`が成功。desktop実機で同じタイムアウトが再発しないことを確認するまで#43はOpenとする。
+- commit `f66db12`。Python自動テスト164件、`git diff --check`、GitHub Actions run `37668976180`が成功。desktop実機で同じタイムアウトが再発しないことを確認するまで#43はOpenとする。
 
 ## GitHub / git の現在状態
 
