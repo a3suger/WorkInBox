@@ -21,7 +21,7 @@
 - 残っている実機確認: #18〜#22
 - 実機確認 #24・#25: Closed
 - 追加実装Issue: #26〜#29・#31〜#33 Closed、#30・#34・#36・#37・#39・#41・#42 Open
-- 現在位置: #42をExtension `0.3.45`として実装し、自動テスト163件成功。commit・Actions確認後、desktopでWIB再起動、noteでExtension再読み込みを行って通常同期の進捗表示を実機確認する
+- 現在位置: #42をExtension `0.3.45`として実装。commit `aaa43fd`、自動テスト163件、GitHub Actions run `37664731193`が成功。desktopでWIB再起動、noteでExtension再読み込みを行って通常同期の進捗表示を実機確認する
 
 ### 2026-10-08 #42 通常同期の詳細進捗
 
@@ -30,7 +30,7 @@
 - ダイアログは既存の2秒間隔の`/api/sync-status`取得で、5段階中の現在位置、処理内容、処理件数、残り件数、エラー件数を逐次更新する。
 - 時刻、経過時間、終了予測、割合、プログレスバーは表示しない。
 - TrackingBoxのRecord要約に`tracking-record`進捗イベントを追加した。
-- Extensionバージョンは`0.3.45`。Python自動テスト163件、JavaScript構文確認、`git diff --check`が成功した。
+- Extensionバージョンは`0.3.45`。commit `aaa43fd`。Python自動テスト163件、JavaScript構文確認、`git diff --check`、GitHub Actions run `37664731193`が成功した。
 
 ## GitHub / git の現在状態
 
