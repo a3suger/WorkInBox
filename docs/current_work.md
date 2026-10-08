@@ -20,8 +20,8 @@
 - #6〜#16 の実装 Issue: すべて Closed
 - 残っている実機確認: #18〜#22
 - 実機確認 #24・#25: Closed
-- 追加実装Issue: #26〜#29・#31〜#33 Closed、#30・#34・#36・#37・#39・#41〜#44 Open
-- 現在位置: #44として、macOS LaunchAgentによるWIB常駐運用とSSH管理コマンドを実装。commit `cf07430`、自動テスト167件、GitHub Actions run `37746221567`が成功。desktopで初回導入と実機確認を行う
+- 追加実装Issue: #26〜#29・#31〜#33・#44 Closed、#30・#34・#36・#37・#39・#41〜#43 Open
+- 現在位置: #44のmacOS LaunchAgentによるWIB常駐運用とSSH管理を実装し、desktop実機確認を完了してClosed。#42・#43の実機確認へ戻る
 
 ### 2026-10-08 #42 通常同期の詳細進捗
 
@@ -48,6 +48,8 @@
 - 公開用設定例と`docs/macos_launchd.md`、plist生成の自動テストを追加した。commit `cf07430`。Python自動テスト167件、`git diff --check`、GitHub Actions run `37746221567`が成功。desktopでの実機導入確認までは#44をOpenとする。
 - desktop初回確認で、管理設定の`.venv/bin/python`が実体のframework Pythonへ解決され、仮想環境が外れて`No module named workinbox`になる不具合を確認した。仮想環境のシンボリックリンクを保持する修正と回帰テストを追加する。
 - desktopのPyCharmが作成した`.run/`内の実行設定が`update`の安全確認を止めたため、端末固有IDE設定としてGit管理対象外へ追加する。
+- 仮想環境パス修正後、desktopでinstall、SSH tunnel接続、SSH切断後の継続動作、stop、start、restart、status、logs、clean時のupdateを実機確認した。
+- 未commit変更がある場合はWIBを停止する前にupdateが中止され、WIBが稼働し続けることも確認した。全確認項目がOKとなったため#44をClosedした。
 
 ## GitHub / git の現在状態
 
