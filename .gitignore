@@ -12,6 +12,7 @@ __pycache__/
 *.pyc*
 
 .idea/*
+.run/
 
 /*PRIVATE_*.md
 

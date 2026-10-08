@@ -47,6 +47,7 @@
 - `update`は未commit変更がある場合は停止前に中止し、cleanな場合だけ停止、`git pull --ff-only`、plist再生成、起動を行う。
 - 公開用設定例と`docs/macos_launchd.md`、plist生成の自動テストを追加した。commit `cf07430`。Python自動テスト167件、`git diff --check`、GitHub Actions run `37746221567`が成功。desktopでの実機導入確認までは#44をOpenとする。
 - desktop初回確認で、管理設定の`.venv/bin/python`が実体のframework Pythonへ解決され、仮想環境が外れて`No module named workinbox`になる不具合を確認した。仮想環境のシンボリックリンクを保持する修正と回帰テストを追加する。
+- desktopのPyCharmが作成した`.run/`内の実行設定が`update`の安全確認を止めたため、端末固有IDE設定としてGit管理対象外へ追加する。
 
 ## GitHub / git の現在状態
 
