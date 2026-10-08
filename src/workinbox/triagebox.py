@@ -196,6 +196,7 @@ class TriageService:
         self.database = database or EmailDatabase(config.database.path)
         self.records = record_store or RecordStore(config.database.path)
         self.progress_callback = progress_callback
+        self._batch_messages: dict[str, TriageMessage] = {}
 
     def _progress(self, **event: object) -> None:
         if self.progress_callback is not None:
@@ -244,6 +245,7 @@ class TriageService:
             return TriageResult(errors=(TriageError("<mailbox>", str(exc)),))
 
         unread = fetched.messages
+        self._batch_messages = {item.email.message_id: item for item in unread}
         # Register dedicated workflow origins already present in this batch before
         # processing replies. This makes reply resolution a local SQLite lookup.
         for item in unread:
@@ -448,6 +450,9 @@ class TriageService:
         return False
 
     def _origin_flags(self, origin_message_id: str) -> set[str] | None:
+        batch_message = self._batch_messages.get(origin_message_id)
+        if batch_message is not None:
+            return set(batch_message.flags)
         reference = self.database.imap_reference(origin_message_id)
         if reference is not None and reference.mailbox == self.config.imap.mailbox:
             logging.info(
@@ -460,9 +465,11 @@ class TriageService:
             )
             return set(snapshot.flags)
 
-        logging.info("TriageBox self mail: saved origin UID unavailable; using Message-ID search")
-        origin = self.imap_client.find_message_by_message_id(origin_message_id)
-        return set(origin.flags) if origin is not None else None
+        logging.warning(
+            "TriageBox self mail: saved origin UID unavailable; skipping mailbox Message-ID search: %s",
+            origin_message_id,
+        )
+        return None
 
     def _handle_waiting_action_reply(self, item: TriageMessage) -> bool:
         logging.info(
@@ -575,6 +582,9 @@ class TriageService:
         return None
 
     def _message_by_saved_uid_or_search(self, message_id: str) -> TriageMessage | None:
+        batch_message = self._batch_messages.get(message_id)
+        if batch_message is not None:
+            return batch_message
         reference = self.database.imap_reference(message_id)
         email = self.database.email_message(message_id)
         if (
@@ -602,29 +612,42 @@ class TriageService:
                 flags=snapshot.flags,
             )
 
-        logging.info(
-            "TriageBox reply resolution: saved request UID unavailable; using Message-ID search"
+        logging.warning(
+            "TriageBox reply resolution: saved request UID unavailable; "
+            "skipping mailbox Message-ID search: %s",
+            message_id,
         )
-        return self.imap_client.find_message_by_message_id(message_id)
+        return None
 
     def _set_keyword(self, item: TriageMessage, keyword: str, *, enabled: bool) -> None:
         if item.email.uid is None:
             raise RuntimeError("TriageBox message UID is unavailable")
-        self.imap_client.set_keyword(
+        snapshot = self.imap_client.set_keyword(
             item.email.uid,
             keyword,
             enabled=enabled,
             expected_uidvalidity=item.email.uidvalidity,
         )
+        self._replace_batch_flags(item.email.message_id, snapshot.flags)
 
     def _set_flagged(self, item: TriageMessage, *, enabled: bool) -> None:
         if item.email.uid is None:
             raise RuntimeError("TriageBox message UID is unavailable")
-        self.imap_client.set_flagged(
+        snapshot = self.imap_client.set_flagged(
             item.email.uid,
             enabled=enabled,
             expected_uidvalidity=item.email.uidvalidity,
         )
+        self._replace_batch_flags(item.email.message_id, snapshot.flags)
+
+    def _replace_batch_flags(self, message_id: str, flags: tuple[str, ...]) -> None:
+        item = self._batch_messages.get(message_id)
+        if item is not None:
+            self._batch_messages[message_id] = TriageMessage(
+                email=item.email,
+                headers=item.headers,
+                flags=flags,
+            )
 
     @staticmethod
     def _error(item: TriageMessage, exc: BaseException) -> TriageError:

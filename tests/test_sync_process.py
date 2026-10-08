@@ -90,6 +90,16 @@ class SyncProcessManagerTest(unittest.TestCase):
         self.assertEqual(manager.progress["current"], 3)
         self.assertEqual(manager.progress["total"], 8)
 
+    def test_forward_output_preserves_child_warning_level(self) -> None:
+        stream = io.StringIO(
+            "2026-10-08 03:30:22,811 WARNING TriageBox failed for <mail>: timeout\n"
+        )
+
+        with self.assertLogs("workinbox.sync_process", level=logging.WARNING) as captured:
+            SyncProcessManager("test-config.yaml")._forward_output(4321, stream)
+
+        self.assertIn("WARNING:workinbox.sync_process:sync[4321]", captured.output[0])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -38,6 +38,8 @@
 - 以前のfocusを既存の保存済みUID優先処理で解決し、SQLiteにUIDがある場合はMessage-ID全体検索を呼ばないよう修正した。
 - 以前のfocusが`一括処理 + スターなし`になり、新着メールへスターとcurrent focusが移ること、およびMessage-ID検索が呼ばれないことを自動テストへ追加した。
 - commit `f66db12`。Python自動テスト164件、`git diff --check`、GitHub Actions run `37668976180`が成功。desktop実機で同じタイムアウトが再発しないことを確認するまで#43はOpenとする。
+- desktop再確認では`682 / 2463件`時点でエラー2件となり、返信関係確認の遅延が再発した。保存済みUIDがない場合の残存Message-ID全体検索を廃止し、同じ取得バッチ内のメールはメモリ上から解決する追加修正を行う。
+- launchdの既定WARNINGログで同期子プロセスの警告が親プロセスによりINFOへ落とされ、詳細が記録されない問題も併せて修正する。
 
 ### 2026-10-08 #44 macOS LaunchAgentによる常駐・SSH管理
 

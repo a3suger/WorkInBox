@@ -383,6 +383,35 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             self.assertEqual(imap.fetch_reply_targets, [("<request@example>",)])
             self.assertIn("wib-action-ready", imap.messages["<reply@example>"].flags)
 
+    def test_tracked_reply_without_saved_uid_never_searches_whole_mailbox(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            reply = triage_message(
+                "<reply@example>",
+                "supporter@example.com",
+                3,
+                in_reply_to=("<missing-request@example>",),
+            )
+            relations = TriageRelationStore(path)
+            relations.initialize()
+            relations.record(
+                "<missing-request@example>",
+                "<origin@example>",
+                "schedule_support_request",
+            )
+            imap = FakeTriageImapClient([reply])
+
+            result = TriageService(
+                config,
+                imap,
+                relation_store=relations,
+            ).run()
+
+            self.assertEqual(result.errors, ())
+            self.assertEqual(result.waiting_action_replies, 0)
+            self.assertEqual(imap.find_calls, [])
+
     def test_action_ready_reply_is_not_sent_to_normal_ai_classification(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
@@ -554,6 +583,9 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             self.assertIn("wib-waiting-action", imap.messages["<question@example>"].flags)
             self.assertIn("\\Flagged", imap.messages["<question@example>"].flags)
 
+            # The normal synchronization stores the first run's message before
+            # a later self-copy is handled in the next synchronization.
+            database.synchronize([question.email])
             imap.set_keyword(4, "wib-action-ready", enabled=True, expected_uidvalidity=10)
             imap.set_keyword(4, "wib-bulk", enabled=True, expected_uidvalidity=10)
             relations.record("<question@example>", "<origin@example>", "schedule_support_reply")

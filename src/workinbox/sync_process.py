@@ -134,7 +134,14 @@ class SyncProcessManager:
                                 self._progress = event
                         continue
                 if text:
-                    _LOGGER.info("sync[%d] %s", pid, text)
+                    level = logging.INFO
+                    if " CRITICAL " in text:
+                        level = logging.CRITICAL
+                    elif " ERROR " in text:
+                        level = logging.ERROR
+                    elif " WARNING " in text:
+                        level = logging.WARNING
+                    _LOGGER.log(level, "sync[%d] %s", pid, text)
         finally:
             stream.close()
             _LOGGER.info("Synchronization process output closed: pid=%d", pid)
