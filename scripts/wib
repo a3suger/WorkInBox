@@ -31,7 +31,9 @@ class Settings:
 
 
 def _path(value: str) -> Path:
-    return Path(value).expanduser().resolve()
+    # Keep virtual-environment interpreter symlinks intact. Resolving
+    # .venv/bin/python to its framework binary loses the venv context.
+    return Path(os.path.abspath(Path(value).expanduser()))
 
 
 def load_settings(path: Path) -> Settings:

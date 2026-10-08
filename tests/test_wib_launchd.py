@@ -52,10 +52,10 @@ class WibLaunchdTests(unittest.TestCase):
             plist = self.module.build_plist(settings)
 
             self.assertEqual(plist["Label"], "jp.workinbox.web")
-            self.assertEqual(plist["WorkingDirectory"], str(project.resolve()))
+            self.assertEqual(plist["WorkingDirectory"], str(project))
             self.assertEqual(plist["ProgramArguments"][-1], "8123")
             self.assertEqual(
-                plist["StandardOutPath"], str(log_dir.resolve() / "web-launchd.log")
+                plist["StandardOutPath"], str(log_dir / "web-launchd.log")
             )
             plistlib.dumps(plist)
 
@@ -79,6 +79,34 @@ class WibLaunchdTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "存在しません"):
                 self.module.load_settings(config)
+
+    def test_virtual_environment_python_symlink_is_preserved(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "WorkInBox"
+            real_python = root / "framework" / "python"
+            venv_python = project / ".venv" / "bin" / "python"
+            app_config = project / "config.yaml"
+            real_python.parent.mkdir(parents=True)
+            real_python.touch()
+            venv_python.parent.mkdir(parents=True)
+            venv_python.symlink_to(real_python)
+            app_config.touch()
+            config = root / "maintenance.conf"
+            config.write_text(
+                "[workinbox]\n"
+                f"project_dir = {project}\n"
+                f"python = {venv_python}\n"
+                f"config = {app_config}\n"
+                f"log_dir = {project / 'logs'}\n",
+                encoding="utf-8",
+            )
+
+            settings = self.module.load_settings(config)
+            plist = self.module.build_plist(settings)
+
+            self.assertEqual(settings.python, venv_python)
+            self.assertEqual(plist["ProgramArguments"][0], str(venv_python))
 
 
 if __name__ == "__main__":
