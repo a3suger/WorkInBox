@@ -1,0 +1,12 @@
+[workinbox]
+# Copy this file to ~/.config/workinbox/maintenance.conf on the Mac that runs WIB.
+# Replace the example paths with paths on that Mac. Do not commit the real file.
+project_dir = /path/to/WorkInBox
+python = /path/to/WorkInBox/.venv/bin/python
+config = /path/to/WorkInBox/config.yaml
+log_dir = /path/to/WorkInBox/logs
+
+# WIB normally listens only on the desktop itself. The note accesses it by SSH forwarding.
+host = 127.0.0.1
+port = 8000
+

@@ -210,6 +210,9 @@ workinbox-web --config config.yaml
 python -m workinbox.web_runtime --config config.yaml
 ```
 
+macOSでWIBを常駐させ、SSHから起動・停止・更新する場合は
+[`docs/macos_launchd.md`](docs/macos_launchd.md)を参照してください。
+
 既定ではローカルホストだけにバインドします。
 
 ```text

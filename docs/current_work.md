@@ -20,8 +20,8 @@
 - #6〜#16 の実装 Issue: すべて Closed
 - 残っている実機確認: #18〜#22
 - 実機確認 #24・#25: Closed
-- 追加実装Issue: #26〜#29・#31〜#33 Closed、#30・#34・#36・#37・#39・#41〜#43 Open
-- 現在位置: #42をExtension `0.3.45`として実装し、#43で専用ワークフロー着眼点移動時のIMAPタイムアウトを修正。commit `f66db12`、自動テスト164件、GitHub Actions run `37668976180`が成功。desktopでWIB再起動、noteでExtension再読み込みを行って通常同期を再実行する
+- 追加実装Issue: #26〜#29・#31〜#33 Closed、#30・#34・#36・#37・#39・#41〜#44 Open
+- 現在位置: #44として、macOS LaunchAgentによるWIB常駐運用とSSH管理コマンドを実装。自動テスト167件成功。commit・Actions確認後、desktopで初回導入と実機確認を行う
 
 ### 2026-10-08 #42 通常同期の詳細進捗
 
@@ -38,6 +38,14 @@
 - 以前のfocusを既存の保存済みUID優先処理で解決し、SQLiteにUIDがある場合はMessage-ID全体検索を呼ばないよう修正した。
 - 以前のfocusが`一括処理 + スターなし`になり、新着メールへスターとcurrent focusが移ること、およびMessage-ID検索が呼ばれないことを自動テストへ追加した。
 - commit `f66db12`。Python自動テスト164件、`git diff --check`、GitHub Actions run `37668976180`が成功。desktop実機で同じタイムアウトが再発しないことを確認するまで#43はOpenとする。
+
+### 2026-10-08 #44 macOS LaunchAgentによる常駐・SSH管理
+
+- desktop固有のリポジトリ、Python、WIB config、ログの各パスを`~/.config/workinbox/maintenance.conf`へ記録する方式とした。この実機設定はGit管理しない。
+- `scripts/wib`へ`install`、`start`、`stop`、`restart`、`status`、`logs`、`update`を追加した。
+- `install`が非公開設定を検証し、`~/Library/LaunchAgents/jp.workinbox.web.plist`を生成してLaunchAgentを登録する。
+- `update`は未commit変更がある場合は停止前に中止し、cleanな場合だけ停止、`git pull --ff-only`、plist再生成、起動を行う。
+- 公開用設定例と`docs/macos_launchd.md`、plist生成の自動テストを追加した。Python自動テスト167件と`git diff --check`が成功。desktopでの実機導入確認までは#44をOpenとする。
 
 ## GitHub / git の現在状態
 

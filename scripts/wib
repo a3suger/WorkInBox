@@ -1,0 +1,254 @@
+#!/usr/bin/env python3
+"""Manage WorkInBox as a per-user macOS LaunchAgent."""
+
+from __future__ import annotations
+
+import argparse
+import configparser
+import os
+import plistlib
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from pathlib import Path
+
+
+LABEL = "jp.workinbox.web"
+DEFAULT_CONFIG = Path("~/.config/workinbox/maintenance.conf").expanduser()
+DEFAULT_PLIST = Path(f"~/Library/LaunchAgents/{LABEL}.plist").expanduser()
+
+
+@dataclass(frozen=True)
+class Settings:
+    project_dir: Path
+    python: Path
+    config: Path
+    log_dir: Path
+    host: str
+    port: int
+
+
+def _path(value: str) -> Path:
+    return Path(value).expanduser().resolve()
+
+
+def load_settings(path: Path) -> Settings:
+    parser = configparser.ConfigParser()
+    if not path.is_file():
+        raise ValueError(
+            f"管理設定がありません: {path}\n"
+            "deploy/macos/maintenance.conf.example をコピーし、実際のパスを設定してください。"
+        )
+    try:
+        with path.open(encoding="utf-8") as handle:
+            parser.read_file(handle)
+        section = parser["workinbox"]
+        settings = Settings(
+            project_dir=_path(section["project_dir"]),
+            python=_path(section["python"]),
+            config=_path(section["config"]),
+            log_dir=_path(section["log_dir"]),
+            host=section.get("host", "127.0.0.1").strip(),
+            port=section.getint("port", 8000),
+        )
+    except (KeyError, configparser.Error, ValueError) as exc:
+        raise ValueError(f"管理設定を読み込めません: {path}: {exc}") from exc
+
+    missing = [
+        candidate
+        for candidate in (settings.project_dir, settings.python, settings.config)
+        if not candidate.exists()
+    ]
+    if missing:
+        raise ValueError("設定したパスが存在しません: " + ", ".join(map(str, missing)))
+    if not settings.project_dir.is_dir():
+        raise ValueError(f"project_dirがディレクトリではありません: {settings.project_dir}")
+    if settings.port < 1 or settings.port > 65535:
+        raise ValueError(f"portが範囲外です: {settings.port}")
+    return settings
+
+
+def build_plist(settings: Settings) -> dict[str, object]:
+    return {
+        "Label": LABEL,
+        "ProgramArguments": [
+            str(settings.python),
+            "-m",
+            "workinbox.web_runtime",
+            "--config",
+            str(settings.config),
+            "--host",
+            settings.host,
+            "--port",
+            str(settings.port),
+        ],
+        "WorkingDirectory": str(settings.project_dir),
+        "RunAtLoad": True,
+        "KeepAlive": False,
+        "ProcessType": "Background",
+        "StandardOutPath": str(settings.log_dir / "web-launchd.log"),
+        "StandardErrorPath": str(settings.log_dir / "web-launchd-error.log"),
+    }
+
+
+def domain() -> str:
+    return f"gui/{os.getuid()}"
+
+
+def service() -> str:
+    return f"{domain()}/{LABEL}"
+
+
+def run(
+    command: list[str], *, check: bool = True, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, check=check, text=True, cwd=cwd)
+
+
+def is_loaded() -> bool:
+    result = subprocess.run(
+        ["launchctl", "print", service()],
+        check=False,
+        text=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def install(settings: Settings, plist_path: Path) -> None:
+    settings.log_dir.mkdir(parents=True, exist_ok=True)
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = plist_path.with_suffix(".plist.tmp")
+    with temporary.open("wb") as handle:
+        plistlib.dump(build_plist(settings), handle, sort_keys=False)
+    temporary.replace(plist_path)
+    if is_loaded():
+        run(["launchctl", "bootout", domain(), str(plist_path)])
+    run(["launchctl", "bootstrap", domain(), str(plist_path)])
+    print(f"WIBを登録して起動しました: {service()}")
+
+
+def start(plist_path: Path) -> None:
+    if not plist_path.is_file():
+        raise RuntimeError(f"LaunchAgentが未導入です。先にinstallしてください: {plist_path}")
+    if not is_loaded():
+        run(["launchctl", "bootstrap", domain(), str(plist_path)])
+    run(["launchctl", "kickstart", service()])
+    print("WIBを起動しました。")
+
+
+def stop(plist_path: Path) -> None:
+    if not is_loaded():
+        print("WIBは停止しています。")
+        return
+    run(["launchctl", "bootout", domain(), str(plist_path)])
+    print("WIBを停止しました。")
+
+
+def status(settings: Settings) -> int:
+    if not is_loaded():
+        print("WIB: 停止（LaunchAgent未登録）")
+        return 1
+    try:
+        with urllib.request.urlopen(
+            f"http://{settings.host}:{settings.port}/api/health", timeout=2
+        ) as response:
+            healthy = 200 <= response.status < 300
+    except (urllib.error.URLError, TimeoutError):
+        healthy = False
+    if healthy:
+        print(f"WIB: 稼働中（http://{settings.host}:{settings.port}/api/health 正常）")
+        return 0
+    print("WIB: LaunchAgent登録済み、ヘルスチェック応答なし")
+    return 2
+
+
+def logs(settings: Settings, *, follow: bool) -> None:
+    paths = [settings.log_dir / "web-launchd.log", settings.log_dir / "web-launchd-error.log"]
+    existing = [str(path) for path in paths if path.exists()]
+    if not existing:
+        print(f"ログはまだありません: {settings.log_dir}")
+        return
+    command = ["tail", "-n", "100"]
+    if follow:
+        command.append("-f")
+    run(command + existing)
+
+
+def update(settings: Settings, plist_path: Path) -> None:
+    git_status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=settings.project_dir,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    if git_status.stdout.strip():
+        raise RuntimeError("未commitの変更があるため更新を中止しました。git statusを確認してください。")
+    stop(plist_path)
+    try:
+        run(["git", "pull", "--ff-only"], check=True, cwd=settings.project_dir)
+    except subprocess.CalledProcessError:
+        print("更新に失敗したためWIBは停止したままです。", file=sys.stderr)
+        raise
+    install(settings, plist_path)
+    print("GitHubからの更新とWIBの再起動が完了しました。")
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="WIBのmacOS常駐運用を管理します")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG,
+        help=f"管理設定（既定: {DEFAULT_CONFIG}）",
+    )
+    parser.add_argument(
+        "--plist",
+        type=Path,
+        default=DEFAULT_PLIST,
+        help=f"LaunchAgent設定（既定: {DEFAULT_PLIST}）",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("install", help="LaunchAgentを生成・登録して起動")
+    subparsers.add_parser("start", help="WIBを起動")
+    subparsers.add_parser("stop", help="WIBを停止")
+    subparsers.add_parser("restart", help="WIBを再起動")
+    subparsers.add_parser("status", help="稼働状態を確認")
+    logs_parser = subparsers.add_parser("logs", help="直近のログを表示")
+    logs_parser.add_argument("--follow", action="store_true", help="ログを継続表示")
+    subparsers.add_parser("update", help="安全にgit pullしてWIBを再起動")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    try:
+        settings = load_settings(args.config.expanduser())
+        plist_path = args.plist.expanduser()
+        if args.command == "install":
+            install(settings, plist_path)
+        elif args.command == "start":
+            start(plist_path)
+        elif args.command == "stop":
+            stop(plist_path)
+        elif args.command == "restart":
+            stop(plist_path)
+            start(plist_path)
+        elif args.command == "status":
+            return status(settings)
+        elif args.command == "logs":
+            logs(settings, follow=args.follow)
+        elif args.command == "update":
+            update(settings, plist_path)
+    except (ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
+        print(f"エラー: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
