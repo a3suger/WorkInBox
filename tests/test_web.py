@@ -11,6 +11,7 @@ from workinbox.application import TrackingQueryService
 from workinbox.config import AppConfig, DatabaseConfig, ImapConfig
 from workinbox.database import EmailDatabase
 from workinbox.models import EmailMessage, TrackingStatus
+from workinbox.triagebox import TriageHeaders, TriageMessage
 from workinbox.web import _TEMPLATES, _message_ids_equal, _mid_value, create_app
 
 
@@ -89,6 +90,10 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("GET", routes["/api/advertising-senders"])
         self.assertIn("POST", routes["/api/advertising-senders"])
         self.assertIn("DELETE", routes["/api/advertising-senders"])
+        self.assertIn("GET", routes["/advertising-senders"])
+        self.assertIn("POST", routes["/advertising-senders/add"])
+        self.assertIn("POST", routes["/advertising-senders/delete"])
+        self.assertIn("POST", routes["/advertising-senders/process-requests"])
         self.assertIn("GET", routes["/deadlines.ics"])
         self.assertIn("PROPFIND", routes["/caldav/deadlines/"])
         self.assertIn("REPORT", routes["/caldav/deadlines/"])
@@ -109,6 +114,58 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("POST", routes["/sync"])
         self.assertIn("POST", routes["/full-recheck"])
         self.assertIn("POST", routes["/tags/{key}/{operation}"])
+
+    def test_web_processes_advertising_registration_requests_explicitly(self) -> None:
+        class FakeAdvertisingImap:
+            def __init__(self, item):
+                self.item = item
+                self.keyword_updates = []
+                self.flag_updates = []
+
+            def fetch_by_keyword(self, keyword):
+                self.searched = keyword
+                return (self.item,)
+
+            def set_keyword(self, uid, keyword, *, enabled, expected_uidvalidity=None):
+                self.keyword_updates.append((uid, keyword, enabled, expected_uidvalidity))
+
+            def set_flagged(self, uid, *, enabled, expected_uidvalidity=None):
+                self.flag_updates.append((uid, enabled, expected_uidvalidity))
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            email = EmailMessage(
+                "<ad@example>", "Advertiser <news@example.com>", "me@example.com",
+                "Ad", None, None, mailbox="INBOX", uidvalidity=10, uid=7,
+            )
+            item = TriageMessage(
+                email,
+                TriageHeaders(
+                    from_address="Advertiser <news@example.com>",
+                    message_id=email.message_id,
+                    in_reply_to=(), references=(), origin_message_id=None,
+                ),
+                ("wib-ad-sender-register", "wib-review", "\\Flagged"),
+            )
+            fake = FakeAdvertisingImap(item)
+            app = create_app(self._config(path), advertising_imap_client=fake)
+            route = next(
+                route for route in app.routes
+                if route.path == "/advertising-senders/process-requests"
+            )
+
+            response = route.endpoint()
+
+            self.assertEqual(response.status_code, 303)
+            self.assertEqual(fake.searched, "wib-ad-sender-register")
+            self.assertEqual(
+                fake.keyword_updates,
+                [(7, "wib-bulk", True, 10), (7, "wib-ad-sender-register", False, 10)],
+            )
+            self.assertEqual(fake.flag_updates, [(7, False, 10)])
+            from workinbox.advertising_senders import AdvertisingSenderStore
+            stored = AdvertisingSenderStore(path).get("news@example.com")
+            self.assertIsNotNone(stored)
 
     def test_thunderbird_imap_target_excludes_password(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -161,7 +218,7 @@ class WebFoundationTest(unittest.TestCase):
         for name in (
             "base.html", "dashboard.html", "emails.html", "pending.html", "deadlines.html",
             "schedules.html", "records.html", "deadline_source_message.html",
-            "deadline_detail.html",
+            "deadline_detail.html", "advertising_senders.html",
         ):
             self.assertIsNotNone(_TEMPLATES.get_template(name))
 

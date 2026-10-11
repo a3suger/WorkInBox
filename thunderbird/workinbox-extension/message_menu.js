@@ -101,7 +101,9 @@ for (const button of document.querySelectorAll("button")) {
     } else if (advertisingSender) {
       void sendOperation(button, requestFor(currentMessage, {
         type: "workinbox-register-advertising-sender",
-      }), "広告送信者の登録依頼タグを付けました。次回の通常同期で登録します。");
+      }), (response) => response.queued
+        ? "WIBに接続できないため、登録依頼タグを付けました。Webの管理画面から処理してください。"
+        : "広告送信者へ登録し、一括処理にしました。");
     }
   });
 }

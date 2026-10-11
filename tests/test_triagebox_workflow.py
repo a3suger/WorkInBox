@@ -414,7 +414,7 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             self.assertEqual(result.waiting_action_replies, 0)
             self.assertEqual(imap.find_calls, [])
 
-    def test_advertising_registration_and_later_match_are_finished(self) -> None:
+    def test_registration_request_is_not_a_triagebox_exception(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
             config = self.make_config(path)
@@ -424,33 +424,44 @@ class TriageBoxWorkflowTest(unittest.TestCase):
                 1,
                 flags=("\\Flagged", "wib-review", "wib-ad-sender-register"),
             )
-            later = triage_message(
-                "<later@example>",
-                "news@example.com",
-                2,
-                flags=("\\Flagged", "wib-watch"),
-            )
-            imap = FakeTriageImapClient([registration, later])
+            imap = FakeTriageImapClient([registration])
 
             result = TriageService(config, imap).run()
 
             self.assertEqual(result.errors, ())
             registration_flags = imap.messages["<registration@example>"].flags
-            later_flags = imap.messages["<later@example>"].flags
-            self.assertIn("wib-bulk", registration_flags)
             self.assertIn("wib-review", registration_flags)
-            self.assertNotIn("wib-ad-sender-register", registration_flags)
-            self.assertNotIn("\\Flagged", registration_flags)
-            self.assertIn("wib-bulk", later_flags)
-            self.assertIn("wib-watch", later_flags)
-            self.assertNotIn("\\Flagged", later_flags)
+            self.assertIn("wib-ad-sender-register", registration_flags)
+            self.assertIn("\\Flagged", registration_flags)
 
             from workinbox.advertising_senders import AdvertisingSenderStore
 
-            stored = AdvertisingSenderStore(path).get("news@example.com")
-            self.assertIsNotNone(stored)
-            self.assertEqual(stored.display_name, "Advertiser")
-            self.assertEqual(stored.match_count, 2)
+            self.assertEqual(AdvertisingSenderStore(path).list(), [])
+
+    def test_registered_advertising_sender_is_finished_by_triagebox(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            from workinbox.advertising_senders import AdvertisingSenderStore
+
+            store = AdvertisingSenderStore(path)
+            store.initialize()
+            store.add("news@example.com")
+            message = triage_message(
+                "<later@example>",
+                "news@example.com",
+                2,
+                flags=("\\Flagged", "wib-watch"),
+            )
+            imap = FakeTriageImapClient([message])
+
+            result = TriageService(config, imap).run()
+
+            self.assertEqual(result.errors, ())
+            flags = imap.messages[message.email.message_id].flags
+            self.assertIn("wib-bulk", flags)
+            self.assertIn("wib-watch", flags)
+            self.assertNotIn("\\Flagged", flags)
 
     def test_low_ironport_reputation_is_finished_without_registering_sender(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

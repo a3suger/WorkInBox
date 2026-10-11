@@ -7,7 +7,7 @@ from ipaddress import ip_address
 from pathlib import Path
 from threading import Lock
 from typing import Callable
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse, Response
@@ -31,6 +31,7 @@ from .models import DeadlineCreatedBy
 from .normal_workflow import NormalWorkflowCompletionService
 from .record_store import RecordStore
 from .advertising_senders import AdvertisingSenderStore
+from .imap_client import ImapClient
 from .work_tags import WORK_TAGS
 from . import __version__
 
@@ -66,6 +67,7 @@ def create_app(
     record_store: RecordStore | None = None,
     dashboard_service: DashboardService | None = None,
     advertising_sender_store: AdvertisingSenderStore | None = None,
+    advertising_imap_client: ImapClient | None = None,
 ) -> FastAPI:
     sync_service = synchronization_service or SynchronizationService(config)
     tracking_service = query_service or TrackingQueryService(config)
@@ -85,6 +87,10 @@ def create_app(
         config.database.path
     )
     advertising_senders.initialize()
+    advertising_imap = advertising_imap_client or ImapClient(
+        config.imap,
+        reputation_header=config.advertising.ironport_reputation_header,
+    )
     sync_lock = Lock()
 
     app = FastAPI(title="WorkInBox")
@@ -312,6 +318,89 @@ def create_app(
             request=request,
             name="records.html",
             context={"records": records.list(), **common_view_flags()},
+        )
+
+    @app.get("/advertising-senders")
+    def advertising_sender_page(request: Request):
+        return _TEMPLATES.TemplateResponse(
+            request=request,
+            name="advertising_senders.html",
+            context={
+                "senders": advertising_senders.list(),
+                "message": request.query_params.get("message"),
+                "error": request.query_params.get("error"),
+                **common_view_flags(),
+            },
+        )
+
+    async def form_value(request: Request, key: str) -> str:
+        body = (await request.body()).decode("utf-8")
+        return (parse_qs(body, keep_blank_values=True).get(key) or [""])[0]
+
+    @app.post("/advertising-senders/add")
+    async def advertising_sender_page_add(request: Request):
+        try:
+            advertising_senders.add(await form_value(request, "address"))
+        except ValueError as exc:
+            return RedirectResponse(
+                url=f"/advertising-senders?error={quote(str(exc))}", status_code=303
+            )
+        return RedirectResponse(url="/advertising-senders?message=登録しました", status_code=303)
+
+    @app.post("/advertising-senders/delete")
+    async def advertising_sender_page_delete(request: Request):
+        try:
+            advertising_senders.delete(await form_value(request, "address"))
+        except ValueError as exc:
+            return RedirectResponse(
+                url=f"/advertising-senders?error={quote(str(exc))}", status_code=303
+            )
+        return RedirectResponse(url="/advertising-senders?message=削除しました", status_code=303)
+
+    @app.post("/advertising-senders/process-requests")
+    def process_advertising_sender_requests():
+        processed = 0
+        errors: list[str] = []
+        try:
+            requests = advertising_imap.fetch_by_keyword("wib-ad-sender-register")
+        except (OSError, RuntimeError, ValueError) as exc:
+            return RedirectResponse(
+                url=f"/advertising-senders?error={quote(str(exc))}", status_code=303
+            )
+        for item in requests:
+            try:
+                sender = advertising_senders.add(
+                    item.headers.from_address or item.email.sender
+                )
+                advertising_imap.set_keyword(
+                    item.email.uid,
+                    "wib-bulk",
+                    enabled=True,
+                    expected_uidvalidity=item.email.uidvalidity,
+                )
+                advertising_imap.set_flagged(
+                    item.email.uid,
+                    enabled=False,
+                    expected_uidvalidity=item.email.uidvalidity,
+                )
+                advertising_imap.set_keyword(
+                    item.email.uid,
+                    "wib-ad-sender-register",
+                    enabled=False,
+                    expected_uidvalidity=item.email.uidvalidity,
+                )
+                advertising_senders.record_match(sender.address)
+                processed += 1
+            except (OSError, RuntimeError, ValueError) as exc:
+                errors.append(f"{item.email.message_id}: {exc}")
+        if errors:
+            return RedirectResponse(
+                url=f"/advertising-senders?error={quote('; '.join(errors))}",
+                status_code=303,
+            )
+        return RedirectResponse(
+            url=f"/advertising-senders?message=登録依頼を{processed}件処理しました",
+            status_code=303,
         )
 
     @app.get("/pending")

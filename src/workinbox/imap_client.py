@@ -375,19 +375,6 @@ class ImapClient:
             since_text = since.strftime("%d-%b-%Y")
             uid_values: set[bytes] = set()
 
-            # Registration requests are an offline-safe command queue. Search
-            # them independently of unread state, checkpoint and lookback age.
-            status, registration_data = client.uid(
-                "search", None, "KEYWORD", "wib-ad-sender-register"
-            )
-            if status != "OK":
-                raise RuntimeError("IMAP advertising sender registration search failed")
-            uid_values.update(
-                registration_data[0].split()
-                if registration_data and registration_data[0]
-                else ()
-            )
-
             if checkpoint is not None and checkpoint[0] == current_uidvalidity:
                 last_uid = checkpoint[1]
                 if highest_existing_uid <= last_uid:
@@ -522,6 +509,29 @@ class ImapClient:
                 current_uidvalidity,
                 highest_existing_uid,
             )
+
+    def fetch_by_keyword(self, keyword: str) -> tuple[TriageMessage, ...]:
+        if not keyword or any(character.isspace() for character in keyword):
+            raise ValueError("IMAP keyword must not be empty or contain whitespace")
+        with imaplib.IMAP4_SSL(
+            self.config.host, self.config.port, timeout=self.config.timeout_seconds
+        ) as client:
+            client.login(self.config.username, self.config.password)
+            status, _ = client.select(self.config.mailbox, readonly=True)
+            if status != "OK":
+                raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
+            current_uidvalidity = _uidvalidity(client)
+            status, data = client.uid("search", None, "KEYWORD", keyword)
+            if status != "OK":
+                raise RuntimeError(f"IMAP keyword search failed: {keyword}")
+            messages: list[TriageMessage] = []
+            for uid_bytes in data[0].split() if data and data[0] else ():
+                item, _ = self._fetch_triage_message(
+                    client, int(uid_bytes), current_uidvalidity
+                )
+                if item is not None:
+                    messages.append(item)
+            return tuple(messages)
 
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None:
         if message_id in self._message_id_cache:

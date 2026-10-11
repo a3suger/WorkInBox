@@ -1,6 +1,7 @@
 const WORKINBOX_ORIGIN_HEADER = "X-WorkInBox-Origin-Message-ID";
 const WORKINBOX_ACTION_HEADER = "X-WorkInBox-Action";
 const WORKINBOX_REQUEST_ID_HEADER = "X-WorkInBox-Request-ID";
+const WORKINBOX_API_URL = "http://127.0.0.1:8000/";
 const RECORD_ACTION = "create-record";
 const REQUESTED_TAG = "wib-requested";
 const BULK_TAG = "wib-bulk";
@@ -1171,9 +1172,40 @@ async function resolveAdvertisingSenderRegistrationTagKey() {
 async function queueAdvertisingSender(messageId, thunderbirdMessageId) {
   const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
   if (!message) throw new Error("表示中のメールを取得できませんでした。");
-  const tagKey = await resolveAdvertisingSenderRegistrationTagKey();
-  await addTag(message, tagKey);
-  return { ok: true };
+  try {
+    const response = await fetch(new URL("api/advertising-senders", WORKINBOX_API_URL).href, {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address: message.author || "" }),
+    });
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`;
+      try { detail = (await response.json()).detail || detail; } catch (_error) { /* no JSON */ }
+      const error = new Error(detail);
+      error.wibConnected = true;
+      throw error;
+    }
+    const bulkTagKey = await resolveBulkTagKey();
+    const registeredTags = await messenger.messages.tags.list();
+    const requestTagKeys = new Set(
+      registeredTags
+        .filter((tag) => tag.key === AD_SENDER_REGISTER_TAG
+          || tag.tag === AD_SENDER_REGISTER_DEFINITION.tag)
+        .map((tag) => tag.key),
+    );
+    const tags = (message.tags || []).filter((tag) => !requestTagKeys.has(tag));
+    await messenger.messages.update(message.id, {
+      tags: [...new Set([...tags, bulkTagKey])],
+      flagged: false,
+    });
+    return { ok: true, queued: false };
+  } catch (error) {
+    if (error?.wibConnected) throw error;
+    const tagKey = await resolveAdvertisingSenderRegistrationTagKey();
+    await addTag(message, tagKey);
+    return { ok: true, queued: true };
+  }
 }
 
 async function setNormalCompletionActionStatus(tabId, badgeText, title) {

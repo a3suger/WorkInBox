@@ -299,10 +299,7 @@ async function openSettings() {
 }
 
 async function openAdvertisingSenders() {
-  await messenger.tabs.create({
-    url: messenger.runtime.getURL("advertising_senders.html"),
-    active: true,
-  });
+  await openWib("/advertising-senders");
 }
 
 document.addEventListener("click", (event) => {

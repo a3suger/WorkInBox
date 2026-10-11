@@ -22,7 +22,6 @@ _MESSAGE_ID_RE = re.compile(r"<[^<>\s]+>")
 _WAITING_ACTION = "wib-waiting-action"
 _ACTION_READY = "wib-action-ready"
 _BULK = "wib-bulk"
-_AD_SENDER_REGISTER = "wib-ad-sender-register"
 _SCHEDULE = "wib-schedule"
 _DEADLINE = "wib-deadline"
 _SUPPORT_REQUEST = "schedule_support_request"
@@ -301,17 +300,11 @@ class TriageService:
                 errors=len(errors),
             )
             try:
-                if _AD_SENDER_REGISTER in item.flags:
-                    self._register_advertising_sender(item)
-                elif self._handle_registered_advertising_sender(item):
-                    pass
-                elif self._handle_ironport_reputation(item):
-                    pass
                 # The extension-controlled origin header is a stronger signal
                 # than the From address. Thunderbird may send through an
                 # identity/alias that is not listed in config.identity, but the
                 # self-Cc copy is still the WIB support request M2.
-                elif item.headers.action == _RECORD_ACTION:
+                if item.headers.action == _RECORD_ACTION:
                     self._handle_record_request(item)
                 elif item.headers.action in _SUPPORT_FOLLOWUP_ACTIONS:
                     if self._handle_self_action_reply(item):
@@ -326,8 +319,12 @@ class TriageService:
                         logging.info("TriageBox self mail: no applicable WIB transition")
                 elif self._handle_waiting_action_reply(item):
                     waiting_action_replies += 1
-                else:
-                    self._handle_dedicated_thread_focus(item)
+                elif self._handle_dedicated_thread_focus(item):
+                    pass
+                elif self._handle_registered_advertising_sender(item):
+                    pass
+                elif self._handle_ironport_reputation(item):
+                    pass
             except (OSError, RuntimeError, ValueError) as exc:
                 logging.warning(
                     "TriageBox failed for %s: %s",
@@ -373,15 +370,6 @@ class TriageService:
             waiting_action_replies=waiting_action_replies,
             errors=tuple(errors),
         )
-
-    def _register_advertising_sender(self, item: TriageMessage) -> None:
-        name, address = normalize_sender(item.headers.from_address or item.email.sender)
-        self.advertising_senders.add(address, display_name=name)
-        self._advertising_addresses.add(address)
-        self._finish_advertising_message(item)
-        self._set_keyword(item, _AD_SENDER_REGISTER, enabled=False)
-        self.advertising_senders.record_match(address)
-        logging.info("TriageBox registered advertising sender: %s", address)
 
     def _handle_registered_advertising_sender(self, item: TriageMessage) -> bool:
         try:

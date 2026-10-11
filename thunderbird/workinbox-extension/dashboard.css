@@ -96,7 +96,3 @@ dialog::backdrop { background: rgb(0 0 0 / 35%); }
 .wib-links { margin-top: 10px; }
 .section-actions { margin-top: 10px; }
 .error { background: color-mix(in srgb, #dc2626 12%, Canvas); color: #b91c1c; padding: 10px 12px; border-radius: 6px; }
-.sender-form { display: flex; gap: 8px; margin-top: 10px; }
-.sender-form input { flex: 1; min-width: 220px; padding: 8px; }
-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-th, td { text-align: left; padding: 8px; border-bottom: 1px solid color-mix(in srgb, CanvasText 16%, transparent); }

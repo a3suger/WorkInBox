@@ -135,7 +135,7 @@ Thunderbird由来の現在値、WIBの接続状態、オフライン時に利用
 
 ### [advertising_sender_rules.md](advertising_sender_rules.md)
 
-広告送信者アドレスのDB管理、一時タグによるオフライン登録依頼、通常同期での`一括処理`・スター解除、Extension管理UIを定める。
+広告送信者アドレスのDB管理、オンライン時の直接登録、オフライン時の一時タグ、WIB Web管理画面からの明示処理を定める。
 
 ### [design_notes_tags_and_external_intake.md](design_notes_tags_and_external_intake.md)
 

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}WebWIB：広告送信者{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2>広告送信者</h2>
+    <div class="muted">登録済み送信者 {{ senders | length }} 件</div>
+  </div>
+  <form method="post" action="/advertising-senders/process-requests">
+    <button type="submit" class="primary">登録依頼タグを処理</button>
+  </form>
+</div>
+
+{% if message %}<div class="notice">{{ message }}</div>{% endif %}
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+<div class="notice">
+  WIBに接続できないときにExtensionが付けた「広告送信者登録」タグを、上のボタンで明示的に処理します。通常同期やTriageBoxでは処理しません。
+</div>
+
+<form method="post" action="/advertising-senders/add" class="toolbar">
+  <label>メールアドレス <input type="email" name="address" required size="36"></label>
+  <button type="submit">追加</button>
+</form>
+
+{% if senders %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>メールアドレス</th><th>表示名</th><th>処理件数</th><th>最終処理</th><th></th></tr></thead>
+  <tbody>
+  {% for sender in senders %}
+    <tr>
+      <td>{{ sender.address }}</td>
+      <td>{{ sender.display_name or "-" }}</td>
+      <td>{{ sender.match_count }}</td>
+      <td>{{ sender.last_matched_at or "-" }}</td>
+      <td>
+        <form method="post" action="/advertising-senders/delete">
+          <input type="hidden" name="address" value="{{ sender.address }}">
+          <button type="submit">削除</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty">登録済みの広告送信者はありません。</div>
+{% endif %}
+{% endblock %}
