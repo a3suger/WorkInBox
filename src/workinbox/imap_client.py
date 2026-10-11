@@ -185,9 +185,11 @@ class ImapClient:
         config: ImapConfig,
         *,
         progress_callback: ProgressCallback | None = None,
+        reputation_header: str = "X-IronPort-Reputation",
     ) -> None:
         self.config = config
         self.progress_callback = progress_callback
+        self.reputation_header = reputation_header
         self._message_id_cache: dict[str, TriageMessage | None] = {}
 
     def _progress(self, **event: object) -> None:
@@ -567,7 +569,7 @@ class ImapClient:
         return (
             TriageMessage(
                 email=email,
-                headers=parse_triage_headers(parsed),
+                headers=parse_triage_headers(parsed, self.reputation_header),
                 flags=_parse_flags(fetched),
             ),
             _parse_internaldate(fetched) if include_internaldate else None,

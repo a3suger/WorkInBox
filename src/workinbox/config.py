@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from email.utils import parseaddr
+import math
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,13 @@ class ScheduleSupportConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class AdvertisingConfig:
+    ironport_reputation_enabled: bool = True
+    ironport_reputation_header: str = "X-IronPort-Reputation"
+    ironport_reputation_threshold: float = -1.0
+
+
+@dataclass(frozen=True, slots=True)
 class DatabaseConfig:
     path: Path
 
@@ -73,6 +81,7 @@ class AppConfig:
     ai: AiConfig = field(default_factory=AiConfig)
     identity: IdentityConfig | None = None
     schedule_support: ScheduleSupportConfig = field(default_factory=ScheduleSupportConfig)
+    advertising: AdvertisingConfig = field(default_factory=AdvertisingConfig)
 
 
 def _parse_schedule_supporter(value: object) -> ScheduleSupporter:
@@ -150,6 +159,33 @@ def load_config(path: str | Path) -> AppConfig:
             supporters=tuple(_parse_schedule_supporter(value) for value in raw_supporters)
         )
 
+        advertising_raw = raw.get("advertising", {}) or {}
+        if not isinstance(advertising_raw, dict):
+            raise ValueError("advertising must be a mapping")
+        ironport_raw = advertising_raw.get("ironport_reputation", {}) or {}
+        if not isinstance(ironport_raw, dict):
+            raise ValueError("advertising.ironport_reputation must be a mapping")
+        reputation_header = str(
+            ironport_raw.get("header", "X-IronPort-Reputation")
+        ).strip()
+        if (
+            not reputation_header
+            or ":" in reputation_header
+            or any(character.isspace() for character in reputation_header)
+        ):
+            raise ValueError("advertising.ironport_reputation.header must be a header name")
+        reputation_enabled = ironport_raw.get("enabled", True)
+        if not isinstance(reputation_enabled, bool):
+            raise ValueError("advertising.ironport_reputation.enabled must be true or false")
+        reputation_threshold = float(ironport_raw.get("threshold", -1.0))
+        if not math.isfinite(reputation_threshold):
+            raise ValueError("advertising.ironport_reputation.threshold must be finite")
+        advertising = AdvertisingConfig(
+            ironport_reputation_enabled=reputation_enabled,
+            ironport_reputation_header=reputation_header,
+            ironport_reputation_threshold=reputation_threshold,
+        )
+
         ai_raw = raw.get("ai", {}) or {}
         body_max_chars = int(ai_raw.get("body_max_chars", 4000))
         timeout_seconds = float(ai_raw.get("timeout_seconds", 120.0))
@@ -180,4 +216,5 @@ def load_config(path: str | Path) -> AppConfig:
         ai=ai,
         identity=identity,
         schedule_support=schedule_support,
+        advertising=advertising,
     )

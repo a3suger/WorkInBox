@@ -112,6 +112,12 @@ imap:
 database:
   path: data/workinbox.db
 
+advertising:
+  ironport_reputation:
+    enabled: true
+    header: X-IronPort-Reputation
+    threshold: -1.0
+
 ai:
   url: http://127.0.0.1:11434
   model: qwen2.5:7b
@@ -128,6 +134,9 @@ ai:
 - `mailbox`: 対象 mailbox。現在は通常 `INBOX`
 - `new_mail_lookback_days`: 新規メール探索の対象日数。今日を含む N 暦日を対象とする
 - `database.path`: SQLite データベースの保存先
+- `advertising.ironport_reputation.enabled`: IronPort reputationによる自動整理を有効にするか
+- `advertising.ironport_reputation.header`: 数値スコアを読むメールヘッダー名
+- `advertising.ironport_reputation.threshold`: この値以下のメールを`一括処理`・スターなしにする
 - `ai.url`: Ollama API のベース URL
 - `ai.model`: 初期分類に使用する Ollama モデル
 - `ai.body_max_chars`: AI へ渡す本文の最大文字数。本文先頭から切り出す

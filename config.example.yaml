@@ -20,6 +20,12 @@ schedule_support:
     - "Supporter One <supporter1@example.jp>"
     - "Supporter Two <supporter2@example.jp>"
 
+advertising:
+  ironport_reputation:
+    enabled: true
+    header: X-IronPort-Reputation
+    threshold: -1.0
+
 database:
   path: data/workinbox.db
 

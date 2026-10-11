@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 from dataclasses import dataclass
 from email.message import Message
@@ -51,6 +52,7 @@ class TriageHeaders:
     origin_message_id: str | None
     action: str | None = None
     request_id: str | None = None
+    reputation_value: str | None = None
 
     @property
     def referenced_message_ids(self) -> tuple[str, ...]:
@@ -164,7 +166,10 @@ def sender_kind(from_header: str | None, self_addresses: tuple[str, ...]) -> Tri
     return TriageSenderKind.OTHER
 
 
-def parse_triage_headers(message: Message) -> TriageHeaders:
+def parse_triage_headers(
+    message: Message,
+    reputation_header: str = "X-IronPort-Reputation",
+) -> TriageHeaders:
     origin_message_id = normalize_message_id(
         message.get("X-WorkInBox-Origin-Message-ID")
     ) or normalize_message_id(message.get("X-Forwarded-Message-Id"))
@@ -176,6 +181,7 @@ def parse_triage_headers(message: Message) -> TriageHeaders:
         origin_message_id=origin_message_id,
         action=(message.get("X-WorkInBox-Action") or "").strip() or None,
         request_id=(message.get("X-WorkInBox-Request-ID") or "").strip() or None,
+        reputation_value=(message.get(reputation_header) or "").strip() or None,
     )
 
 
@@ -299,6 +305,8 @@ class TriageService:
                     self._register_advertising_sender(item)
                 elif self._handle_registered_advertising_sender(item):
                     pass
+                elif self._handle_ironport_reputation(item):
+                    pass
                 # The extension-controlled origin header is a stronger signal
                 # than the From address. Thunderbird may send through an
                 # identity/alias that is not listed in config.identity, but the
@@ -390,6 +398,40 @@ class TriageService:
     def _finish_advertising_message(self, item: TriageMessage) -> None:
         self._set_keyword(item, _BULK, enabled=True)
         self._set_flagged(item, enabled=False)
+
+    def _handle_ironport_reputation(self, item: TriageMessage) -> bool:
+        setting = self.config.advertising
+        value = item.headers.reputation_value
+        if not setting.ironport_reputation_enabled or value is None:
+            return False
+        try:
+            score = float(value)
+        except ValueError:
+            logging.warning(
+                "TriageBox ignored non-numeric %s value for %s: %r",
+                setting.ironport_reputation_header,
+                item.email.message_id,
+                value,
+            )
+            return False
+        if not math.isfinite(score):
+            logging.warning(
+                "TriageBox ignored non-finite %s value for %s: %r",
+                setting.ironport_reputation_header,
+                item.email.message_id,
+                value,
+            )
+            return False
+        if score > setting.ironport_reputation_threshold:
+            return False
+        self._finish_advertising_message(item)
+        logging.info(
+            "TriageBox handled low reputation mail: message_id=%s score=%s threshold=%s",
+            item.email.message_id,
+            score,
+            setting.ironport_reputation_threshold,
+        )
+        return True
 
     def _handle_record_request(self, item: TriageMessage) -> None:
         origin_message_id = item.headers.origin_message_id

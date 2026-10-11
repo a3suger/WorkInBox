@@ -34,6 +34,39 @@ database:
             self.assertIsNone(config.identity)
             self.assertIsNone(config.ai.identity)
             self.assertEqual(config.schedule_support.supporters, ())
+            self.assertTrue(config.advertising.ironport_reputation_enabled)
+            self.assertEqual(
+                config.advertising.ironport_reputation_header,
+                "X-IronPort-Reputation",
+            )
+            self.assertEqual(config.advertising.ironport_reputation_threshold, -1.0)
+
+    def test_loads_ironport_reputation_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text(
+                """imap:
+  host: imap.example
+  username: user
+  password: pass
+  new_mail_lookback_days: 7
+database:
+  path: workinbox.db
+advertising:
+  ironport_reputation:
+    enabled: false
+    header: X-Custom-Reputation
+    threshold: -2.5
+""",
+                encoding="utf-8",
+            )
+            config = load_config(path)
+            self.assertFalse(config.advertising.ironport_reputation_enabled)
+            self.assertEqual(
+                config.advertising.ironport_reputation_header,
+                "X-Custom-Reputation",
+            )
+            self.assertEqual(config.advertising.ironport_reputation_threshold, -2.5)
 
     def test_loads_identity_and_normalizes_all_addresses(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

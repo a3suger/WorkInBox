@@ -150,6 +150,7 @@ def triage_message(
     references: tuple[str, ...] = (),
     action: str | None = None,
     request_id: str | None = None,
+    reputation_value: str | None = None,
 ) -> TriageMessage:
     email = EmailMessage(
         message_id,
@@ -172,6 +173,7 @@ def triage_message(
             origin_message_id=origin,
             action=action,
             request_id=request_id,
+            reputation_value=reputation_value,
         ),
         flags=flags,
     )
@@ -449,6 +451,57 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             self.assertIsNotNone(stored)
             self.assertEqual(stored.display_name, "Advertiser")
             self.assertEqual(stored.match_count, 2)
+
+    def test_low_ironport_reputation_is_finished_without_registering_sender(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            message = triage_message(
+                "<low-reputation@example>",
+                "sender@example.com",
+                1,
+                flags=("\\Flagged", "wib-review"),
+                reputation_value="-1.0",
+            )
+            imap = FakeTriageImapClient([message])
+
+            result = TriageService(config, imap).run()
+
+            self.assertEqual(result.errors, ())
+            flags = imap.messages["<low-reputation@example>"].flags
+            self.assertIn("wib-bulk", flags)
+            self.assertIn("wib-review", flags)
+            self.assertNotIn("\\Flagged", flags)
+
+            from workinbox.advertising_senders import AdvertisingSenderStore
+
+            self.assertEqual(AdvertisingSenderStore(path).list(), [])
+
+    def test_high_or_invalid_ironport_reputation_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            high = triage_message(
+                "<high-reputation@example>",
+                "high@example.com",
+                1,
+                flags=("\\Flagged",),
+                reputation_value="-0.9",
+            )
+            invalid = triage_message(
+                "<invalid-reputation@example>",
+                "invalid@example.com",
+                2,
+                flags=("\\Flagged",),
+                reputation_value="Positive",
+            )
+            imap = FakeTriageImapClient([high, invalid])
+
+            result = TriageService(config, imap).run()
+
+            self.assertEqual(result.errors, ())
+            self.assertNotIn("wib-bulk", imap.messages[high.email.message_id].flags)
+            self.assertNotIn("wib-bulk", imap.messages[invalid.email.message_id].flags)
 
     def test_action_ready_reply_is_not_sent_to_normal_ai_classification(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

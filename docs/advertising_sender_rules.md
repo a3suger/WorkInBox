@@ -12,6 +12,12 @@ Thunderbirdの送信者アドレス完全一致フィルタをWIBへ移し、広
 - 一致したメールは既存タグを維持し、`wib-bulk`を追加してスターを外す。
 - 過去メール全体への自動遡及は行わない。
 
+## IronPort reputationによるメール単位の判定
+
+`X-IronPort-Reputation`を数値として読み、設定した閾値以下なら、そのメールだけを既存タグを維持して`一括処理`・スターなしにする。この判定では送信者をSQLiteへ登録しない。
+
+初期設定は有効、ヘッダー名`X-IronPort-Reputation`、閾値`-1.0`である。ヘッダーがない場合、空の場合、数値でない場合、有限値でない場合は処理しない。設定は`config.yaml`の`advertising.ironport_reputation`で変更できる。
+
 ## 接続できない場合の登録
 
 Extensionの「この送信者を広告として登録」は、表示中メールへ一時タグ`wib-ad-sender-register`（広告送信者登録）を付ける。これは作業分類ではなく、IMAPを介した登録依頼キューである。

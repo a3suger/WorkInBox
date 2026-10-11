@@ -124,6 +124,7 @@ class SynchronizationService:
         self.imap_client = imap_client or ImapClient(
             config.imap,
             progress_callback=progress_callback,
+            reputation_header=config.advertising.ironport_reputation_header,
         )
         self.classifier = classifier or OllamaClassifier(config.ai)
         self.record_summarizer = record_summarizer or OllamaRecordSummarizer(config.ai)
