@@ -21,6 +21,7 @@ const WIB_TAGS = Object.freeze([
   { key: "wib-waiting-action", tag: "対応待ち", color: "#7CB342" },
   { key: "wib-action-ready", tag: "対応あり", color: "#558B2F" },
   { key: "wib-requested", tag: "依頼済み", color: "#795548" },
+  { key: "wib-ad-sender-register", tag: "広告送信者登録", color: "#607D8B" },
 ]);
 
 const WIB_KEYS = new Set(WIB_TAGS.map((item) => item.key));

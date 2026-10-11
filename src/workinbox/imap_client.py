@@ -373,6 +373,19 @@ class ImapClient:
             since_text = since.strftime("%d-%b-%Y")
             uid_values: set[bytes] = set()
 
+            # Registration requests are an offline-safe command queue. Search
+            # them independently of unread state, checkpoint and lookback age.
+            status, registration_data = client.uid(
+                "search", None, "KEYWORD", "wib-ad-sender-register"
+            )
+            if status != "OK":
+                raise RuntimeError("IMAP advertising sender registration search failed")
+            uid_values.update(
+                registration_data[0].split()
+                if registration_data and registration_data[0]
+                else ()
+            )
+
             if checkpoint is not None and checkpoint[0] == current_uidvalidity:
                 last_uid = checkpoint[1]
                 if highest_existing_uid <= last_uid:

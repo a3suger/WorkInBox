@@ -73,11 +73,12 @@ class WorkTagServiceTest(unittest.TestCase):
         )
 
     def test_canonical_tag_set_matches_current_design(self) -> None:
-        self.assertEqual(len(WORK_TAGS), 13)
+        self.assertEqual(len(WORK_TAGS), 14)
         keys = {tag.key for tag in WORK_TAGS}
         self.assertIn("wib-watch", keys)
         self.assertIn("wib-action-ready", keys)
         self.assertIn("wib-bulk", keys)
+        self.assertIn("wib-ad-sender-register", keys)
         self.assertNotIn("wib-important", keys)
         self.assertNotIn("wib-batch", keys)
 

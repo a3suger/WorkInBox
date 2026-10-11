@@ -13,6 +13,7 @@ from .config import AppConfig
 from .database import EmailDatabase
 from .models import EmailMessage, ImapFlagsSnapshot
 from .record_store import RecordStore
+from .advertising_senders import AdvertisingSenderStore, normalize_sender
 from .triage_store import TriageRelationStore
 
 
@@ -20,6 +21,7 @@ _MESSAGE_ID_RE = re.compile(r"<[^<>\s]+>")
 _WAITING_ACTION = "wib-waiting-action"
 _ACTION_READY = "wib-action-ready"
 _BULK = "wib-bulk"
+_AD_SENDER_REGISTER = "wib-ad-sender-register"
 _SCHEDULE = "wib-schedule"
 _DEADLINE = "wib-deadline"
 _SUPPORT_REQUEST = "schedule_support_request"
@@ -188,6 +190,7 @@ class TriageService:
         relation_store: TriageRelationStore | None = None,
         database: EmailDatabase | None = None,
         record_store: RecordStore | None = None,
+        advertising_sender_store: AdvertisingSenderStore | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:
         self.config = config
@@ -195,8 +198,12 @@ class TriageService:
         self.relations = relation_store or TriageRelationStore(config.database.path)
         self.database = database or EmailDatabase(config.database.path)
         self.records = record_store or RecordStore(config.database.path)
+        self.advertising_senders = advertising_sender_store or AdvertisingSenderStore(
+            config.database.path
+        )
         self.progress_callback = progress_callback
         self._batch_messages: dict[str, TriageMessage] = {}
+        self._advertising_addresses: set[str] = set()
 
     def _progress(self, **event: object) -> None:
         if self.progress_callback is not None:
@@ -223,6 +230,10 @@ class TriageService:
         self.relations.initialize()
         self.database.initialize()
         self.records.initialize()
+        self.advertising_senders.initialize()
+        self._advertising_addresses = {
+            item.address for item in self.advertising_senders.list()
+        }
         checkpoint = self.relations.checkpoint(self.config.imap.mailbox)
         if checkpoint is None:
             logging.info("TriageBox checkpoint: none")
@@ -284,11 +295,15 @@ class TriageService:
                 errors=len(errors),
             )
             try:
+                if _AD_SENDER_REGISTER in item.flags:
+                    self._register_advertising_sender(item)
+                elif self._handle_registered_advertising_sender(item):
+                    pass
                 # The extension-controlled origin header is a stronger signal
                 # than the From address. Thunderbird may send through an
                 # identity/alias that is not listed in config.identity, but the
                 # self-Cc copy is still the WIB support request M2.
-                if item.headers.action == _RECORD_ACTION:
+                elif item.headers.action == _RECORD_ACTION:
                     self._handle_record_request(item)
                 elif item.headers.action in _SUPPORT_FOLLOWUP_ACTIONS:
                     if self._handle_self_action_reply(item):
@@ -350,6 +365,31 @@ class TriageService:
             waiting_action_replies=waiting_action_replies,
             errors=tuple(errors),
         )
+
+    def _register_advertising_sender(self, item: TriageMessage) -> None:
+        name, address = normalize_sender(item.headers.from_address or item.email.sender)
+        self.advertising_senders.add(address, display_name=name)
+        self._advertising_addresses.add(address)
+        self._finish_advertising_message(item)
+        self._set_keyword(item, _AD_SENDER_REGISTER, enabled=False)
+        self.advertising_senders.record_match(address)
+        logging.info("TriageBox registered advertising sender: %s", address)
+
+    def _handle_registered_advertising_sender(self, item: TriageMessage) -> bool:
+        try:
+            _, address = normalize_sender(item.headers.from_address or item.email.sender)
+        except ValueError:
+            return False
+        if address not in self._advertising_addresses:
+            return False
+        self._finish_advertising_message(item)
+        self.advertising_senders.record_match(address)
+        logging.info("TriageBox handled registered advertising sender: %s", address)
+        return True
+
+    def _finish_advertising_message(self, item: TriageMessage) -> None:
+        self._set_keyword(item, _BULK, enabled=True)
+        self._set_flagged(item, enabled=False)
 
     def _handle_record_request(self, item: TriageMessage) -> None:
         origin_message_id = item.headers.origin_message_id

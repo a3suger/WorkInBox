@@ -314,6 +314,7 @@ Extension を削除しても復元材料が残るよう、この JSON は通常�
 | `wib-review` | `見る・検討` | `#039BE5` |
 | `wib-watch` | `注目` | `#7B1FA2` |
 | `wib-bulk` | `一括処理` | `#424242` |
+| `wib-ad-sender-register` | `広告送信者登録` | `#607D8B` |
 | `wib-pending` | `判定保留` | `#757575` |
 | `wib-deadline-done` | `締切登録済み` | `#8E2424` |
 | `wib-schedule-done` | `スケジュール対応済み` | `#A65300` |

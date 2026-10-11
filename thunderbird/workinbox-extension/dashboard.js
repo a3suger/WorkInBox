@@ -298,6 +298,13 @@ async function openSettings() {
   await messenger.runtime.openOptionsPage();
 }
 
+async function openAdvertisingSenders() {
+  await messenger.tabs.create({
+    url: messenger.runtime.getURL("advertising_senders.html"),
+    active: true,
+  });
+}
+
 document.addEventListener("click", (event) => {
   const workView = event.target.closest("[data-work-view]");
   const wibPath = event.target.closest("[data-wib-path]");
@@ -309,6 +316,7 @@ document.addEventListener("click", (event) => {
   else if (event.target.closest("#sync-details-button")) openSyncDetails();
   else if (event.target.closest("#open-tasks")) operation = openTasks();
   else if (event.target.closest("#open-settings")) operation = openSettings();
+  else if (event.target.closest("#manage-advertising-senders")) operation = openAdvertisingSenders();
   else if (event.target.closest("#refresh")) operation = refreshAll();
   if (operation) {
     void operation.catch((error) => {

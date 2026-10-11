@@ -133,6 +133,10 @@ WIBサーバーへ接続できない場合もThunderbird上で通常メール作
 
 Thunderbird由来の現在値、WIBの接続状態、オフライン時に利用可能な操作、APIとキャッシュの候補仕様を整理する。確定済みの正式設計ではなく、実装前に `design.md` と `thunderbird_bridge.md` へ統合する。
 
+### [advertising_sender_rules.md](advertising_sender_rules.md)
+
+広告送信者アドレスのDB管理、一時タグによるオフライン登録依頼、通常同期での`一括処理`・スター解除、Extension管理UIを定める。
+
 ### [design_notes_tags_and_external_intake.md](design_notes_tags_and_external_intake.md)
 
 Thunderbird タグ、Extension、自分宛て備忘メール、ICS、将来の外部形式等に関する補足設計。

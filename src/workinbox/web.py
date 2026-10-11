@@ -9,7 +9,7 @@ from threading import Lock
 from typing import Callable
 from urllib.parse import parse_qs
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
@@ -30,6 +30,7 @@ from .deadline_workflow import DeadlineWorkflowService
 from .models import DeadlineCreatedBy
 from .normal_workflow import NormalWorkflowCompletionService
 from .record_store import RecordStore
+from .advertising_senders import AdvertisingSenderStore
 from .work_tags import WORK_TAGS
 from . import __version__
 
@@ -64,6 +65,7 @@ def create_app(
     normal_workflow_service: NormalWorkflowCompletionService | None = None,
     record_store: RecordStore | None = None,
     dashboard_service: DashboardService | None = None,
+    advertising_sender_store: AdvertisingSenderStore | None = None,
 ) -> FastAPI:
     sync_service = synchronization_service or SynchronizationService(config)
     tracking_service = query_service or TrackingQueryService(config)
@@ -79,6 +81,10 @@ def create_app(
     normal_completion_service = normal_workflow_service or NormalWorkflowCompletionService(config)
     records = record_store or RecordStore(config.database.path)
     dashboard = dashboard_service or DashboardService(config, record_store=records)
+    advertising_senders = advertising_sender_store or AdvertisingSenderStore(
+        config.database.path
+    )
+    advertising_senders.initialize()
     sync_lock = Lock()
 
     app = FastAPI(title="WorkInBox")
@@ -388,6 +394,37 @@ def create_app(
     @app.get("/api/deadlines/summary")
     def deadline_summary() -> dict[str, object]:
         return deadline_data_service.summary()
+
+    def advertising_sender_data(item) -> dict[str, object]:
+        return {
+            "address": item.address,
+            "display_name": item.display_name,
+            "created_at": item.created_at,
+            "last_matched_at": item.last_matched_at,
+            "match_count": item.match_count,
+        }
+
+    @app.get("/api/advertising-senders")
+    def list_advertising_senders() -> dict[str, object]:
+        return {"items": [advertising_sender_data(item) for item in advertising_senders.list()]}
+
+    @app.post("/api/advertising-senders")
+    async def add_advertising_sender(request: Request) -> dict[str, object]:
+        payload = await request.json()
+        try:
+            item = advertising_senders.add(str(payload.get("address", "")))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"ok": True, "item": advertising_sender_data(item)}
+
+    @app.delete("/api/advertising-senders")
+    async def delete_advertising_sender(request: Request) -> dict[str, object]:
+        payload = await request.json()
+        try:
+            deleted = advertising_senders.delete(str(payload.get("address", "")))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"ok": True, "deleted": deleted}
 
     @app.get("/deadlines.ics", response_class=PlainTextResponse)
     def deadline_calendar(request: Request) -> PlainTextResponse:

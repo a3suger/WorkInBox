@@ -5,6 +5,12 @@ const RECORD_ACTION = "create-record";
 const REQUESTED_TAG = "wib-requested";
 const BULK_TAG = "wib-bulk";
 const LEGACY_BULK_TAG = "wib-batch";
+const AD_SENDER_REGISTER_TAG = "wib-ad-sender-register";
+const AD_SENDER_REGISTER_DEFINITION = {
+  key: AD_SENDER_REGISTER_TAG,
+  tag: "広告送信者登録",
+  color: "#607D8B",
+};
 const BULK_TAG_DEFINITION = {
   key: BULK_TAG,
   tag: "一括処理",
@@ -1147,6 +1153,29 @@ async function resolveBulkTagKey() {
   return BULK_TAG;
 }
 
+async function resolveAdvertisingSenderRegistrationTagKey() {
+  const registeredTags = await messenger.messages.tags.list();
+  const existing = registeredTags.find(
+    (tag) => tag.key === AD_SENDER_REGISTER_TAG
+      || tag.tag === AD_SENDER_REGISTER_DEFINITION.tag,
+  );
+  if (existing) return existing.key;
+  await messenger.messages.tags.create(
+    AD_SENDER_REGISTER_DEFINITION.key,
+    AD_SENDER_REGISTER_DEFINITION.tag,
+    AD_SENDER_REGISTER_DEFINITION.color,
+  );
+  return AD_SENDER_REGISTER_TAG;
+}
+
+async function queueAdvertisingSender(messageId, thunderbirdMessageId) {
+  const message = await resolveDisplayedMessage(thunderbirdMessageId, messageId);
+  if (!message) throw new Error("表示中のメールを取得できませんでした。");
+  const tagKey = await resolveAdvertisingSenderRegistrationTagKey();
+  await addTag(message, tagKey);
+  return { ok: true };
+}
+
 async function setNormalCompletionActionStatus(tabId, badgeText, title) {
   await messenger.messageDisplayAction.setBadgeText({ tabId, text: badgeText });
   await messenger.messageDisplayAction.setTitle({ tabId, title });
@@ -1358,6 +1387,8 @@ messenger.runtime.onMessage.addListener((request) => {
     operation = completeMessage(request.messageId, request.thunderbirdMessageId, request.mode);
   } else if (request.type === "workinbox-handle-action-ready") {
     operation = handleActionReady(request.messageId, request.thunderbirdMessageId, request.action);
+  } else if (request.type === "workinbox-register-advertising-sender") {
+    operation = queueAdvertisingSender(request.messageId, request.thunderbirdMessageId);
   } else {
     return undefined;
   }

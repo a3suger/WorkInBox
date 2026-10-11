@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>広告送信者の管理</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <header><div><h1>広告送信者の管理</h1><p>完全一致する送信者を一括処理・スターなしにします。</p></div></header>
+  <main>
+    <section id="connection" class="connection checking">
+      <strong id="connection-label">WIB接続を確認中</strong>
+      <p id="connection-detail">一覧を取得しています…</p>
+    </section>
+    <section class="group">
+      <h2>追加</h2>
+      <form id="add-form" class="sender-form">
+        <input id="address" type="email" required placeholder="sender@example.com" autocomplete="off">
+        <button type="submit">追加</button>
+      </form>
+    </section>
+    <section class="group">
+      <h2>登録済み送信者</h2>
+      <p id="empty">登録はありません。</p>
+      <table id="sender-table" hidden>
+        <thead><tr><th>メールアドレス</th><th>一致回数</th><th>最終一致</th><th></th></tr></thead>
+        <tbody id="sender-list"></tbody>
+      </table>
+    </section>
+    <p id="error" class="error" hidden></p>
+  </main>
+  <script src="advertising_senders.js"></script>
+</body>
+</html>

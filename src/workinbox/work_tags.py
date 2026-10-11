@@ -24,6 +24,7 @@ WORK_TAGS: tuple[WorkTagDefinition, ...] = (
     WorkTagDefinition("wib-waiting-action", "対応待ち", "#7CB342", "waiting"),
     WorkTagDefinition("wib-action-ready", "対応あり", "#558B2F", "waiting"),
     WorkTagDefinition("wib-requested", "依頼済み", "#795548", "history"),
+    WorkTagDefinition("wib-ad-sender-register", "広告送信者登録", "#607D8B", "command"),
     WorkTagDefinition("wib-bulk", "一括処理", "#424242", "end"),
 )
 

@@ -78,6 +78,7 @@ for (const button of document.querySelectorAll("button")) {
     const normalWorkflow = button.dataset.normalWorkflow;
     const completion = button.dataset.completion;
     const actionReady = button.dataset.actionReady;
+    const advertisingSender = button.hasAttribute("data-advertising-sender");
     if (kind || dismissKind) {
       void sendOperation(button, requestFor(currentMessage, {
         type: kind ? "workinbox-open-dedicated-workflow" : "workinbox-dismiss-dedicated-workflow",
@@ -97,6 +98,10 @@ for (const button of document.querySelectorAll("button")) {
       void sendOperation(button, requestFor(currentMessage, {
         type: "workinbox-handle-action-ready", action: actionReady,
       }), actionReady === "finish" ? "返信せず終了しました。" : "返信メールを作成します。");
+    } else if (advertisingSender) {
+      void sendOperation(button, requestFor(currentMessage, {
+        type: "workinbox-register-advertising-sender",
+      }), "広告送信者の登録依頼タグを付けました。次回の通常同期で登録します。");
     }
   });
 }

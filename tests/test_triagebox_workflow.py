@@ -412,6 +412,44 @@ class TriageBoxWorkflowTest(unittest.TestCase):
             self.assertEqual(result.waiting_action_replies, 0)
             self.assertEqual(imap.find_calls, [])
 
+    def test_advertising_registration_and_later_match_are_finished(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            config = self.make_config(path)
+            registration = triage_message(
+                "<registration@example>",
+                "Advertiser <NEWS@Example.com>",
+                1,
+                flags=("\\Flagged", "wib-review", "wib-ad-sender-register"),
+            )
+            later = triage_message(
+                "<later@example>",
+                "news@example.com",
+                2,
+                flags=("\\Flagged", "wib-watch"),
+            )
+            imap = FakeTriageImapClient([registration, later])
+
+            result = TriageService(config, imap).run()
+
+            self.assertEqual(result.errors, ())
+            registration_flags = imap.messages["<registration@example>"].flags
+            later_flags = imap.messages["<later@example>"].flags
+            self.assertIn("wib-bulk", registration_flags)
+            self.assertIn("wib-review", registration_flags)
+            self.assertNotIn("wib-ad-sender-register", registration_flags)
+            self.assertNotIn("\\Flagged", registration_flags)
+            self.assertIn("wib-bulk", later_flags)
+            self.assertIn("wib-watch", later_flags)
+            self.assertNotIn("\\Flagged", later_flags)
+
+            from workinbox.advertising_senders import AdvertisingSenderStore
+
+            stored = AdvertisingSenderStore(path).get("news@example.com")
+            self.assertIsNotNone(stored)
+            self.assertEqual(stored.display_name, "Advertiser")
+            self.assertEqual(stored.match_count, 2)
+
     def test_action_ready_reply_is_not_sent_to_normal_ai_classification(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workinbox.db"
