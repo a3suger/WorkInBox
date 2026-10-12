@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import sqlite3
 from html import escape
 from ipaddress import ip_address
@@ -30,7 +31,7 @@ from .deadline_workflow import DeadlineWorkflowService
 from .models import DeadlineCreatedBy
 from .normal_workflow import NormalWorkflowCompletionService
 from .record_store import RecordStore
-from .advertising_senders import AdvertisingSenderStore
+from .advertising_senders import AdvertisingSenderStore, normalize_sender
 from .imap_client import ImapClient
 from .work_tags import WORK_TAGS
 from . import __version__
@@ -91,6 +92,7 @@ def create_app(
         config.imap,
         reputation_header=config.advertising.ironport_reputation_header,
     )
+    advertising_run_lock = Lock()
     sync_lock = Lock()
 
     app = FastAPI(title="WorkInBox")
@@ -327,6 +329,7 @@ def create_app(
             name="advertising_senders.html",
             context={
                 "senders": advertising_senders.list(),
+                "lookback_days": config.imap.new_mail_lookback_days,
                 "message": request.query_params.get("message"),
                 "error": request.query_params.get("error"),
                 **common_view_flags(),
@@ -401,6 +404,120 @@ def create_app(
         return RedirectResponse(
             url=f"/advertising-senders?message=登録依頼を{processed}件処理しました",
             status_code=303,
+        )
+
+    def run_advertising_filters_now() -> dict[str, object]:
+        if not advertising_run_lock.acquire(blocking=False):
+            return {
+                "ok": False,
+                "scanned": 0,
+                "matched": 0,
+                "sender_matches": 0,
+                "reputation_matches": 0,
+                "error_count": 1,
+                "errors": ["広告判定は既に実行中です"],
+            }
+        try:
+            messages = advertising_imap.fetch_unread_since(
+                config.imap.new_mail_lookback_days
+            )
+            addresses = {item.address for item in advertising_senders.list()}
+            matched = 0
+            sender_matches = 0
+            reputation_matches = 0
+            errors: list[str] = []
+            for item in messages:
+                try:
+                    _, address = normalize_sender(
+                        item.headers.from_address or item.email.sender
+                    )
+                    sender_match = address in addresses
+                    reputation_match = False
+                    value = item.headers.reputation_value
+                    setting = config.advertising
+                    if setting.ironport_reputation_enabled and value is not None:
+                        try:
+                            score = float(value)
+                        except ValueError:
+                            score = math.nan
+                        reputation_match = (
+                            math.isfinite(score)
+                            and score <= setting.ironport_reputation_threshold
+                        )
+                    if not sender_match and not reputation_match:
+                        continue
+                    advertising_imap.set_keyword(
+                        item.email.uid,
+                        "wib-bulk",
+                        enabled=True,
+                        expected_uidvalidity=item.email.uidvalidity,
+                    )
+                    advertising_imap.set_flagged(
+                        item.email.uid,
+                        enabled=False,
+                        expected_uidvalidity=item.email.uidvalidity,
+                    )
+                    matched += 1
+                    if sender_match:
+                        sender_matches += 1
+                        advertising_senders.record_match(address)
+                    if reputation_match:
+                        reputation_matches += 1
+                except (OSError, RuntimeError, ValueError) as exc:
+                    errors.append(f"{item.email.message_id}: {exc}")
+            return {
+                "ok": not errors,
+                "lookback_days": config.imap.new_mail_lookback_days,
+                "scanned": len(messages),
+                "matched": matched,
+                "sender_matches": sender_matches,
+                "reputation_matches": reputation_matches,
+                "error_count": len(errors),
+                "errors": errors,
+            }
+        finally:
+            advertising_run_lock.release()
+
+    @app.post("/api/advertising-senders/run-now")
+    def api_run_advertising_filters_now() -> dict[str, object]:
+        try:
+            return run_advertising_filters_now()
+        except (OSError, RuntimeError, ValueError) as exc:
+            return {
+                "ok": False,
+                "scanned": 0,
+                "matched": 0,
+                "sender_matches": 0,
+                "reputation_matches": 0,
+                "error_count": 1,
+                "errors": [str(exc)],
+            }
+
+    @app.post("/advertising-senders/run-now")
+    def page_run_advertising_filters_now():
+        try:
+            result = run_advertising_filters_now()
+        except (OSError, RuntimeError, ValueError) as exc:
+            return RedirectResponse(
+                url=f"/advertising-senders?error={quote(str(exc))}", status_code=303
+            )
+        if not result["ok"]:
+            summary = (
+                f"未読{result['scanned']}件を確認し、{result['matched']}件を処理、"
+                f"エラー{result['error_count']}件: "
+            )
+            return RedirectResponse(
+                url=f"/advertising-senders?error={quote(summary + '; '.join(result['errors']))}",
+                status_code=303,
+            )
+        message = (
+            f"直近{result['lookback_days']}日間の未読{result['scanned']}件を確認し、"
+            f"{result['matched']}件を一括処理にしました"
+            f"（送信者{result['sender_matches']}件、スコア{result['reputation_matches']}件、"
+            f"エラー{result['error_count']}件）"
+        )
+        return RedirectResponse(
+            url=f"/advertising-senders?message={quote(message)}", status_code=303
         )
 
     @app.get("/pending")

@@ -108,7 +108,7 @@ class FakeImap:
                 return "OK", [(b"6 (UID 60 FLAGS (" + flags + b"))", b"")]
             return self.fetch_responses[uid]
         if uid == 40:
-            return "OK", [(b"4 (UID 40 BODY[] {10})", RAW_MESSAGE), b")"]
+            return "OK", [(b"4 (UID 40 FLAGS () BODY[] {10})", RAW_MESSAGE), b")"]
         if uid == 50:
             return "NO", []
         raise AssertionError((command, args))
@@ -332,6 +332,16 @@ class ImapClientTest(unittest.TestCase):
     def test_new_mail_since_counts_today_as_one_calendar_day(self) -> None:
         self.assertEqual(_new_mail_since(date(2026, 8, 8), 1), date(2026, 8, 8))
         self.assertEqual(_new_mail_since(date(2026, 8, 8), 7), date(2026, 8, 2))
+
+    @patch("workinbox.imap_client.imaplib.IMAP4_SSL", FakeImap)
+    @patch("workinbox.imap_client.date")
+    def test_fetch_unread_since_ignores_checkpoint_and_uses_lookback(self, mock_date) -> None:
+        mock_date.today.return_value = date(2026, 8, 8)
+
+        messages = ImapClient(self.config).fetch_unread_since(7)
+
+        self.assertEqual([item.email.message_id for item in messages], ["<new@example>"])
+        self.assertEqual(FakeImap.last_search_args, (None, "UNSEEN", "SINCE", "02-Aug-2026"))
 
     @patch("workinbox.imap_client.imaplib.IMAP4_SSL", ReadSupportImap)
     @patch("workinbox.imap_client.date")

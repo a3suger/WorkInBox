@@ -243,5 +243,6 @@ Decision 017 の2カード構成を、実運用で切り替え操作が有効に
 - 一時タグはWIB Webの管理画面から利用者が明示的に処理する。成功後にタグを外し、失敗時は残して再実行可能にする。
 - 登録済み送信者の一覧、手入力追加、削除、登録依頼タグの処理はWIB Webの管理画面から行う。
 - `X-IronPort-Reputation`が設定閾値以下のメールも同じ整理状態にするが、この判定だけでは送信者をSQLiteへ登録しない。
+- WIB WebとAPIから、`new_mail_lookback_days`期間内の未読メールに対する広告判定だけをチェックポイントに関係なく明示実行できるようにする。TriageBox全体は再実行しない。
 
 統合先: `docs/design.md`の「タグ体系」。詳細は`docs/advertising_sender_rules.md`。実装Issueは#45。

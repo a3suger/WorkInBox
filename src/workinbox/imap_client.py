@@ -533,6 +533,32 @@ class ImapClient:
                     messages.append(item)
             return tuple(messages)
 
+    def fetch_unread_since(self, lookback_days: int) -> tuple[TriageMessage, ...]:
+        if lookback_days < 1:
+            raise ValueError("lookback_days must be at least 1")
+        with imaplib.IMAP4_SSL(
+            self.config.host, self.config.port, timeout=self.config.timeout_seconds
+        ) as client:
+            client.login(self.config.username, self.config.password)
+            status, _ = client.select(self.config.mailbox, readonly=True)
+            if status != "OK":
+                raise RuntimeError(f"Unable to select mailbox: {self.config.mailbox}")
+            current_uidvalidity = _uidvalidity(client)
+            since = _new_mail_since(date.today(), lookback_days)
+            status, data = client.uid(
+                "search", None, "UNSEEN", "SINCE", since.strftime("%d-%b-%Y")
+            )
+            if status != "OK":
+                raise RuntimeError("IMAP UNSEEN lookback search failed")
+            messages: list[TriageMessage] = []
+            for uid_bytes in data[0].split() if data and data[0] else ():
+                item, _ = self._fetch_triage_message(
+                    client, int(uid_bytes), current_uidvalidity
+                )
+                if item is not None:
+                    messages.append(item)
+            return tuple(messages)
+
     def find_message_by_message_id(self, message_id: str) -> TriageMessage | None:
         if message_id in self._message_id_cache:
             return self._message_id_cache[message_id]

@@ -94,6 +94,8 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("POST", routes["/advertising-senders/add"])
         self.assertIn("POST", routes["/advertising-senders/delete"])
         self.assertIn("POST", routes["/advertising-senders/process-requests"])
+        self.assertIn("POST", routes["/advertising-senders/run-now"])
+        self.assertIn("POST", routes["/api/advertising-senders/run-now"])
         self.assertIn("GET", routes["/deadlines.ics"])
         self.assertIn("PROPFIND", routes["/caldav/deadlines/"])
         self.assertIn("REPORT", routes["/caldav/deadlines/"])
@@ -166,6 +168,74 @@ class WebFoundationTest(unittest.TestCase):
             from workinbox.advertising_senders import AdvertisingSenderStore
             stored = AdvertisingSenderStore(path).get("news@example.com")
             self.assertIsNotNone(stored)
+
+    def test_run_now_checks_all_unread_in_lookback_without_checkpoint(self) -> None:
+        class FakeAdvertisingImap:
+            def __init__(self, items):
+                self.items = tuple(items)
+                self.keyword_updates = []
+                self.flag_updates = []
+
+            def fetch_unread_since(self, lookback_days):
+                self.lookback_days = lookback_days
+                return self.items
+
+            def set_keyword(self, uid, keyword, *, enabled, expected_uidvalidity=None):
+                self.keyword_updates.append((uid, keyword, enabled, expected_uidvalidity))
+
+            def set_flagged(self, uid, *, enabled, expected_uidvalidity=None):
+                self.flag_updates.append((uid, enabled, expected_uidvalidity))
+
+        def item(message_id, sender, uid, reputation=None):
+            email = EmailMessage(
+                message_id, sender, "me@example.com", "Mail", None, None,
+                mailbox="INBOX", uidvalidity=10, uid=uid,
+            )
+            return TriageMessage(
+                email,
+                TriageHeaders(
+                    from_address=sender, message_id=message_id,
+                    in_reply_to=(), references=(), origin_message_id=None,
+                    reputation_value=reputation,
+                ),
+                (),
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workinbox.db"
+            from workinbox.advertising_senders import AdvertisingSenderStore
+            store = AdvertisingSenderStore(path)
+            store.initialize()
+            store.add("registered@example.com")
+            fake = FakeAdvertisingImap([
+                item("<sender@example>", "registered@example.com", 7),
+                item("<score@example>", "other@example.com", 8, "-3.1"),
+                item("<normal@example>", "normal@example.com", 9, "0.5"),
+            ])
+            app = create_app(
+                self._config(path),
+                advertising_sender_store=store,
+                advertising_imap_client=fake,
+            )
+            route = next(
+                route for route in app.routes
+                if route.path == "/api/advertising-senders/run-now"
+            )
+
+            result = route.endpoint()
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(fake.lookback_days, 7)
+            self.assertEqual(result["scanned"], 3)
+            self.assertEqual(result["matched"], 2)
+            self.assertEqual(result["sender_matches"], 1)
+            self.assertEqual(result["reputation_matches"], 1)
+            self.assertEqual(result["error_count"], 0)
+            self.assertEqual(
+                fake.keyword_updates,
+                [(7, "wib-bulk", True, 10), (8, "wib-bulk", True, 10)],
+            )
+            self.assertEqual(fake.flag_updates, [(7, False, 10), (8, False, 10)])
 
     def test_thunderbird_imap_target_excludes_password(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -248,6 +318,14 @@ class WebFoundationTest(unittest.TestCase):
         self.assertIn("wib-answer", source)
         self.assertIn("wib-review", source)
         self.assertIn("wib-watch", source)
+
+    def test_advertising_sender_template_offers_run_now(self) -> None:
+        source, _, _ = _TEMPLATES.env.loader.get_source(
+            _TEMPLATES.env, "advertising_senders.html"
+        )
+        self.assertIn("広告判定を今すぐ実行", source)
+        self.assertIn('action="/advertising-senders/run-now"', source)
+        self.assertIn("直近{{ lookback_days }}日間の未読メール", source)
 
     def test_deadline_template_offers_explicit_whole_mail_exit(self) -> None:
         source, _, _ = _TEMPLATES.env.loader.get_source(_TEMPLATES.env, "deadlines.html")
