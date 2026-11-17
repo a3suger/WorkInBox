@@ -82,6 +82,7 @@ class AppConfig:
     identity: IdentityConfig | None = None
     schedule_support: ScheduleSupportConfig = field(default_factory=ScheduleSupportConfig)
     advertising: AdvertisingConfig = field(default_factory=AdvertisingConfig)
+    web_sync_interval_minutes: int = 15
 
 
 def _parse_schedule_supporter(value: object) -> ScheduleSupporter:
@@ -186,6 +187,13 @@ def load_config(path: str | Path) -> AppConfig:
             ironport_reputation_threshold=reputation_threshold,
         )
 
+        web_raw = raw.get("web", {})
+        if not isinstance(web_raw, dict):
+            raise ValueError("web must be a mapping")
+        web_sync_interval_minutes = web_raw.get("sync_interval_minutes", 15)
+        if type(web_sync_interval_minutes) is not int or web_sync_interval_minutes < 0:
+            raise ValueError("web.sync_interval_minutes must be a non-negative integer")
+
         ai_raw = raw.get("ai", {}) or {}
         body_max_chars = int(ai_raw.get("body_max_chars", 4000))
         timeout_seconds = float(ai_raw.get("timeout_seconds", 120.0))
@@ -217,4 +225,5 @@ def load_config(path: str | Path) -> AppConfig:
         identity=identity,
         schedule_support=schedule_support,
         advertising=advertising,
+        web_sync_interval_minutes=web_sync_interval_minutes,
     )

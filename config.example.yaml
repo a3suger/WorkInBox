@@ -26,6 +26,9 @@ advertising:
     header: X-IronPort-Reputation
     threshold: -1.0
 
+web:
+  sync_interval_minutes: 15  # 0 で定期同期を無効化
+
 database:
   path: data/workinbox.db
 

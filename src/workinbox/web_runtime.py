@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from pathlib import Path
 
@@ -27,6 +28,15 @@ def _remove_post_route(app: FastAPI, path: str) -> None:
     ]
 
 
+async def _run_periodic_sync(manager: SyncProcessManager, interval_seconds: int) -> None:
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            manager.start(full_recheck=False)
+        except OSError:
+            logging.exception("Unable to start scheduled synchronization process")
+
+
 def create_app(
     config: AppConfig,
     *,
@@ -41,10 +51,22 @@ def create_app(
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         async with original_lifespan(application):
+            interval_seconds = config.web_sync_interval_minutes * 60
+            periodic_sync = None
+            if interval_seconds:
+                periodic_sync = asyncio.create_task(
+                    _run_periodic_sync(manager, interval_seconds)
+                )
             try:
                 yield
             finally:
-                manager.stop()
+                try:
+                    if periodic_sync is not None:
+                        periodic_sync.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await periodic_sync
+                finally:
+                    manager.stop()
 
     app.router.lifespan_context = lifespan
 
