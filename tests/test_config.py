@@ -31,6 +31,7 @@ database:
             self.assertEqual(config.ai.timeout_seconds, 120.0)
             self.assertEqual(config.ai.keep_alive, "30m")
             self.assertEqual(config.ai.max_workers, 1)
+            self.assertEqual(config.web_sync_interval_minutes, 15)
             self.assertIsNone(config.identity)
             self.assertIsNone(config.ai.identity)
             self.assertEqual(config.schedule_support.supporters, ())
@@ -40,6 +41,19 @@ database:
                 "X-IronPort-Reputation",
             )
             self.assertEqual(config.advertising.ironport_reputation_threshold, -1.0)
+
+    def test_web_sync_interval_can_be_changed_or_disabled(self) -> None:
+        example = Path(__file__).resolve().parents[1] / "config.example.yaml"
+        source = example.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            for value in (0, 5):
+                with self.subTest(value=value):
+                    path.write_text(
+                        source.replace("sync_interval_minutes: 15", f"sync_interval_minutes: {value}"),
+                        encoding="utf-8",
+                    )
+                    self.assertEqual(load_config(path).web_sync_interval_minutes, value)
 
     def test_loads_ironport_reputation_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

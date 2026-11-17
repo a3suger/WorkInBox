@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 from fastapi.responses import RedirectResponse
 
 from workinbox.config import AppConfig, DatabaseConfig, ImapConfig
-from workinbox.web_runtime import create_app
+from workinbox.web_runtime import _run_periodic_sync, create_app
 from workinbox.web import cli as legacy_web_cli
 
 
@@ -52,6 +53,45 @@ class FakeSyncProcessManager:
         self.started_at_value = datetime(2026, 8, 12, 10, 45).astimezone()
         self.starts.append(full_recheck)
         return True
+
+
+class PeriodicSyncTest(unittest.IsolatedAsyncioTestCase):
+    async def test_ticks_retry_after_failure_and_skip_while_sync_is_running(self) -> None:
+        manager = FakeSyncProcessManager()
+        manager.start(full_recheck=True)
+        start = Mock()
+
+        async def next_tick(interval_seconds: int) -> None:
+            match start.call_count:
+                case 0:
+                    self.assertEqual(manager.starts, [True])
+                case 1:
+                    self.assertEqual(manager.starts, [True])
+                    manager.running = False
+                case 3:
+                    raise asyncio.CancelledError
+
+        sleep = AsyncMock(side_effect=next_tick)
+        original_start = manager.start
+
+        def start_sync(*, full_recheck: bool) -> bool:
+            if start.call_count == 2:
+                raise OSError("start failed")
+            return original_start(full_recheck=full_recheck)
+
+        start.side_effect = start_sync
+        with (
+            patch.object(manager, "start", start),
+            patch("workinbox.web_runtime.asyncio.sleep", sleep),
+            self.assertLogs(level="ERROR") as logs,
+            self.assertRaises(asyncio.CancelledError),
+        ):
+            await _run_periodic_sync(manager, 900)
+
+        self.assertEqual(manager.starts, [True, False])
+        self.assertEqual(start.call_args_list, [call(full_recheck=False)] * 3)
+        self.assertEqual(sleep.await_args_list, [call(900)] * 4)
+        self.assertIn("start failed", logs.output[0])
 
 
 class WebRuntimeTest(unittest.TestCase):
